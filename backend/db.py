@@ -1,6 +1,6 @@
 import json
 import sqlite3
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
 
 SCHEMA = '''
 PRAGMA journal_mode=WAL;
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS outbox (
  state TEXT NOT NULL DEFAULT 'queued', error TEXT);
 CREATE TABLE IF NOT EXISTS audit (
  id INTEGER PRIMARY KEY, at INTEGER NOT NULL, operation TEXT NOT NULL, data TEXT NOT NULL);
-PRAGMA user_version=1;
+
 '''
 
 
@@ -39,12 +39,18 @@ def connect(path):
 
 
 def initialize(path, mode):
-    with connect(path) as db:
+    with closing(connect(path)) as db, db:
+        version = db.execute('PRAGMA user_version').fetchone()[0]
+        if version > 2:
+            raise RuntimeError('Database schema is newer than this application')
         db.executescript(SCHEMA)
         previous = db.execute("SELECT value FROM meta WHERE key='mode'").fetchone()
         if previous and previous['value'] != mode:
             raise RuntimeError('Use a separate database for demo and live mode')
+        db.execute('BEGIN IMMEDIATE')
         db.execute("INSERT OR IGNORE INTO meta VALUES ('mode',?)", (mode,))
+        from .zenstore import migrate
+        migrate(db)
 
 
 @contextmanager

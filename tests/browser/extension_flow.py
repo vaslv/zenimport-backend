@@ -119,3 +119,32 @@ def test_popup_unknown_page_and_storage_boundary(browser):
     }''')
     assert result is False, 'Content script can read the backend token'
     popup.close();unknown.close()
+
+
+def test_history_filter_and_paging(browser):
+    from urllib.parse import urlparse, parse_qs
+    context, identifier = browser
+    page = context.new_page()
+    records = [{'id': f'h{i}', 'date': '2020-01-01', 'income': 0, 'outcome': i, 'comment': f'История {i}'} for i in range(105)]
+    def history_route(route):
+        query = parse_qs(urlparse(route.request.url).query)
+        offset = int(query.get('offset', ['0'])[0])
+        data = [] if 'start' in query else records
+        route.fulfill(json={'items': data[offset:offset+100], 'total': len(data), 'offset': offset,
+                            'limit': 100, 'has_more': offset+100 < len(data)})
+    page.route('**/api/zenmoney/history?*', history_route)
+    page.goto(f'chrome-extension://{identifier}/app.html#zenmoney')
+    expect(page.locator('#history-page')).to_have_text('Найдено: 105. Показано: 1–100.')
+    expect(page.locator('#zen article')).to_have_count(100)
+    page.locator('#history-next').click()
+    expect(page.locator('#history-page')).to_have_text('Найдено: 105. Показано: 101–105.')
+    expect(page.locator('#history-next')).to_be_disabled()
+    page.locator('#history-prev').click()
+    expect(page.locator('#history-page')).to_contain_text('1–100')
+    page.locator('#history-start').fill('2021-01-01')
+    page.get_by_role('button', name='Применить период').click()
+    expect(page.locator('#history-page')).to_have_text('Найдено: 0. Показано: 0–0.')
+    expect(page.locator('#zen')).to_contain_text('Операций пока нет')
+    expect(page.locator('#history-prev')).to_be_disabled()
+    expect(page.locator('#history-next')).to_be_disabled()
+    page.close()

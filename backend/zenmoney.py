@@ -1,6 +1,5 @@
-import json
 import time
-from zenimport_zenmoney import Client, KINDS, FORCE_FETCH, validate_diff, entity_key
+from zenimport_zenmoney import Client, FORCE_FETCH
 
 DEMO_ACCOUNT = '00000000-0000-4000-8000-000000000001'
 
@@ -26,25 +25,20 @@ class ZenMoney:
         return Client(self.token).read_diff(payload['serverTimestamp'], force_fetch=payload.get('forceFetch'))
 
 
-def apply_diff(db, result):
-    validate_diff(result)
-    for kind in KINDS:
-        for item in result.get(kind, []):
-            db.execute('INSERT OR REPLACE INTO zen_entities VALUES (?,?,?)',
-                       (kind, entity_key(kind, item), json.dumps(item)))
-    for item in result.get('deletion', []):
-        db.execute('DELETE FROM zen_entities WHERE kind=? AND id=?',
-                   (item['object'], str(item['id'])))
-    db.execute("INSERT OR REPLACE INTO meta VALUES ('cursor',?)", (str(result['serverTimestamp']),))
+def apply_diff(db, result, requested_cursor=None):
+    from .zenstore import store_diff
+    store_diff(db, result, requested_cursor)
 
 
 def request_diff(db, client, transactions=None):
     row = db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()
-    payload = {'currentClientTimestamp': int(time.time()), 'serverTimestamp': int(row['value']) if row else 0}
-    if not row:
+    full = db.execute("SELECT 1 FROM meta WHERE key='needs_full_sync'").fetchone()
+    payload = {'currentClientTimestamp': int(time.time()), 'serverTimestamp': int(row['value']) if row and not full else 0}
+    if not row or full:
         payload['forceFetch'] = list(FORCE_FETCH)
     if transactions:
         payload['transaction'] = transactions
     result = client.diff(payload)
-    apply_diff(db, result)
+    apply_diff(db, result, payload['serverTimestamp'])
+    db.execute("DELETE FROM meta WHERE key='needs_full_sync'")
     return result

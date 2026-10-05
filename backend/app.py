@@ -3,7 +3,9 @@ import os
 import secrets
 import threading
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
+from datetime import date
+from .zenstore import history, summary
 from fastapi.responses import FileResponse, JSONResponse
 from .db import initialize, transaction, entities
 from .models import BankImport, Mapping, Decision
@@ -66,8 +68,18 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
             return {'mode': mode, 'capabilities': {'write': mode == 'demo'}, 'last_sync': int(cursor['value']) if cursor else None,
                     'bank_accounts': [dict(r) for r in db.execute('SELECT * FROM bank_accounts')],
                     'zenmoney_accounts': entities(db, 'account'), 'categories': entities(db, 'tag'),
-                    'zenmoney_transactions': entities(db, 'transaction'), 'review': review(db),
+                    'zenmoney_transactions': history(db)['items'], 'zenmoney_summary': summary(db), 'review': review(db),
                     'outbox': [dict(r) for r in db.execute('SELECT bank_transaction,zen_id,state,error FROM outbox')]}
+
+    @app.get('/api/zenmoney/history')
+    def zen_history(limit: int = Query(100, ge=1, le=200), offset: int = Query(0, ge=0),
+                    start: date | None = None, end: date | None = None,
+                    account: str | None = None, include_deleted: bool = False):
+        if start and end and start > end:
+            fail('Начало периода позже конца', 422)
+        with transaction(path) as db:
+            return history(db, limit=limit, offset=offset, start=start, end=end,
+                           account=account, include_deleted=include_deleted)
 
     @app.post('/api/imports')
     def imports(data: BankImport):
