@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "ZenBridge · Bank Review",
+  "version": "0.1.0",
+  "description": "Локальный разбор банковских операций и проверка перед отправкой в ZenMoney",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "optional_host_permissions": ["https://*/*"],
+  "action": {"default_popup": "popup.html"},
+  "options_page": "app.html",
+  "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'none'"}
+}

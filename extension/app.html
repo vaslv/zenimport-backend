@@ -1,0 +1,11 @@
+<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="style.css"><title>ZenBridge · Проверка операций</title><body><main>
+<header><span class="eyebrow">БАНКИ → ПРОВЕРКА → ZENMONEY</span><h1>Ваши операции под контролем</h1><p>Сопоставьте счета, проверьте совпадения и подтвердите недостающие операции.</p></header>
+<section><h2>Подключение <span id="mode"></span></h2><form id="settings"><label>Адрес сервера<input id="url" type="url" required></label><label>API-токен<input id="token" type="password" required autocomplete="off"></label><button>Сохранить</button></form><p>Токен ZenMoney хранится только на сервере.</p></section>
+<nav><button id="refresh">Обновить</button><button id="sync">Синхронизировать ZenMoney</button><button id="send">Отправить подтверждённые</button></nav>
+<p id="status" role="status" aria-live="polite"></p>
+<section><h2>1. Сопоставление счетов</h2><div id="accounts"></div></section>
+<section><h2>2. Проверка банковских операций</h2><p>Совпадение суммы и даты — подсказка. Решение принимаете вы. «Подтвердить создание» добавляет операцию в очередь.</p><div id="review"></div></section>
+<section><h2>3. Очередь отправки</h2><div id="outbox"></div></section>
+<details><summary>Операции из ZenMoney</summary><div id="zen"></div></details>
+</main><script type="module" src="app.js"></script></body></html>
