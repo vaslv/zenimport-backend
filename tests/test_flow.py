@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from backend.app import create_app
 from backend.db import transaction, entities
 from backend.zenmoney import ZenMoney, DEMO_ACCOUNT, apply_diff
+from zenimport_zenmoney import ResponseError
 
 TOKEN = 'test-token-that-is-long-enough'
 IMPORT = {'bank': 'demo', 'adapter_version': '1', 'account': 'bank-001', 'currency': 'VND',
@@ -166,7 +167,7 @@ def test_diff_deletions_and_bad_cursor_roll_back(setup):
     with transaction(path) as db:
         apply_diff(db, {'serverTimestamp': 2, 'deletion': [{'object': 'transaction', 'id': 'existing'}]})
         assert entities(db, 'transaction') == []
-    with pytest.raises(ValueError), transaction(path) as db:
+    with pytest.raises(ResponseError), transaction(path) as db:
         apply_diff(db, {'serverTimestamp': 'bad'})
     with transaction(path) as db:
         assert db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()[0] == '2'
@@ -197,7 +198,7 @@ def test_live_http_contract(monkeypatch):
     def remote(request):
         captured.append(request)
         return httpx.Response(200, json={'serverTimestamp': 123, 'account': [], 'transaction': []})
-    monkeypatch.setattr(httpx, 'Client', lambda **kwargs: client_type(transport=httpx.MockTransport(remote), **kwargs))
+    monkeypatch.setattr(httpx, 'Client', lambda **kwargs: client_type(**{**kwargs, 'transport': httpx.MockTransport(remote)}))
     result = ZenMoney('live', 'server-only-secret').diff({'currentClientTimestamp': 100, 'serverTimestamp': 0})
     assert result['serverTimestamp'] == 123
     assert str(captured[0].url) == 'https://api.zenmoney.ru/v8/diff/'

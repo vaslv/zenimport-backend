@@ -12,6 +12,9 @@ WORKDIR /app
 COPY requirements.runtime.lock.txt ./
 RUN python -m pip install --no-cache-dir -r requirements.runtime.lock.txt
 
+COPY packages/zenmoney-client ./packages/zenmoney-client
+RUN python -m pip install --no-cache-dir --no-deps ./packages/zenmoney-client
+
 FROM dependencies AS runtime
 RUN groupadd --gid 10001 app && useradd --uid 10001 --gid app --no-create-home app \
     && mkdir /data && chown app:app /data
