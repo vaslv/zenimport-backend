@@ -1,83 +1,99 @@
-import {api, settings} from './api.js';
+import {api, settings, normalizeBaseUrl} from './api.js';
 const $ = id => document.getElementById(id);
-const stateNames = {pending: 'Ожидает проверки', queued: 'Подтверждена', sent: 'Отправлена', linked: 'Связана', ignored: 'Пропущена', uncertain: 'Результат неизвестен', conflict: 'Конфликт'};
-function el(tag, text, className) {
-  const node = document.createElement(tag); if (text !== undefined) node.textContent = text;
-  if (className) node.className = className; return node;
+const names = {pending:'Ожидает проверки',queued:'Подтверждена',sent:'Отправлена',linked:'Связана',ignored:'Пропущена',uncertain:'Результат неизвестен',conflict:'Конфликт'};
+const titles = {overview:'Обзор',zenmoney:'Данные ZenMoney',banks:'Банковские данные',review:'Проверка и очередь',settings:'Подключение'};
+let state = null, busy = false, connected = false;
+function el(tag, text, className) { const n=document.createElement(tag); if(text!==undefined)n.textContent=text; if(className)n.className=className; return n; }
+function empty(node, text) { if(!node.childNodes.length)node.append(el('p',text,'empty')); }
+function action(text, fn) { const b=el('button',text); b.dataset.apiAction=''; b.onclick=()=>run(fn); return b; }
+function select(items, label) { const n=el('select'); n.setAttribute('aria-label',label); n.append(new Option(label,'')); items.forEach(i=>n.append(new Option(i.title,i.id))); return n; }
+function amount(tx) { return new Intl.NumberFormat('ru-RU',{style:'currency',currency:tx.currency}).format(tx.amount_minor/(tx.currency==='VND'?1:100)); }
+function feedback(text, error=false) { $('status').textContent=text; $('feedback').classList.toggle('error',error); }
+function controls() {
+  document.querySelectorAll('[data-api-action]').forEach(b=>b.disabled=busy||!connected);
+  $('save').disabled=busy; $('url').disabled=busy; $('token').disabled=busy;
+  $('send').disabled=busy||!connected||!state?.capabilities?.write||!state?.outbox?.some(x=>['queued','uncertain'].includes(x.state));
+  $('demo').disabled=busy||!connected||state?.mode!=='demo';
+  $('connection').textContent=busy?'Обновление…':connected?'Сервер подключён':'Нет подключения';
+  $('refresh').disabled=busy; // Reconnect is possible after a network error.
 }
-function button(text, fn) { const node = el('button', text); node.onclick = () => run(fn); return node; }
-function select(items, placeholder) {
-  const node = el('select'); node.append(new Option(placeholder, ''));
-  items.forEach(item => node.append(new Option(item.title, item.id))); return node;
+function navigate() {
+  let name=location.hash.slice(1)||'overview'; if(!titles[name])name='overview';
+  document.querySelectorAll('[data-view]').forEach(n=>n.hidden=n.dataset.view!==name);
+  document.querySelectorAll('nav a').forEach(n=>{if(n.hash===`#${name}`)n.setAttribute('aria-current','page');else n.removeAttribute('aria-current');});
+  $('title').textContent=titles[name];
 }
-let busy = false;
-async function run(fn) {
-  if (busy) return;
-  busy = true; document.querySelectorAll('button').forEach(n => n.disabled = true);
-  $('status').textContent = 'Выполняется…';
-  try { const result = await fn(); await refresh(); $('status').textContent = result?.results ? JSON.stringify(result.results) : 'Готово'; }
-  catch (error) { $('status').textContent = error.message; }
-  finally { busy = false; document.querySelectorAll('button').forEach(n => n.disabled = false); }
+function render() {
+  for(const id of ['metrics','accounts','bank-rows','review','outbox','zen','zen-accounts','categories'])$(id).replaceChildren();
+  $('mode').textContent=state ? (state.mode==='demo'?'DEMO · учебные данные':'LIVE · история ZenMoney'):'Нет подключения';
+  $('last-sync').textContent=state?.last_sync ? `Синхронизация: ${new Date(state.last_sync*1000).toLocaleString('ru-RU')}`:'Синхронизации ещё не было';
+  if(!state) { controls(); return; }
+  for(const [label,value] of [['Банковские операции',state.review.length],['Операции ZenMoney',state.zenmoney_transactions.length],['На проверке',state.review.filter(t=>t.state==='pending').length]]) {
+    const card=el('div',undefined,'metric'); card.append(el('strong',String(value)),el('span',label)); $('metrics').append(card);
+  }
+  state.zenmoney_accounts.forEach(a=>{ const row=el('article'); row.append(el('h3',a.title),el('p',a.archive?'Архивный счёт':'Активный счёт')); $('zen-accounts').append(row); });
+  empty($('zen-accounts'),'Счета ещё не загружены. Запустите синхронизацию.');
+  state.categories.forEach(t=>$('categories').append(el('span',t.title,'badge'))); empty($('categories'),'Категорий пока нет.');
+  state.bank_accounts.forEach(a=>{
+    const card=el('article'); card.append(el('h3',`${a.bank} / ${a.account} · ${a.currency}`));
+    const target=select(state.zenmoney_accounts.filter(z=>!z.archive),'Счёт ZenMoney'); target.value=a.zenmoney_account||'';
+    const locked=state.review.some(t=>t.bank_account===a.id&&['queued','sent','linked'].includes(t.state));
+    target.disabled=locked; card.append(target);
+    if(!locked)card.append(action('Сопоставить',()=>{if(!target.value)throw new Error('Выберите счёт ZenMoney.');return api(`/api/accounts/${a.id}/mapping`,{zenmoney_account:target.value},'PUT');}));
+    else card.append(el('p','Привязка используется подтверждёнными операциями.','muted'));
+    $('accounts').append(card);
+  });
+  empty($('accounts'),'Сначала импортируйте операции через иконку расширения на странице демобанка.');
+  state.review.forEach(tx=>{
+    const card=el('article'); card.append(el('span',names[tx.state]||tx.state,'badge'),el('h3',`${tx.date} · ${amount(tx)}`),el('p',tx.description));
+    const raw=el('details'); raw.append(el('summary','Исходные поля'),el('pre',JSON.stringify(tx.raw,null,2))); card.append(raw); $('bank-rows').append(card);
+    if(tx.state!=='pending')return;
+    const review=el('article'); review.dataset.transaction=tx.id; review.append(el('h3',`${tx.date} · ${amount(tx)}`),el('p',tx.description));
+    if(!tx.mapped)review.append(el('p','Сначала сопоставьте счёт в разделе «Банковские данные».'));
+    else if(!state.capabilities?.write)review.append(el('p','Запись отключена до завершения этапов интеграции.'));
+    else {
+      const category=select(state.categories,'Категория'); review.append(category);
+      const decide=(action,match_id=null)=>api(`/api/review/${tx.id}/confirm`,{action,match_id,category:category.value||null,reviewed_candidates:tx.candidates.map(c=>c.id)});
+      tx.candidates.forEach(c=>review.append(el('p',`${c.reason}: ${c.date} · ${c.payee||c.comment||c.id}`),action('Это та же операция',()=>decide('link',c.id))));
+      review.append(action('Подтвердить создание',()=>{if(tx.candidates.length&&!confirm('Есть похожие операции. Создать отдельную операцию?'))return;return decide('create');}),action('Пропустить',()=>decide('ignore')));
+    }
+    $('review').append(review);
+  });
+  empty($('bank-rows'),'Банковских операций пока нет.'); empty($('review'),'Нет операций, ожидающих проверки.');
+  state.outbox.forEach(item=>{const row=el('article');row.append(el('strong',names[item.state]||item.state),el('p',item.zen_id,'muted'));if(item.error)row.append(el('p',item.error));if(item.state==='queued')row.append(action('Вернуть на проверку',()=>api(`/api/outbox/${item.bank_transaction}/reopen`,{})));$('outbox').append(row);});
+  empty($('outbox'),'Очередь пуста. Подтверждение добавляет операцию в очередь, отправка выполняется отдельно.');
+  state.zenmoney_transactions.forEach(tx=>{const row=el('article');row.append(el('h3',tx.date),el('p',`${tx.comment||tx.payee||'Без описания'} · +${tx.income} / −${tx.outcome}${tx.deleted?' · удалена':''}`));$('zen').append(row);});
+  empty($('zen'),'Операций пока нет.');
+  $('write-note').textContent=state.mode==='demo'?'DEMO: подтверждение и отправка работают только с учебными данными.':'LIVE: запись отключена до завершения интеграции. Доступно чтение истории.';
+  controls();
 }
 async function refresh() {
-  const state = await api('/api/state');
-  $('mode').textContent = state.mode === 'demo' ? 'ДЕМО · без записи в ZenMoney' : 'LIVE · реальные данные';
-  for (const id of ['accounts', 'review', 'outbox', 'zen']) $(id).replaceChildren();
-  if (!state.bank_accounts.length) $('accounts').append(el('p', 'Сначала считайте операции через иконку расширения на странице банка.'));
-  state.bank_accounts.forEach(account => {
-    const row = el('div', undefined, 'account');
-    row.append(el('strong', `${account.bank} / ${account.account} · ${account.currency}`));
-    const target = select(state.zenmoney_accounts.filter(a => !a.archive), 'Выберите счёт ZenMoney');
-    target.value = account.zenmoney_account || '';
-    row.append(target, button('Сопоставить', () => api(`/api/accounts/${account.id}/mapping`, {zenmoney_account: target.value}, 'PUT')));
-    $('accounts').append(row);
-  });
-  if (!state.review.length) $('review').append(el('p', 'Операций пока нет. Для первого прогона откройте http://127.0.0.1:8000/demo-bank.'));
-  state.review.forEach(tx => {
-    const card = el('article');
-    card.append(el('span', stateNames[tx.state], 'badge'), el('h3', `${tx.date} · ${new Intl.NumberFormat('ru-RU', {style:'currency',currency:tx.currency}).format(tx.amount_minor / (tx.currency === 'VND' ? 1 : 100))}`), el('p', tx.description));
-    const raw = el('details'); raw.append(el('summary', 'Исходные поля'), el('pre', JSON.stringify(tx.raw, null, 2))); card.append(raw);
-    if (tx.state === 'pending' && tx.mapped) {
-      const category = select(state.categories, 'Без категории'); card.append(category);
-      const decide = (action, match_id = null) => api(`/api/review/${tx.id}/confirm`, {action, match_id, category: category.value || null, reviewed_candidates: tx.candidates.map(c => c.id)});
-      tx.candidates.forEach(candidate => {
-        card.append(el('p', `${candidate.reason}: ${candidate.date} · ${candidate.payee || candidate.comment || candidate.id}`),
-          button('Это та же операция', () => decide('link', candidate.id)));
-      });
-      card.append(button('Подтвердить создание', () => {
-        if (tx.candidates.length && !confirm('Есть похожие операции. Создать отдельную операцию?')) return;
-        return decide('create');
-      }), button('Пропустить', () => decide('ignore')));
-    } else if (!tx.mapped) card.append(el('p', 'Сначала сопоставьте счёт выше.'));
-    $('review').append(card);
-  });
-  state.outbox.forEach(item => {
-    const row = el('div');
-    row.append(el('p', `${item.zen_id} · ${stateNames[item.state] || item.state}${item.error ? ' · ' + item.error : ''}`));
-    if (item.state === 'queued') row.append(button('Вернуть на проверку', () => api(`/api/outbox/${item.bank_transaction}/reopen`, {})));
-    $('outbox').append(row);
-  });
-  if (!state.outbox.length) $('outbox').append(el('p', 'Нет подтверждённых операций.'));
-  state.zenmoney_transactions.forEach(tx => $('zen').append(el('p', `${tx.date} · +${tx.income} / −${tx.outcome} · ${tx.comment || tx.payee || ''}${tx.deleted ? ' · удалена' : ''}`)));
+  const result=await api('/api/state');
+  if(!['demo','live'].includes(result.mode)||!['bank_accounts','zenmoney_accounts','categories','review','outbox','zenmoney_transactions'].every(k=>Array.isArray(result[k])))throw new Error('Сервер вернул несовместимый формат данных.');
+  state=result; connected=true; render();
 }
-$('settings').onsubmit = async event => {
-  event.preventDefault();
+async function run(fn) {
+  if(busy)return;busy=true;controls();feedback('Выполняется…');
+  try {const result=await fn();await refresh();feedback(result?.results?`Отправка завершена: ${result.results.filter(x=>x.state==='sent').length} успешно, ${result.results.filter(x=>x.state!=='sent').length} требуют внимания.`:'Данные обновлены.');}
+  catch(error){connected=false;feedback(error.message,true);}
+  finally{busy=false;controls();}
+}
+$('settings').onsubmit=async event=>{
+  event.preventDefault(); if(busy)return;
   try {
-    const url = new URL($('url').value);
-    if (url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Укажите только адрес сервера без пути и параметров.');
-    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) throw new Error('Удалённый сервер должен использовать HTTPS.');
-    if (url.protocol === 'https:') {
-      const granted = await chrome.permissions.request({origins: [`${url.origin}/*`]});
-      if (!granted) throw new Error('Доступ к серверу не разрешён');
-    }
-    await chrome.storage.local.set({baseUrl: url.origin, token: $('token').value.trim()});
-    await run(async () => {});
-  } catch (error) { $('status').textContent = error.message; }
+    const baseUrl=normalizeBaseUrl($('url').value),token=$('token').value.trim();
+    if(token.length<24)throw new Error('API-токен должен содержать не менее 24 символов.');
+    const url=new URL(baseUrl);
+    if(url.protocol==='https:'&&!await chrome.permissions.request({origins:[`https://${url.hostname}/*`]}))throw new Error('Доступ к серверу не разрешён.');
+    await chrome.storage.local.set({baseUrl,token});state=null;connected=false;render();
+    await run(async()=>{});
+  }catch(error){feedback(error.message,true);}
 };
-$('refresh').onclick = () => run(async () => {});
-$('sync').onclick = () => run(() => api('/api/zenmoney/sync', {}));
-$('send').onclick = () => {
-  if (confirm('Отправить все подтверждённые операции? В LIVE-режиме они появятся в ZenMoney.')) run(() => api('/api/outbox/send', {}));
-};
-const config = await settings(); $('url').value = config.baseUrl; $('token').value = config.token;
-if (config.token) await run(async () => {});
+$('refresh').onclick=()=>run(async()=>{});
+$('sync').onclick=()=>run(()=>api('/api/zenmoney/sync',{}));
+$('demo').onclick=async()=>{const config=await settings();chrome.tabs.create({url:config.baseUrl+'/demo-bank'});};
+$('send').onclick=()=>{if(confirm('Отправить подтверждённые демонстрационные операции?'))run(()=>api('/api/outbox/send',{}));};
+window.addEventListener('hashchange',navigate);
+const config=await settings();$('url').value=config.baseUrl;$('token').value=config.token;
+if(!config.token)location.hash='settings';navigate();render();
+if(config.token)await run(async()=>{});

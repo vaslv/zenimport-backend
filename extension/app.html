@@ -1,11 +1,17 @@
-<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="style.css"><title>ZenBridge · Проверка операций</title><body><main>
-<header><span class="eyebrow">БАНКИ → ПРОВЕРКА → ZENMONEY</span><h1>Ваши операции под контролем</h1><p>Сопоставьте счета, проверьте совпадения и подтвердите недостающие операции.</p></header>
-<section><h2>Подключение <span id="mode"></span></h2><form id="settings"><label>Адрес сервера<input id="url" type="url" required></label><label>API-токен<input id="token" type="password" required autocomplete="off"></label><button>Сохранить</button></form><p>Токен ZenMoney хранится только на сервере.</p></section>
-<nav><button id="refresh">Обновить</button><button id="sync">Синхронизировать ZenMoney</button><button id="send">Отправить подтверждённые</button></nav>
-<p id="status" role="status" aria-live="polite"></p>
-<section><h2>1. Сопоставление счетов</h2><div id="accounts"></div></section>
-<section><h2>2. Проверка банковских операций</h2><p>Совпадение суммы и даты — подсказка. Решение принимаете вы. «Подтвердить создание» добавляет операцию в очередь.</p><div id="review"></div></section>
-<section><h2>3. Очередь отправки</h2><div id="outbox"></div></section>
-<details><summary>Операции из ZenMoney</summary><div id="zen"></div></details>
-</main><script type="module" src="app.js"></script></body></html>
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="style.css"><title>ZenImport · Операции</title></head>
+<body><div class="shell"><aside class="sidebar"><a class="brand" href="#overview">ZI <span>ZenImport</span></a>
+<p class="sidebar-note">Банки и ZenMoney<br>в одном рабочем месте</p>
+<nav aria-label="Разделы">
+<a href="#overview">Обзор</a><a href="#zenmoney">ZenMoney</a><a href="#banks">Банковские данные</a><a href="#review">Проверка и очередь</a><a href="#settings">Подключение</a>
+</nav><div class="sidebar-foot">Личный финансовый импорт<br><span id="connection" role="status">Не подключено</span></div></aside>
+<main><header><div><span class="eyebrow">ОТ ИСТОРИИ К ПОРЯДКУ</span><h1 id="title">Обзор</h1></div><span id="mode" class="badge">Нет подключения</span></header>
+<div class="toolbar"><button id="refresh" data-api-action>Обновить данные</button><button id="sync" data-api-action>Синхронизировать ZenMoney</button><span id="last-sync"></span></div>
+<div id="feedback" role="status" aria-live="polite"><span id="status">Сохраните адрес и API-токен, чтобы подключиться.</span></div>
+<section id="view-overview" data-view="overview"><div class="metrics" id="metrics"></div><article class="intro"><h2>Начните с подключения</h2><p>Сервер хранит историю. Расширение помогает загрузить данные и проверить каждое решение.</p><ol><li>Сохраните адрес локального backend и API-токен.</li><li>Синхронизируйте демонстрационные данные ZenMoney.</li><li>Откройте демобанк и считайте операции через иконку расширения.</li></ol><button id="demo" data-api-action>Открыть демобанк</button><p class="muted">В DEMO используются учебные данные. Реальные банковские адаптеры ещё не подключены.</p></article></section>
+<section id="view-zenmoney" data-view="zenmoney" hidden><h2>Счета</h2><div id="zen-accounts"></div><h2>Категории</h2><div id="categories" class="chips"></div><h2>Операции из ZenMoney</h2><div id="zen"></div></section>
+<section id="view-banks" data-view="banks" hidden><h2>Банковские счета</h2><div id="accounts"></div><h2>Исходные операции</h2><div id="bank-rows"></div></section>
+<section id="view-review" data-view="review" hidden><p id="write-note" class="notice">Подтверждение и отправка пока доступны для демонстрационной проверки.</p><h2>Операции на проверку</h2><div id="review"></div><div class="section-heading"><h2>Очередь</h2><button id="send" data-api-action>Отправить подтверждённые</button></div><div id="outbox"></div></section>
+<section id="view-settings" data-view="settings" hidden><article><h2>Подключение к backend</h2><form id="settings"><label for="url">Адрес сервера</label><input id="url" type="url" required placeholder="http://127.0.0.1:18791"><label for="token">API-токен backend</label><input id="token" type="password" required autocomplete="off"><p class="muted">Возьмите API_TOKEN из локального файла .env. Токен ZenMoney здесь не нужен.</p><button id="save">Сохранить и подключиться</button></form></article></section>
+</main></div><script type="module" src="app.js"></script></body></html>

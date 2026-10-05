@@ -215,3 +215,14 @@ def test_deleted_transaction_is_not_a_candidate(setup):
         apply_diff(db, {'serverTimestamp': 2, 'transaction': [tx]})
     assert client.get('/api/state').json()['review'][0]['candidates'] == []
     assert approve(client, identifier).status_code == 200
+
+
+def test_live_write_gate(tmp_path):
+    class NoCalls:
+        def diff(self, payload):
+            raise AssertionError('Live write gate must reject before network')
+    client = TestClient(create_app(tmp_path / 'live', TOKEN, 'live', NoCalls()))
+    client.headers['Authorization'] = f'Bearer {TOKEN}'
+    assert client.get('/api/state').json()['capabilities']['write'] is False
+    assert client.post('/api/review/any/confirm', json={'action': 'create'}).status_code == 403
+    assert client.post('/api/outbox/send', json={}).status_code == 403

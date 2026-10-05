@@ -41,5 +41,15 @@ COPY tests/parser.test.mjs ./tests/parser.test.mjs
 USER node
 CMD ["node", "--test", "tests/parser.test.mjs"]
 
+
+FROM mcr.microsoft.com/playwright/python:v1.58.0-noble@sha256:678457c4c323b981d8b4befc57b95366bb1bb6aa30057b1269f6b171e8d9975a AS browser-tests
+WORKDIR /app
+COPY requirements.lock.txt ./
+RUN python -m pip install --no-cache-dir -r requirements.lock.txt playwright==1.58.0
+COPY extension ./extension
+COPY tests/browser ./tests/browser
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+CMD ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests/browser/extension_flow.py"]
+
 # Default builds produce the application, not a test image.
 FROM runtime AS final

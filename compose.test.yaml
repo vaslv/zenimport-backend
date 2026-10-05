@@ -42,6 +42,34 @@ services:
     tmpfs: [/tmp]
     command: ["python", "tests/container_smoke.py", "seed"]
 
+
+  browser-backend:
+    profiles: [test]
+    build:
+      context: .
+      target: runtime
+    environment:
+      API_TOKEN: docker-test-token-not-for-real-data
+      ZENMONEY_MODE: demo
+      DATABASE_PATH: /data/browser.sqlite3
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /data:uid=10001,gid=10001,mode=0700
+
+  browser-tests:
+    profiles: [test]
+    build:
+      context: .
+      target: browser-tests
+    network_mode: service:browser-backend
+    depends_on:
+      browser-backend:
+        condition: service_healthy
+    shm_size: 1gb
+    volumes:
+      - ./test-results:/results
+
 volumes:
   data:
     name: ${COMPOSE_PROJECT_NAME:-zenimport}-test-data

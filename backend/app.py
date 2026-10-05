@@ -27,7 +27,7 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
     client = zen_client or ZenMoney(mode, os.getenv('ZENMONEY_TOKEN', ''))
     # One process/worker. DB BEGIN IMMEDIATE additionally serializes mutations.
     lock = threading.Lock()
-    app = FastAPI(title='ZenBridge', version='0.1.0')
+    app = FastAPI(title='ZenImport', version='0.1.0')
 
     @app.middleware('http')
     async def guard(request: Request, call_next):
@@ -63,7 +63,7 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
     def state():
         with transaction(path) as db:
             cursor = db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()
-            return {'mode': mode, 'last_sync': int(cursor['value']) if cursor else None,
+            return {'mode': mode, 'capabilities': {'write': mode == 'demo'}, 'last_sync': int(cursor['value']) if cursor else None,
                     'bank_accounts': [dict(r) for r in db.execute('SELECT * FROM bank_accounts')],
                     'zenmoney_accounts': entities(db, 'account'), 'categories': entities(db, 'tag'),
                     'zenmoney_transactions': entities(db, 'transaction'), 'review': review(db),
@@ -99,12 +99,16 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
 
     @app.post('/api/review/{identifier}/confirm')
     def decision(identifier: str, data: Decision):
+        if mode != 'demo':
+            fail('Запись отключена до завершения этапа интеграции', 403)
         with lock, transaction(path) as db:
             sync(db)
             return confirm(db, identifier, data)
 
     @app.post('/api/outbox/send')
     def send():
+        if mode != 'demo':
+            fail('Запись отключена до завершения этапа интеграции', 403)
         results = []
         with lock:
             with transaction(path) as db:
