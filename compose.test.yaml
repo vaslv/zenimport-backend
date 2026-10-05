@@ -1,0 +1,47 @@
+# Only use with scripts/test-docker.sh: dedicated project and disposable data.
+services:
+  backend:
+    environment:
+      API_TOKEN: docker-test-token-not-for-real-data
+      ZENMONEY_MODE: demo
+      ZENMONEY_TOKEN: ""
+    ports: !override
+      - "127.0.0.1:0:8000"
+    restart: "no"
+
+  backend-tests:
+    profiles: [test]
+    build:
+      context: .
+      target: backend-tests
+    read_only: true
+    tmpfs: [/tmp]
+    network_mode: none
+
+  parser-tests:
+    profiles: [test]
+    build:
+      context: .
+      target: parser-tests
+    read_only: true
+    tmpfs: [/tmp]
+    network_mode: none
+
+  smoke:
+    profiles: [test]
+    build:
+      context: .
+      target: backend-tests
+    environment:
+      SMOKE_BASE_URL: http://backend:8000
+      SMOKE_TOKEN: docker-test-token-not-for-real-data
+    depends_on:
+      backend:
+        condition: service_healthy
+    read_only: true
+    tmpfs: [/tmp]
+    command: ["python", "tests/container_smoke.py", "seed"]
+
+volumes:
+  data:
+    name: ${COMPOSE_PROJECT_NAME:-zenimport}-test-data

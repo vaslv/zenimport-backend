@@ -1,0 +1,38 @@
+name: zenimport
+services:
+  backend:
+    build:
+      context: .
+      target: runtime
+    environment:
+      API_TOKEN: ${API_TOKEN:-}
+      ZENMONEY_MODE: ${ZENMONEY_MODE:-demo}
+      ZENMONEY_TOKEN: ${ZENMONEY_TOKEN:-}
+      DATABASE_PATH: /data/zenimport.sqlite3
+    ports:
+      - "127.0.0.1:${HTTP_PORT:-18791}:8000"
+    volumes:
+      - data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  init:
+    profiles: [tools]
+    build:
+      context: .
+      target: config
+    network_mode: none
+    volumes:
+      - .:/workspace
+
+volumes:
+  data:
+    name: ${COMPOSE_PROJECT_NAME:-zenimport}-${ZENMONEY_MODE:-demo}-data

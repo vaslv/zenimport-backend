@@ -1,0 +1,16 @@
+**/.env
+**/.env.*
+**/.git
+**/.idea
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/*.pyc
+**/node_modules
+**/.DS_Store
+**/*.sqlite*
+**/*.db
+**/debug-*.json
+data/
+outputs/
+work/
