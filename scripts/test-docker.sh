@@ -7,7 +7,10 @@ dc() { docker compose -p "$project" -f "$root/compose.yaml" -f "$root/compose.te
 cleanup() {
   status=$?
   trap - EXIT
-  dc down --volumes --rmi local --remove-orphans >/dev/null 2>&1 || true
+  if ! dc --profile test down --volumes --rmi local --remove-orphans; then
+    printf '%s\n' "WARNING: test cleanup failed for $project" >&2
+    [ "$status" -ne 0 ] || status=1
+  fi
   exit "$status"
 }
 trap cleanup EXIT
