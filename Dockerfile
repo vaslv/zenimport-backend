@@ -5,6 +5,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 FROM python-base AS config
 WORKDIR /app
 COPY docker/init_env.py /app/init_env.py
+COPY backend/config.py /app/backend/config.py
+COPY .env.example /app/.env.example
 CMD ["python", "/app/init_env.py"]
 
 FROM python-base AS dependencies
@@ -19,6 +21,7 @@ FROM dependencies AS runtime
 RUN groupadd --gid 10001 app && useradd --uid 10001 --gid app --no-create-home app \
     && mkdir /data && chown app:app /data
 COPY backend ./backend
+COPY .env.example ./.env.example
 COPY fixtures/demo-bank.html ./fixtures/demo-bank.html
 USER 10001:10001
 ENV DATABASE_PATH=/data/zenimport.sqlite3

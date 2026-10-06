@@ -1,14 +1,11 @@
 import os
-import secrets
 import sys
 from pathlib import Path
 import uvicorn
+from .config import create_env
 
 if '--init' in sys.argv:
-    path = Path('.env')
-    with path.open('x') as file:
-        file.write(f'API_TOKEN={secrets.token_urlsafe(32)}\nZENMONEY_MODE=demo\nDATABASE_PATH=data/demo.sqlite3\n')
-    path.chmod(0o600)
+    create_env(Path('.env'))
     print('Создан .env. API_TOKEN скопируйте в настройки расширения.')
 else:
     if Path('.env').exists():
