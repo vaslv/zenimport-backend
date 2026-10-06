@@ -67,6 +67,9 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
             cursor = db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()
             return {'mode': mode, 'capabilities': {'write': mode == 'demo'}, 'last_sync': int(cursor['value']) if cursor else None,
                     'bank_accounts': [dict(r) for r in db.execute('SELECT * FROM bank_accounts')],
+                    'bank_imports': [{'id': r['id'], 'received_at': r['received_at'], 'bank_account': r['bank_account'],
+                                      'capture': json.loads(r['payload']).get('capture')}
+                                     for r in db.execute('SELECT id,received_at,bank_account,payload FROM imports ORDER BY received_at DESC,id DESC LIMIT 50')],
                     'zenmoney_accounts': entities(db, 'account'), 'categories': entities(db, 'tag'),
                     'zenmoney_transactions': history(db)['items'], 'zenmoney_summary': summary(db), 'review': review(db),
                     'outbox': [dict(r) for r in db.execute('SELECT bank_transaction,zen_id,state,error FROM outbox')]}

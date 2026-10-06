@@ -2,20 +2,24 @@ import {api} from './api.js';
 let payload;
 const $ = id => document.getElementById(id);
 $('open').onclick = () => chrome.tabs.create({url: chrome.runtime.getURL('app.html')});
-$('extract').onclick = async () => {
-  $('extract').disabled = true;
+async function extract(collectAll=false) {
+  $('extract').disabled = $('collect').disabled = true;
+  $('status').textContent=collectAll?'Собираю страницы. Держите окно расширения открытым…':'Читаю страницу…';
   $('import').hidden = $('debug').hidden = true;
   payload = undefined;
   try {
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    await chrome.scripting.executeScript({target:{tabId:tab.id},func:value=>{globalThis.__zenImportAllPages=value;},args:[collectAll]});
     const [result] = await chrome.scripting.executeScript({target: {tabId: tab.id}, files: ['extract.js']});
     if (!result.result?.ok) throw new Error(result.result?.error || 'Страница недоступна');
     payload = result.result.data;
-    $('status').textContent = `${payload.bank} · ${payload.account} · ${payload.transactions.length} операций. HTML не собирается.`;
+    $('status').textContent = `${payload.bank} · ${payload.account} · ${payload.transactions.length} операций. HTML не собирается.${payload.capture?` Строки ${payload.capture.row_start}–${payload.capture.row_end} из ${payload.capture.total_rows}. ${payload.capture.complete?'Все строки выбранного поиска собраны.':'Это только часть истории.'}`:''}`;
     $('import').hidden = $('debug').hidden = false;
   } catch (error) { $('status').textContent = error.message; }
-  finally { $('extract').disabled = false; }
-};
+  finally { $('extract').disabled = $('collect').disabled = false; }
+}
+$('extract').onclick=()=>extract(false);
+$('collect').onclick=()=>extract(true);
 $('import').onclick = async () => {
   $('import').disabled = true;
   try {

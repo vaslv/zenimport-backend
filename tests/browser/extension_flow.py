@@ -1,4 +1,6 @@
 import os
+import json
+import shutil
 import tempfile
 from pathlib import Path
 import pytest
@@ -10,7 +12,15 @@ TOKEN = 'docker-test-token-not-for-real-data'
 @pytest.fixture(scope='module')
 def browser():
     with sync_playwright() as p, tempfile.TemporaryDirectory() as profile:
-        extension = '/app/extension'
+        # Headless tests open popup.html directly, which does not grant activeTab.
+        # Grant only the synthetic bank host in a temporary test copy; production
+        # manifest retains activeTab and does not request persistent bank access.
+        extension = str(Path(profile) / 'extension')
+        shutil.copytree('/app/extension', extension)
+        manifest_path = Path(extension) / 'manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest['host_permissions'].append('https://ipay.vietinbank.vn/*')
+        manifest_path.write_text(json.dumps(manifest))
         context = p.chromium.launch_persistent_context(profile, channel='chromium', headless=True,
             args=[f'--disable-extensions-except={extension}', f'--load-extension={extension}', '--no-sandbox'],
             viewport={'width': 1440, 'height': 1000})
@@ -148,3 +158,72 @@ def test_history_filter_and_paging(browser):
     expect(page.locator('#history-prev')).to_be_disabled()
     expect(page.locator('#history-next')).to_be_disabled()
     page.close()
+
+
+def fixture_bank(browser, html=None):
+    context, identifier = browser
+    bank = context.new_page()
+    source = html or Path('/app/tests/browser/fixtures/vietinbank.html').read_text()
+    bank.route('https://ipay.vietinbank.vn/**', lambda route: route.fulfill(body=source, content_type='text/html'))
+    bank.goto('https://ipay.vietinbank.vn/payment-history?accountNo=111122223333')
+    return bank
+
+
+def test_vietinbank_period_popup_and_import(browser):
+    context, identifier = browser
+    bank = fixture_bank(browser)
+    popup = context.new_page()
+    popup.goto(f'chrome-extension://{identifier}/popup.html')
+    bank.bring_to_front()
+    popup.locator('#collect').click()
+    expect(popup.locator('#status')).to_contain_text('3 операций')
+    expect(popup.locator('#status')).to_contain_text('Все строки выбранного поиска собраны')
+    popup.locator('#import').click()
+    expect(popup.locator('#status')).to_contain_text('Добавлено: 3')
+    popup.locator('#import').click()
+    expect(popup.locator('#status')).to_contain_text('Уже были: 3')
+    app = open_app(browser)
+    app.locator('nav a[href="#banks"]').click()
+    expect(app.locator('#accounts')).to_contain_text('vietinbank / 111122223333')
+    expect(app.locator('#accounts')).to_contain_text('строки 1–3 из 3')
+    expect(app.locator('#bank-rows')).to_contain_text('Fee without a reference')
+    app.close();popup.close();bank.close()
+
+
+@pytest.mark.parametrize('mutation,expected', [
+    ("document.querySelector('thead td').textContent='NGÀY'", 'английская'),
+    ("document.querySelector('.cus-option').textContent='999988887777 - TEST PERSON - Current account'", 'счёт'),
+    ("document.querySelector('tbody tr td:nth-child(3)').textContent='-65.000 VND'", 'сумма'),
+    ("document.querySelector('tbody tr td:first-child').textContent='31/02/2026 12:00:00'", 'дата'),
+    ("document.querySelector('.table-pagination-total-range').textContent='1-3'", 'счётчик'),
+    ("document.querySelector('tbody tr td:first-child').textContent='31/08/2026 12:00:00'", 'периода'),
+])
+def test_vietinbank_rejects_ambiguous_dom(browser, mutation, expected):
+    bank = fixture_bank(browser)
+    bank.evaluate(mutation)
+    # This isolated container executes only our read-only parser over synthetic DOM.
+    result = bank.evaluate(Path('/app/extension/extract.js').read_text())
+    assert not result['ok']
+    assert expected in result['error']
+    bank.close()
+
+
+def test_vietinbank_fingerprint_stability_and_partial_capture(browser):
+    bank = fixture_bank(browser)
+    source = Path('/app/extension/extract.js').read_text()
+    first = bank.evaluate(source)
+    second = bank.evaluate(source)
+    assert first == second and first['ok']
+    assert first['data']['capture']['complete'] is False
+    assert first['data']['transactions'][0]['raw']['reference_kind'] == 'fingerprint'
+    assert first['data']['transactions'][0]['amount_minor'] == -65000
+    assert first['data']['transactions'][1]['amount_minor'] == 100000
+    bank.close()
+
+
+def test_vietinbank_collection_rejects_changed_context(browser):
+    bank = fixture_bank(browser)
+    bank.evaluate("document.querySelector('[aria-label=\"Page 2\"]').onclick=()=>{document.querySelector('.table-pagination-total-total').textContent='4';render(1);};globalThis.__zenImportAllPages=true")
+    result = bank.evaluate(Path('/app/extension/extract.js').read_text())
+    assert not result['ok'] and 'изменились' in result['error']
+    bank.close()

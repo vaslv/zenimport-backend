@@ -1,0 +1,22 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Synthetic VietinBank history fixture</title>
+<div class="vt-select__single-value"><div class="cus-option">111122223333 - TEST PERSON - Current account</div></div>
+<input readonly placeholder="Choose time range" value="01/09/2026 - 06/10/2026">
+<table class="cms-table paragraph-2"><thead><tr><td>DATE</td><td>DESCRIPTION</td><td>AMOUNT</td><td>BALANCE</td></tr></thead><tbody></tbody></table>
+<div class="table-pagination"><span class="table-pagination-total-range"></span> trong <span class="table-pagination-total-total">3</span> kết quả
+<a role="button" aria-label="Page 1 is your current page">1</a><a role="button" aria-label="Page 2">2</a></div>
+<script>
+// Synthetic values only. DOM structure and labels observed on the bank's English UI.
+const pages = [
+ [['06/10/2026 12:01:00','CT DI:TEST0001 Coffee','-65,000 VND','935,000 VND'],
+  ['05/10/2026 10:30:00','CT DEN:TEST0002 Transfer','+100,000 VND','1,000,000 VND']],
+ [['01/09/2026 08:00:01','Fee without a reference','-1,000 VND','900,000 VND']]
+];
+function render(index){
+ const body=document.querySelector('tbody');body.replaceChildren();
+ for(const cells of pages[index]){const row=document.createElement('tr');row.className='cms-table-row';for(const text of cells){const c=document.createElement('td');c.textContent=text;row.append(c);}body.append(row);}
+ document.querySelector('.table-pagination-total-range').textContent=index===0?'1-2':'3-3';
+}
+document.querySelector('[aria-label="Page 1 is your current page"]').onclick=()=>render(0);
+document.querySelector('[aria-label="Page 2"]').onclick=()=>setTimeout(()=>render(1),50);
+render(0);
+</script></html>

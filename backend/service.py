@@ -81,6 +81,14 @@ def import_bank(db, data):
             if (old['date'], old['amount_minor'], old['description']) != (str(tx.date), tx.amount_minor, tx.description):
                 fail('Операция с тем же банковским ID изменилась; импорт отменён')
             continue
+        if tx.raw.reference_kind == 'fingerprint':
+            # A changed description/balance is not automatically a new financial event.
+            peers = db.execute('SELECT raw FROM bank_transactions WHERE bank_account=? AND date=? AND amount_minor=?',
+                               (account_id, str(tx.date), tx.amount_minor)).fetchall()
+            for peer in peers:
+                original = json.loads(peer['raw'])
+                if original.get('reference_kind') == 'fingerprint' and original['date'] == tx.raw.date:
+                    fail('Неоднозначный повтор операции без банковского ID: то же время и сумма. Нужна ручная сверка; импорт отменён')
         db.execute('INSERT INTO bank_transactions(id,bank_account,external_id,date,amount_minor,description,raw) VALUES (?,?,?,?,?,?,?)',
                    (str(uuid.uuid4()), account_id, tx.external_id, str(tx.date), tx.amount_minor,
                     tx.description, tx.raw.model_dump_json()))

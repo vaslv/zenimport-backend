@@ -1,6 +1,6 @@
 from datetime import date
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class StrictModel(BaseModel):
@@ -8,6 +8,8 @@ class StrictModel(BaseModel):
 
 
 class RawRow(StrictModel):
+    reference_kind: Literal['bank', 'fingerprint'] = 'bank'
+    balance: str | None = Field(default=None, max_length=100)
     reference: str = Field(min_length=1, max_length=200)
     date: str = Field(max_length=100)
     amount: str = Field(max_length=100)
@@ -22,12 +24,39 @@ class BankTransaction(StrictModel):
     raw: RawRow
 
 
+class Capture(StrictModel):
+    start_date: date | None = None
+    end_date: date | None = None
+    row_start: int = Field(ge=1)
+    row_end: int = Field(ge=1)
+    total_rows: int = Field(ge=1, le=100000)
+    pages: int = Field(ge=1, le=2000)
+    complete: bool
+
+
 class BankImport(StrictModel):
+    capture: Capture | None = None
     bank: str = Field(pattern=r'^[a-z0-9_-]{1,40}$')
     adapter_version: str = Field(min_length=1, max_length=30)
     account: str = Field(min_length=1, max_length=120)
     currency: Literal['VND', 'USD', 'EUR']
     transactions: list[BankTransaction] = Field(min_length=1, max_length=2000)
+
+    @model_validator(mode='after')
+    def validate_capture(self):
+        c = self.capture
+        if c:
+            if not (c.row_start <= c.row_end <= c.total_rows) or c.row_end-c.row_start+1 != len(self.transactions):
+                raise ValueError('Capture count differs from transactions')
+            if c.complete != (c.row_start == 1 and c.row_end == c.total_rows):
+                raise ValueError('Invalid completeness claim')
+            if bool(c.start_date) != bool(c.end_date) or (c.start_date and c.start_date > c.end_date):
+                raise ValueError('Invalid capture period')
+            if c.start_date and any(not c.start_date <= t.date <= c.end_date for t in self.transactions):
+                raise ValueError('Transaction outside selected period')
+        if self.bank == 'vietinbank' and (self.currency != 'VND' or not c):
+            raise ValueError('VietinBank requires VND and capture metadata')
+        return self
 
 
 class Mapping(StrictModel):

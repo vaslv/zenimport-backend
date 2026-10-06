@@ -39,13 +39,15 @@ function render() {
   state.bank_accounts.forEach(a=>{
     const card=el('article'); card.append(el('h3',`${a.bank} / ${a.account} · ${a.currency}`));
     const target=select(state.zenmoney_accounts.filter(z=>!z.archive),'Счёт ZenMoney'); target.value=a.zenmoney_account||'';
+    const lastImport=state.bank_imports?.find(i=>i.bank_account===a.id && i.capture);
+    if(lastImport){const c=lastImport.capture;card.append(el('p',`${c.start_date||'Период не виден'} — ${c.end_date||''}: строки ${c.row_start}–${c.row_end} из ${c.total_rows}. ${c.complete?'Все строки выбранного поиска собраны.':'Частичный импорт.'}`,'muted'));}
     const locked=state.review.some(t=>t.bank_account===a.id&&['queued','sent','linked'].includes(t.state));
     target.disabled=locked; card.append(target);
     if(!locked)card.append(action('Сопоставить',()=>{if(!target.value)throw new Error('Выберите счёт ZenMoney.');return api(`/api/accounts/${a.id}/mapping`,{zenmoney_account:target.value},'PUT');}));
     else card.append(el('p','Привязка используется подтверждёнными операциями.','muted'));
     $('accounts').append(card);
   });
-  empty($('accounts'),'Сначала импортируйте операции через иконку расширения на странице демобанка.');
+  empty($('accounts'),'Сначала импортируйте операции через иконку расширения на странице поддерживаемого банка.');
   state.review.forEach(tx=>{
     const card=el('article'); card.append(el('span',names[tx.state]||tx.state,'badge'),el('h3',`${tx.date} · ${amount(tx)}`),el('p',tx.description));
     const raw=el('details'); raw.append(el('summary','Исходные поля'),el('pre',JSON.stringify(tx.raw,null,2))); card.append(raw); $('bank-rows').append(card);
