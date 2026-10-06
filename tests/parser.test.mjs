@@ -51,12 +51,13 @@ test('complete applies only to a single response covering the whole result',asyn
 });
 
 test('DevTools captures only newly armed history responses, strips secrets, supports base64',async()=>{
-  const src=readFileSync(new URL('../extension/devtools.js',import.meta.url),'utf8').replace("import {detailKeys} from './vietinbank-json.js';",'');
+  const src=readFileSync(new URL('../extension/devtools.js',import.meta.url),'utf8').replace("import {describeHistoryRequest} from './bank-contract.js';",'').replace("import {detailKeys} from './vietinbank-json.js';",'');
   const {detailKeys}=await import('../extension/vietinbank-json.js');
-  let listener;const sent=[];const now=Date.now();
+  const {describeHistoryRequest}=await import('../extension/bank-contract.js');
+  let listener;const sent=[];let saved;const now=Date.now();
   const state={status:'waiting',tabId:42,startedAt:now-1000,expires:now+10000};
-  const chrome={devtools:{inspectedWindow:{tabId:42},network:{onRequestFinished:{addListener:fn=>listener=fn}}},runtime:{onMessage:{addListener:()=>{}},sendMessage:async m=>sent.push(m)},storage:{session:{get:async()=>({bankCapture:state})}}};
-  vm.runInNewContext(src,{chrome,detailKeys,URL,Date,JSON,Number,TextDecoder,Uint8Array,atob});
+  const chrome={devtools:{inspectedWindow:{tabId:42},network:{onRequestFinished:{addListener:fn=>listener=fn}}},runtime:{onMessage:{addListener:()=>{}},sendMessage:async m=>sent.push(m)},storage:{session:{get:async()=>({bankCapture:state}),set:async value=>{saved=value;}}}};
+  vm.runInNewContext(src,{chrome,detailKeys,describeHistoryRequest,URL,Date,JSON,Number,TextDecoder,Uint8Array,atob});
   const request={request:{method:'POST',url:'https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions'},response:{status:200},startedDateTime:new Date(now).toISOString(),getContent:cb=>cb(btoa(JSON.stringify(response())),'base64')};
   await listener(request);assert.equal(sent.length,1);assert.ok(!JSON.stringify(sent).includes('NEVER-SAVE'));assert.equal(sent[0].tabId,42);
   await listener({...request,startedDateTime:new Date(now-5000).toISOString()});assert.equal(sent.length,1);
@@ -65,6 +66,10 @@ test('DevTools captures only newly armed history responses, strips secrets, supp
   state.status='ready';await listener(request);assert.equal(sent.length,1);
   state.status='waiting';await listener({...request,getContent:()=>Promise.resolve({content:JSON.stringify(response()),encoding:''})});assert.equal(sent.length,2);
   await listener({...request,getContent:cb=>cb('invalid','')});assert.equal(sent[2].error,'network-response-unavailable');
+  state.diagnoseRequest=true;
+  await listener({...request,request:{...request.request,postData:{text:JSON.stringify({sessionId:'SECRET',accountNo:'SECRET',currentPage:0})}}});
+  assert.equal(saved.bankContract.report.body.fields.currentPage.value,0);
+  assert.ok(!JSON.stringify(saved).includes('SECRET'));
 });
 
 test('history date hints use Vietnam dates and clamp month ends',async()=>{
@@ -72,4 +77,17 @@ test('history date hints use Vietnam dates and clamp month ends',async()=>{
   assert.equal(historyPeriod(6,new Date('2026-10-06T05:00:00Z')),'06.04.2026 — 06.10.2026');
   assert.equal(historyPeriod(1,new Date('2026-03-31T05:00:00Z')),'28.02.2026 — 31.03.2026');
   assert.equal(historyPeriod(1,new Date('2026-10-05T18:00:00Z')),'06.09.2026 — 06.10.2026');
+});
+
+test('request diagnostics deny secrets and account values while exposing dates/paging',async()=>{
+  const {describeHistoryRequest}=await import('../extension/bank-contract.js');
+  const report=describeHistoryRequest({url:'https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions?sessionId=SECRET',method:'POST',headers:[{name:'Authorization',value:'SECRET'}],postData:{text:JSON.stringify({sessionId:'SECRET',accountNo:'SECRET',checksum:'SECRET',fromDate:'01/04/2026',toDate:'06/10/2026',currentPage:1,pageSize:100,nested:{token:'SECRET'},rows:[{secret:'SECRET'}]})}});
+  assert.ok(!JSON.stringify(report).includes('SECRET'));
+  assert.equal(report.body.fields.currentPage.value,1);
+  assert.equal(report.body.fields.fromDate.value,'01/04/2026');
+  assert.deepEqual(report.body.fields.accountNo,{type:'string'});
+  assert.ok(!Object.hasOwn(report,'headers'));
+  const form=describeHistoryRequest({url:report.endpoint,method:'POST',postData:{mimeType:'application/x-www-form-urlencoded',text:'token=SECRET&pageSize=100'}});
+  assert.ok(!JSON.stringify(form).includes('SECRET'));assert.equal(form.body.fields.pageSize.value,'100');
+  assert.throws(()=>describeHistoryRequest({url:'https://example.com/',method:'GET'}));
 });

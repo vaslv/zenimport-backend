@@ -1,3 +1,4 @@
+import {describeHistoryRequest} from './bank-contract.js';
 import {detailKeys} from './vietinbank-json.js';
 const tabId=chrome.devtools.inspectedWindow.tabId;
 chrome.runtime.onMessage.addListener((message,sender,reply)=>{
@@ -11,6 +12,10 @@ chrome.devtools.network.onRequestFinished.addListener(async request=>{
   if(!state||state.status!=='waiting'||state.tabId!==tabId||state.expires<Date.now())return;
   // Ignore requests initiated before the operator armed this capture.
   if(!Number.isFinite(Date.parse(request.startedDateTime))||Date.parse(request.startedDateTime)<state.startedAt)return;
+  if(state.diagnoseRequest) {
+    const report=describeHistoryRequest(request.request);
+    await chrome.storage.session.set({bankContract:{captureId:state.expires,report}});
+  }
   const send=message=>chrome.runtime.sendMessage({type:'bank-response',tabId,captureId:state.expires,...message});
   try {
     if(request.response.status<200||request.response.status>=300)throw Error();

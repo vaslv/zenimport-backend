@@ -10,6 +10,8 @@
 <p class="muted">Сначала история сохраняется локально. Отправка в ZenMoney — только отдельным действием после проверки.</p>
 <details id="diagnostics"><summary>Если загрузка не работает</summary>
 <p>Откройте DevTools → Network в банковской вкладке и повторите поиск с изменённым периодом. Можно также загрузить сохранённый ответ банка.</p>
+<button id="diagnose-request" class="secondary">Собрать схему запроса</button><button id="export-contract" class="secondary" hidden>Скачать схему запроса</button>
+<p>Схема нужна для настройки автоматической загрузки. Значения сессии, токенов и счёта в неё не входят. Требуется открытая вкладка Network.</p>
 <label>Файл ответа <input id="json-file" type="file" accept=".json,.txt,application/json,text/plain"></label>
 <button id="clear-capture" class="secondary" hidden>Сбросить ожидание</button>
 <button id="debug" class="secondary" hidden>Скачать данные для диагностики</button>

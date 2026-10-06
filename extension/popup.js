@@ -56,22 +56,33 @@ async function restoreCapture() {
     $('status').textContent='Ожидаю новый ответ истории. '+(tools?.connected?'Захват через Network подключён. ':'Для резервного захвата откройте DevTools (Network) в банковской вкладке. ')+(Date.now()-(state.startedAt||0)>15000?'Ответ ещё не получен: измените период и нажмите Search; проверьте, появился ли новый getHistTransactions в Network. ':'Закройте это окно, нажмите Search в банке, затем снова откройте расширение. ');
   }
 }
-$('capture').onclick=async()=>{
+async function startCapture(diagnoseRequest=false){
   $('capture').disabled=true;payload=undefined;$('import').hidden=$('debug').hidden=true;
   try {
     const [tab]=await chrome.tabs.query({active:true,currentWindow:true});
     if(!tab?.url?.startsWith('https://ipay.vietinbank.vn/payment-history'))throw Error('Откройте историю счёта VietinBank.');
+    if(diagnoseRequest){
+      const tools=await chrome.runtime.sendMessage({type:'devtools-status',tabId:tab.id}).catch(()=>null);
+      if(!tools?.connected)throw Error('Для схемы запроса откройте DevTools → Network в банковской вкладке. После обновления расширения переоткройте DevTools.');
+    }
     await chrome.storage.local.set({historyPeriodMonths:Number($('history-period').value)});
-    await chrome.storage.session.set({bankCapture:{tabId:tab.id,status:'waiting',startedAt:Date.now(),expires:Date.now()+600000}});
-    await chrome.scripting.executeScript({target:{tabId:tab.id},files:['bank-bridge.js']});
-    await chrome.scripting.executeScript({target:{tabId:tab.id},world:'MAIN',files:['bank-observer.js']});
+    await chrome.storage.session.set({bankCapture:{tabId:tab.id,diagnoseRequest,status:'waiting',startedAt:Date.now(),expires:Date.now()+600000}});
+    if(diagnoseRequest){
+      await chrome.scripting.executeScript({target:{tabId:tab.id},world:'MAIN',func:()=>window.__zenImportStopObserver?.()});
+    }else{
+      await chrome.scripting.executeScript({target:{tabId:tab.id},files:['bank-bridge.js']});
+      await chrome.scripting.executeScript({target:{tabId:tab.id},world:'MAIN',files:['bank-observer.js']});
+    }
     await restoreCapture();
   }catch(error){await chrome.storage.session.remove('bankCapture');$('status').textContent=error.message;}
   finally{$('capture').disabled=false;}
 };
+$('capture').onclick=()=>startCapture();
+$('diagnose-request').onclick=()=>startCapture(true);
 $('clear-capture').onclick=async()=>{
   const {bankCapture:state}=await chrome.storage.session.get('bankCapture');
-  await chrome.storage.session.remove('bankCapture');
+  await chrome.storage.session.remove(['bankCapture','bankContract']);
+  $('export-contract').hidden=true;
   if(state)try{await chrome.scripting.executeScript({target:{tabId:state.tabId},world:'MAIN',func:()=>window.__zenImportStopObserver?.()});}catch{}
   payload=undefined;$('import').hidden=$('debug').hidden=$('clear-capture').hidden=true;$('status').textContent='Захват очищен.';
 };
@@ -98,3 +109,17 @@ chrome.storage.local.get('historyPeriodMonths').then(settings=>{
   if([1,6].includes(settings.historyPeriodMonths))$('history-period').value=String(settings.historyPeriodMonths);
   updatePeriodHint();
 });
+
+async function showContract(){
+  const {bankContract:contract,bankCapture:state}=await chrome.storage.session.get(['bankContract','bankCapture']);
+  $('export-contract').hidden=!(contract&&state&&contract.captureId===state.expires&&state.expires>Date.now());
+}
+$('export-contract').onclick=async()=>{
+  const {bankContract:contract,bankCapture:state}=await chrome.storage.session.get(['bankContract','bankCapture']);
+  if(!contract||!state||contract.captureId!==state.expires||state.expires<Date.now())return;
+  const url=URL.createObjectURL(new Blob([JSON.stringify(contract.report,null,2)],{type:'application/json'}));
+  const link=document.createElement('a');link.href=url;link.download='vietinbank-request-schema.json';link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+chrome.storage.onChanged.addListener((changes,area)=>{if(area==='session'&&(changes.bankContract||changes.bankCapture))showContract();});
+showContract();
