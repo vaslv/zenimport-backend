@@ -1,8 +1,9 @@
+import {renderAccountCards,renderHistory} from './zenmoney-view.js';
 import {api, settings, normalizeBaseUrl} from './api.js';
 const $ = id => document.getElementById(id);
 const names = {pending:'Ожидает проверки',queued:'Подтверждена',sent:'Отправлена',linked:'Связана',ignored:'Пропущена',uncertain:'Результат неизвестен',conflict:'Конфликт'};
 const titles = {overview:'Обзор',zenmoney:'Данные ZenMoney',banks:'Банковские данные',review:'Проверка и очередь',settings:'Подключение'};
-let state = null, busy = false, connected = false, historyOffset = 0, historyPage = null;
+let state = null, busy = false, connected = false, historyOffset = 0, historyPage = null, historyAccount = '', zenTab = 'accounts';
 function el(tag, text, className) { const n=document.createElement(tag); if(text!==undefined)n.textContent=text; if(className)n.className=className; return n; }
 function empty(node, text) { if(!node.childNodes.length)node.append(el('p',text,'empty')); }
 function action(text, fn) { const b=el('button',text); b.dataset.apiAction=''; b.onclick=()=>run(fn); return b; }
@@ -13,6 +14,8 @@ function controls() {
   document.querySelectorAll('[data-api-action]').forEach(b=>b.disabled=busy||!connected);
   $('history-prev').disabled=busy||!connected||historyOffset===0;
   $('history-next').disabled=busy||!connected||!historyPage?.has_more;
+  $('history-account').disabled=busy||!connected;
+  $('show-archived').disabled=busy;
   $('save').disabled=busy; $('url').disabled=busy; $('token').disabled=busy;
   $('send').disabled=busy||!connected||!state?.capabilities?.write||!state?.outbox?.some(x=>['queued','uncertain'].includes(x.state));
   $('demo').disabled=busy||!connected||state?.mode!=='demo';
@@ -20,10 +23,11 @@ function controls() {
   $('refresh').disabled=busy; // Reconnect is possible after a network error.
 }
 function navigate() {
-  let name=location.hash.slice(1)||'overview'; if(!titles[name])name='overview';
+  let name=(location.hash.slice(1)||'overview').split('/')[0]; if(!titles[name])name='overview';
   document.querySelectorAll('[data-view]').forEach(n=>n.hidden=n.dataset.view!==name);
   document.querySelectorAll('nav a').forEach(n=>{if(n.hash===`#${name}`)n.setAttribute('aria-current','page');else n.removeAttribute('aria-current');});
   $('title').textContent=titles[name];
+  if(name==='zenmoney')setZenTab(location.hash.split('/')[1]||zenTab);
 }
 function render() {
   for(const id of ['metrics','accounts','bank-rows','review','outbox','zen','zen-accounts','categories'])$(id).replaceChildren();
@@ -33,8 +37,16 @@ function render() {
   for(const [label,value] of [['Банковские операции',state.review.length],['Операции ZenMoney',state.zenmoney_summary?.transactions?.count??state.zenmoney_transactions.length],['На проверке',state.review.filter(t=>t.state==='pending').length]]) {
     const card=el('div',undefined,'metric'); card.append(el('strong',String(value)),el('span',label)); $('metrics').append(card);
   }
-  state.zenmoney_accounts.forEach(a=>{ const row=el('article'); row.append(el('h3',a.title),el('p',a.archive?'Архивный счёт':'Активный счёт')); $('zen-accounts').append(row); });
-  empty($('zen-accounts'),'Счета ещё не загружены. Запустите синхронизацию.');
+  const count=renderAccountCards($('zen-accounts'),state,{showArchived:$('show-archived').checked,onAccount:id=>{
+    run(async()=>{historyAccount=id;historyOffset=0;$('history-start').value='';$('history-end').value='';setZenTab('transactions');location.hash='zenmoney/transactions';});
+  }});
+  $('account-count').textContent=`Показано ${count.visible} из ${count.total} · В архиве: ${count.archived}`;
+  const filter=$('history-account');filter.replaceChildren(new Option('Все счета',''));
+  state.zenmoney_accounts.filter(a=>!a.deleted&&(!a.archive||$('show-archived').checked||String(a.id)===historyAccount)).forEach(a=>filter.append(new Option(a.title+(a.archive?' · архив':''),a.id)));
+  if(historyAccount&&!state.zenmoney_accounts.some(a=>String(a.id)===historyAccount))filter.append(new Option('Недоступный счёт',historyAccount));
+  filter.value=historyAccount;
+  $('history-title').textContent=historyAccount?`Операции · ${state.zenmoney_accounts.find(a=>String(a.id)===historyAccount)?.title||'Недоступный счёт'}`:'Все операции';
+  $('history-clear-account').hidden=!historyAccount;
   state.categories.forEach(t=>$('categories').append(el('span',t.title,'badge'))); empty($('categories'),'Категорий пока нет.');
   state.bank_accounts.forEach(a=>{
     const card=el('article'); card.append(el('h3',`${a.bank} / ${a.account} · ${a.currency}`));
@@ -69,8 +81,7 @@ function render() {
   const coverage=state.zenmoney_summary?.transactions;
   $('history-coverage').textContent=coverage?.first_date?`В базе: ${coverage.first_date} — ${coverage.last_date}. Полнота периода ещё не подтверждена.`:'История ещё не загружена.';
   $('history-page').textContent=historyPage?`Найдено: ${historyPage.total}. Показано: ${historyPage.items.length?historyOffset+1:0}–${historyOffset+historyPage.items.length}.`:'';
-  state.zenmoney_transactions.forEach(tx=>{const row=el('article');row.append(el('h3',tx.date),el('p',`${tx.comment||tx.payee||'Без описания'} · +${tx._amounts?.income??tx.income} / −${tx._amounts?.outcome??tx.outcome}${tx.deleted?' · удалена':''}`));$('zen').append(row);});
-  empty($('zen'),'Операций пока нет.');
+  renderHistory($('zen'),state.zenmoney_transactions,state,historyAccount);
   $('write-note').textContent=state.mode==='demo'?'DEMO: подтверждение и отправка работают только с учебными данными.':'LIVE: запись отключена до завершения интеграции. Доступно чтение истории.';
   controls();
 }
@@ -78,6 +89,7 @@ async function refresh() {
   const result=await api('/api/state');
   if(!['demo','live'].includes(result.mode)||!['bank_accounts','zenmoney_accounts','categories','review','outbox','zenmoney_transactions'].every(k=>Array.isArray(result[k])))throw new Error('Сервер вернул несовместимый формат данных.');
   const params=new URLSearchParams({limit:'100',offset:String(historyOffset)});
+  if(historyAccount)params.set('account',historyAccount);
   if($('history-start').value)params.set('start',$('history-start').value);
   if($('history-end').value)params.set('end',$('history-end').value);
   historyPage=await api(`/api/zenmoney/history?${params}`);
@@ -96,10 +108,28 @@ $('settings').onsubmit=async event=>{
     if(token.length<24)throw new Error('API-токен должен содержать не менее 24 символов.');
     const url=new URL(baseUrl);
     if(url.protocol==='https:'&&!await chrome.permissions.request({origins:[`https://${url.hostname}/*`]}))throw new Error('Доступ к серверу не разрешён.');
-    await chrome.storage.local.set({baseUrl,token});historyOffset=0;historyPage=null;state=null;connected=false;render();
+    await chrome.storage.local.set({baseUrl,token});historyOffset=0;historyPage=null;historyAccount='';state=null;connected=false;render();
     await run(async()=>{});
   }catch(error){feedback(error.message,true);}
 };
+function setZenTab(name){
+  zenTab=['accounts','transactions','categories'].includes(name)?name:'accounts';
+  document.querySelectorAll('[data-zen-tab]').forEach(tab=>{
+    const selected=tab.dataset.zenTab===zenTab;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;
+    $(`zen-panel-${tab.dataset.zenTab}`).hidden=!selected;
+  });
+}
+const tabs=[...document.querySelectorAll('[data-zen-tab]')];
+tabs.forEach((tab,index)=>{
+  tab.onclick=()=>{setZenTab(tab.dataset.zenTab);location.hash=`zenmoney/${zenTab}`;};
+  tab.onkeydown=event=>{
+    let next;if(event.key==='ArrowRight')next=(index+1)%tabs.length;else if(event.key==='ArrowLeft')next=(index+tabs.length-1)%tabs.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=tabs.length-1;else return;
+    event.preventDefault();tabs[next].click();tabs[next].focus();
+  };
+});
+$('show-archived').onchange=()=>{if(state)render();};
+$('history-account').onchange=()=>{const value=$('history-account').value;run(async()=>{historyAccount=value;historyOffset=0;});};
+$('history-clear-account').onclick=()=>run(async()=>{historyAccount='';historyOffset=0;});
 $('history-filter').onsubmit=event=>{event.preventDefault();run(async()=>{historyOffset=0;});};
 $('history-prev').onclick=()=>run(async()=>{historyOffset=Math.max(0,historyOffset-100);});
 $('history-next').onclick=()=>run(async()=>{historyOffset+=100;});

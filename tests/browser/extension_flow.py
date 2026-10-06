@@ -143,7 +143,7 @@ def test_history_filter_and_paging(browser):
         route.fulfill(json={'items': data[offset:offset+100], 'total': len(data), 'offset': offset,
                             'limit': 100, 'has_more': offset+100 < len(data)})
     page.route('**/api/zenmoney/history?*', history_route)
-    page.goto(f'chrome-extension://{identifier}/app.html#zenmoney')
+    page.goto(f'chrome-extension://{identifier}/app.html#zenmoney/transactions')
     expect(page.locator('#history-page')).to_have_text('Найдено: 105. Показано: 1–100.')
     expect(page.locator('#zen article')).to_have_count(100)
     page.locator('#history-next').click()
@@ -154,7 +154,7 @@ def test_history_filter_and_paging(browser):
     page.locator('#history-start').fill('2021-01-01')
     page.get_by_role('button', name='Применить период').click()
     expect(page.locator('#history-page')).to_have_text('Найдено: 0. Показано: 0–0.')
-    expect(page.locator('#zen')).to_contain_text('Операций пока нет')
+    expect(page.locator('#zen')).to_contain_text('Операций по выбранным условиям нет')
     expect(page.locator('#history-prev')).to_be_disabled()
     expect(page.locator('#history-next')).to_be_disabled()
     page.close()
@@ -227,3 +227,102 @@ def test_vietinbank_collection_rejects_changed_context(browser):
     result = bank.evaluate(Path('/app/extension/extract.js').read_text())
     assert not result['ok'] and 'изменились' in result['error']
     bank.close()
+
+
+def test_zenmoney_tabs_accounts_archive_and_transaction_details(browser):
+    from urllib.parse import urlparse, parse_qs
+    context, identifier = browser
+    page = context.new_page()
+    account_data = [
+        {'id':'vnd','title':'VietinBank · основной','instrument':1,'archive':False},
+        {'id':'usd','title':'Долларовый счёт','instrument':2,'archive':False},
+        {'id':'old','title':'Закрытая карта','instrument':2,'archive':True},
+    ]
+    records = [
+        {'id':'coffee','date':'2026-10-06','income':0,'outcome':65000,'incomeAccount':'vnd','outcomeAccount':'vnd',
+         'incomeInstrument':1,'outcomeInstrument':1,'payee':'Кофейня','comment':'Завтрак и кофе','tag':['food'],'_amounts':{'income':'0','outcome':'65000'}},
+        {'id':'transfer','date':'2026-10-06','income':500,'outcome':13000000,'incomeAccount':'usd','outcomeAccount':'vnd',
+         'incomeInstrument':2,'outcomeInstrument':1,'comment':'Пополнение валютного счёта','tag':None},
+        {'id':'salary','date':'2026-10-05','income':20000000,'outcome':0,'incomeAccount':'vnd','outcomeAccount':'vnd',
+         'incomeInstrument':1,'outcomeInstrument':1,'payee':'Работодатель','tag':['salary']},
+        {'id':'archived','date':'2026-10-04','income':0,'outcome':3.1,'incomeAccount':'old','outcomeAccount':'old',
+         'incomeInstrument':2,'outcomeInstrument':2,'comment':'Подписка','tag':None},
+    ]
+    def state_route(route):
+        data = route.fetch().json()
+        data.update(zenmoney_accounts=account_data,zenmoney_instruments=[{'id':1,'shortTitle':'VND'},{'id':2,'shortTitle':'USD'}],
+                    categories=[{'id':'food','title':'Кафе и рестораны'},{'id':'salary','title':'Зарплата'}],zenmoney_merchants=[],
+                    zenmoney_summary={'transactions':{'count':4,'first_date':'2026-10-04','last_date':'2026-10-06'},'coverage_verified':False})
+        route.fulfill(json=data)
+    requests = []
+    def history_route(route):
+        query = parse_qs(urlparse(route.request.url).query)
+        requests.append(query)
+        account = query.get('account',[''])[0]
+        rows = [t for t in records if not account or account in [t['incomeAccount'],t['outcomeAccount']]]
+        start = query.get('start',[''])[0]
+        end = query.get('end',[''])[0]
+        rows = [t for t in rows if (not start or t['date']>=start) and (not end or t['date']<=end)]
+        route.fulfill(json={'items':rows,'total':len(rows),'offset':0,'limit':100,'has_more':False})
+    page.route('**/api/state',state_route)
+    page.route('**/api/zenmoney/history?*',history_route)
+    page.goto(f'chrome-extension://{identifier}/app.html#zenmoney')
+    expect(page.locator('#zen-panel-accounts')).to_be_visible()
+    expect(page.locator('#zen-panel-transactions')).to_be_hidden()
+    expect(page.locator('#zen-panel-categories')).to_be_hidden()
+    expect(page.locator('#zen-accounts button')).to_have_count(2)
+    expect(page.locator('#zen-accounts')).not_to_contain_text('Закрытая карта')
+    page.locator('#show-archived').check()
+    expect(page.locator('#zen-accounts button')).to_have_count(3)
+    page.locator('#show-archived').uncheck()
+    expect(page.locator('#zen-accounts button')).to_have_count(2)
+    page.get_by_role('button',name='Операции по счёту VietinBank · основной',exact=True).click()
+    expect(page.locator('#zen-panel-transactions')).to_be_visible()
+    expect(page.locator('#zen-panel-accounts')).to_be_hidden()
+    expect(page.locator('#history-account')).to_have_value('vnd')
+    expect(page.locator('#zen article')).to_have_count(3)
+    assert requests[-1]['account']==['vnd'] and requests[-1]['offset']==['0']
+    expect(page.locator('#zen .transaction-day')).to_have_count(2)
+    expense=page.locator('[data-transaction-id="coffee"]')
+    expect(expense).to_contain_text('Кафе и рестораны')
+    expect(expense).to_contain_text('Завтрак и кофе')
+    expect(expense.locator('.money')).to_have_text('−65 000 VND')
+    transfer=page.locator('[data-transaction-id="transfer"]')
+    expect(transfer.locator('.transaction-accounts')).to_have_text('VietinBank · основной → Долларовый счёт')
+    expect(transfer.locator('.transaction-sums')).to_contain_text('−13 000 000 VND')
+    expect(transfer.locator('.transaction-sums')).not_to_contain_text('+500')
+    page.locator('#history-account').select_option('usd')
+    expect(page.locator('#zen article')).to_have_count(1)
+    expect(page.locator('#zen .money')).to_have_text('+500,00 USD')
+    page.locator('#zen summary').click()
+    expect(page.locator('#zen dd')).to_contain_text(['transfer','13 000 000 VND','500,00 USD'])
+    page.locator('#history-clear-account').click()
+    expect(page.locator('#zen article')).to_have_count(4)
+    expect(page.locator('#zen .transaction-day')).to_have_count(3)
+    expect(page.locator('[data-transaction-id="transfer"] .money')).to_have_count(2)
+    # Archive toggle controls the accounts list, never silently removes historical transactions.
+    expect(page.locator('[data-transaction-id="archived"] .money')).to_have_text('−3,10 USD')
+    page.screenshot(path='/results/zenmoney-transactions-desktop.png',full_page=True)
+    page.set_viewport_size({'width':390,'height':844})
+    page.screenshot(path='/results/zenmoney-transactions-mobile.png',full_page=True)
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    page.set_viewport_size({'width':1440,'height':1000})
+    page.get_by_role('tab',name='Счета',exact=True).click()
+    page.screenshot(path='/results/zenmoney-accounts.png',full_page=True)
+    page.locator('#show-archived').check()
+    page.get_by_role('button',name='Операции по счёту Закрытая карта',exact=True).click()
+    expect(page.locator('#zen article')).to_have_count(1)
+    expect(page.locator('#history-account')).to_have_value('old')
+    page.get_by_role('tab',name='Категории',exact=True).click()
+    expect(page.locator('#zen-panel-categories')).to_be_visible()
+    expect(page.locator('#zen-panel-transactions')).to_be_hidden()
+    page.get_by_role('tab',name='Категории',exact=True).press('Home')
+    expect(page.get_by_role('tab',name='Счета',exact=True)).to_be_focused()
+    expect(page.locator('#zen-panel-accounts')).to_be_visible()
+    # Exact decimal formatting and textual rendering, without executing supplied markup.
+    result=page.evaluate('''async () => {
+      const {formatMoney}=await import('./zenmoney-view.js');
+      return [formatMoney('9007199254740993.12','USD'),formatMoney('1e-8','BTC'),formatMoney('12.2300','USD')];
+    }''')
+    assert result==['9 007 199 254 740 993,12 USD','0,00000001 BTC','12,23 USD']
+    page.close()

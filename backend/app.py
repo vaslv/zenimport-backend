@@ -71,6 +71,7 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
                                       'capture': json.loads(r['payload']).get('capture')}
                                      for r in db.execute('SELECT id,received_at,bank_account,payload FROM imports ORDER BY received_at DESC,id DESC LIMIT 50')],
                     'zenmoney_accounts': entities(db, 'account'), 'categories': entities(db, 'tag'),
+                    'zenmoney_instruments': entities(db, 'instrument'), 'zenmoney_merchants': entities(db, 'merchant'),
                     'zenmoney_transactions': history(db)['items'], 'zenmoney_summary': summary(db), 'review': review(db),
                     'outbox': [dict(r) for r in db.execute('SELECT bank_transaction,zen_id,state,error FROM outbox')]}
 

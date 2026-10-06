@@ -10,7 +10,25 @@
 <div class="toolbar"><button id="refresh" data-api-action>Обновить данные</button><button id="sync" data-api-action>Синхронизировать ZenMoney</button><span id="last-sync"></span></div>
 <div id="feedback" role="status" aria-live="polite"><span id="status">Сохраните адрес и API-токен, чтобы подключиться.</span></div>
 <section id="view-overview" data-view="overview"><div class="metrics" id="metrics"></div><article class="intro"><h2>Начните с подключения</h2><p>Сервер хранит историю. Расширение помогает загрузить данные и проверить каждое решение.</p><ol><li>Сохраните адрес локального backend и API-токен.</li><li>Синхронизируйте демонстрационные данные ZenMoney.</li><li>Откройте демобанк и считайте операции через иконку расширения.</li></ol><button id="demo" data-api-action>Открыть демобанк</button><p class="muted">В DEMO используются учебные данные. Реальные банковские адаптеры ещё не подключены.</p></article></section>
-<section id="view-zenmoney" data-view="zenmoney" hidden><h2>Счета</h2><div id="zen-accounts"></div><h2>Категории</h2><div id="categories" class="chips"></div><h2>Операции из ZenMoney</h2><p id="history-coverage" class="muted"></p><form id="history-filter" class="toolbar"><label>С <input id="history-start" type="date"></label><label>По <input id="history-end" type="date"></label><button data-api-action>Применить период</button></form><p id="history-page"></p><div id="zen"></div><div class="toolbar"><button id="history-prev" data-api-action>Предыдущая страница</button><button id="history-next" data-api-action>Следующая страница</button></div></section>
+<section id="view-zenmoney" data-view="zenmoney" hidden>
+<div class="zen-tabs" role="tablist" aria-label="Данные ZenMoney">
+<button id="zen-tab-accounts" role="tab" aria-controls="zen-panel-accounts" aria-selected="true" data-zen-tab="accounts">Счета</button>
+<button id="zen-tab-transactions" role="tab" aria-controls="zen-panel-transactions" aria-selected="false" tabindex="-1" data-zen-tab="transactions">Операции</button>
+<button id="zen-tab-categories" role="tab" aria-controls="zen-panel-categories" aria-selected="false" tabindex="-1" data-zen-tab="categories">Категории</button>
+</div>
+<div id="zen-panel-accounts" role="tabpanel" aria-labelledby="zen-tab-accounts">
+<div class="section-heading"><h2>Мои счета</h2><label class="archive-toggle"><input id="show-archived" type="checkbox">Показать архивные счета</label></div>
+<p id="account-count" class="muted"></p><div id="zen-accounts" class="account-grid"></div>
+</div>
+<div id="zen-panel-transactions" role="tabpanel" aria-labelledby="zen-tab-transactions" hidden>
+<div class="section-heading"><h2 id="history-title">Все операции</h2><button id="history-clear-account" class="secondary" data-api-action hidden>Все счета</button></div>
+<form id="history-filter" class="history-filters"><label>Счёт<select id="history-account" aria-label="Фильтр по счёту"><option value="">Все счета</option></select></label><label>С<input id="history-start" type="date"></label><label>По<input id="history-end" type="date"></label><button data-api-action>Применить период</button></form>
+<p id="history-page" class="muted"></p><div id="zen"></div>
+<div class="toolbar"><button id="history-prev" data-api-action>Предыдущая страница</button><button id="history-next" data-api-action>Следующая страница</button></div>
+<p id="history-coverage" class="muted"></p>
+</div>
+<div id="zen-panel-categories" role="tabpanel" aria-labelledby="zen-tab-categories" hidden><h2>Категории</h2><div id="categories" class="chips"></div></div>
+</section>
 <section id="view-banks" data-view="banks" hidden><h2>Банковские счета</h2><div id="accounts"></div><h2>Исходные операции</h2><div id="bank-rows"></div></section>
 <section id="view-review" data-view="review" hidden><p id="write-note" class="notice">Подтверждение и отправка пока доступны для демонстрационной проверки.</p><h2>Операции на проверку</h2><div id="review"></div><div class="section-heading"><h2>Очередь</h2><button id="send" data-api-action>Отправить подтверждённые</button></div><div id="outbox"></div></section>
 <section id="view-settings" data-view="settings" hidden><article><h2>Подключение к backend</h2><form id="settings"><label for="url">Адрес сервера</label><input id="url" type="url" required placeholder="http://127.0.0.1:18791"><label for="token">API-токен backend</label><input id="token" type="password" required autocomplete="off"><p class="muted">Возьмите API_TOKEN из локального файла .env. Токен ZenMoney здесь не нужен.</p><button id="save">Сохранить и подключиться</button></form></article></section>
