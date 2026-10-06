@@ -65,7 +65,7 @@ def test_installed_extension_end_to_end(browser):
     popup = context.new_page()
     popup.goto(f'chrome-extension://{identifier}/popup.html')
     bank.bring_to_front()
-    popup.locator('#extract').click()
+    popup.locator('#diagnostics > summary').click();popup.locator('#legacy-tools > summary').click();popup.locator('#extract').click()
     expect(popup.locator('#status')).to_contain_text('3 операций')
     popup.locator('#import').click()
     expect(popup.locator('#status')).to_contain_text('Добавлено: 3')
@@ -117,7 +117,7 @@ def test_popup_unknown_page_and_storage_boundary(browser):
     context, identifier = browser
     unknown = context.new_page();unknown.goto(BASE + '/docs')
     popup = context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
-    unknown.bring_to_front();popup.locator('#extract').click()
+    unknown.bring_to_front();popup.locator('#diagnostics > summary').click();popup.locator('#legacy-tools > summary').click();popup.locator('#extract').click()
     expect(popup.locator('#status')).to_contain_text('Банк пока не поддерживается')
     expect(popup.locator('#import')).to_be_hidden()
     worker=context.service_workers[0]
@@ -175,7 +175,7 @@ def test_vietinbank_period_popup_and_import(browser):
     popup = context.new_page()
     popup.goto(f'chrome-extension://{identifier}/popup.html')
     bank.bring_to_front()
-    popup.locator('#collect').click()
+    popup.locator('#diagnostics > summary').click();popup.locator('#legacy-tools > summary').click();popup.locator('#collect').click()
     expect(popup.locator('#status')).to_contain_text('3 операций')
     expect(popup.locator('#status')).to_contain_text('Все строки выбранного поиска собраны')
     popup.locator('#import').click()
@@ -362,7 +362,7 @@ def test_vietinbank_json_response_capture(browser,transport):
     assert stored['bankCapture']['payload']['transactions'][0]['raw']['details']['corresponsiveName']=='Example shop'
     popup.locator('#import').click();expect(popup.locator('#status')).to_contain_text('Добавлено: 1')
     popup.locator('#import').click();expect(popup.locator('#status')).to_contain_text('Уже были: 1')
-    popup.locator('#clear-capture').click();expect(popup.locator('#import')).to_be_hidden()
+    popup.locator('#diagnostics > summary').click();popup.locator('#clear-capture').click();expect(popup.locator('#import')).to_be_hidden()
     # Disarmed / unsolicited messages cannot recreate a capture.
     bank.evaluate("()=>window.postMessage({source:'zenimport-history',data:{error:false}},location.origin)")
     assert popup.evaluate('()=>chrome.storage.session.get("bankCapture")')=={}
@@ -375,9 +375,48 @@ def test_json_file_preview_and_invalid_file_clears_import(browser):
     data={'error':False,'accountNo':'777722223333','currentPage':0,'nextPage':0,'pageSize':100,'totalRecords':1,
           'transactions':[{'currency':'VND','remark':'Synthetic file','amount':'100','balance':'1000','trxId':'',
                            'processDate':'01-10-2026 00:00:00','dorC':'C'}]}
+    popup.locator('#diagnostics > summary').click()
     popup.locator('#json-file').set_input_files({'name':'history.json','mimeType':'application/json','buffer':json.dumps(data).encode()})
     expect(popup.locator('#status')).to_contain_text('Ответ охватывает весь результат')
     expect(popup.locator('#import')).to_be_visible()
     popup.locator('#json-file').set_input_files({'name':'bad.json','mimeType':'application/json','buffer':b'{}'})
     expect(popup.locator('#import')).to_be_hidden()
     popup.close()
+
+
+def test_compact_popup_period_choices_and_review_destination(browser):
+    context,identifier=browser
+    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+    expect(popup.locator('#history-period')).to_have_value('1')
+    expect(popup.locator('#capture')).to_have_text('Получить историю')
+    expect(popup.locator('#extract')).to_be_hidden()
+    expect(popup.locator('#collect')).to_be_hidden()
+    expect(popup.locator('#json-file')).to_be_hidden()
+    expect(popup.locator('#period-hint')).to_contain_text('автоматически не меняется')
+    popup.locator('#history-period').select_option('6')
+    expect(popup.locator('#period-hint')).to_contain_text('загружайте его частями')
+    popup.reload();expect(popup.locator('#history-period')).to_have_value('6')
+    Path('/results').mkdir(exist_ok=True)
+    popup.set_viewport_size({'width':370,'height':650})
+    popup.screenshot(path='/results/history-popup.png',full_page=True)
+    assert popup.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    with context.expect_page() as opened:
+        popup.locator('#open').click()
+    review_page=opened.value
+    review_page.wait_for_url('**/app.html#review')
+    review_page.close();popup.close()
+
+
+def test_live_review_shows_candidates_without_enabling_writes(browser):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state['mode']='live';state['capabilities']={'write':False}
+    state['review']=[{'id':'review-example','state':'pending','date':'2026-10-01','amount_minor':-100,'currency':'VND','description':'Example payment','raw':{},'mapped':True,'bank_account':'example',
+                     'candidates':[{'id':'zen-example','date':'2026-10-01','payee':'Example recipient','reason':'Сумма и счёт совпадают; дата ±2 дня'}]}]
+    page=context.new_page()
+    page.route('**/api/state',lambda route:route.fulfill(content_type='application/json',body=json.dumps(state)))
+    page.goto(f'chrome-extension://{identifier}/app.html#review')
+    expect(page.locator('#review')).to_contain_text('Example recipient')
+    expect(page.locator('#review')).to_contain_text('Запись отключена')
+    assert page.locator('#review button').count()==0
+    page.close()

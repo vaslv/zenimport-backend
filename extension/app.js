@@ -65,6 +65,7 @@ function render() {
     const raw=el('details'); raw.append(el('summary','Исходные поля'),el('pre',JSON.stringify(tx.raw,null,2))); card.append(raw); $('bank-rows').append(card);
     if(tx.state!=='pending')return;
     const review=el('article'); review.dataset.transaction=tx.id; review.append(el('h3',`${tx.date} · ${amount(tx)}`),el('p',tx.description));
+    if(!state.capabilities?.write)tx.candidates.forEach(c=>review.append(el('p',`${c.reason}: ${c.date} · ${c.payee||c.comment||c.id}`)));
     if(!tx.mapped)review.append(el('p','Сначала сопоставьте счёт в разделе «Банковские данные».'));
     else if(!state.capabilities?.write)review.append(el('p','Запись отключена до завершения этапов интеграции.'));
     else {

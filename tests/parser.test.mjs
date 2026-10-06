@@ -66,3 +66,10 @@ test('DevTools captures only newly armed history responses, strips secrets, supp
   state.status='waiting';await listener({...request,getContent:()=>Promise.resolve({content:JSON.stringify(response()),encoding:''})});assert.equal(sent.length,2);
   await listener({...request,getContent:cb=>cb('invalid','')});assert.equal(sent[2].error,'network-response-unavailable');
 });
+
+test('history date hints use Vietnam dates and clamp month ends',async()=>{
+  const {historyPeriod}=await import('../extension/history-period.js');
+  assert.equal(historyPeriod(6,new Date('2026-10-06T05:00:00Z')),'06.04.2026 — 06.10.2026');
+  assert.equal(historyPeriod(1,new Date('2026-03-31T05:00:00Z')),'28.02.2026 — 31.03.2026');
+  assert.equal(historyPeriod(1,new Date('2026-10-05T18:00:00Z')),'06.09.2026 — 06.10.2026');
+});

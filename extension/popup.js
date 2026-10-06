@@ -1,8 +1,9 @@
 import {api} from './api.js';
+import {historyPeriod} from './history-period.js';
 import {parseVietinBankJson} from './vietinbank-json.js';
 let payload;
 const $ = id => document.getElementById(id);
-$('open').onclick = () => chrome.tabs.create({url: chrome.runtime.getURL('app.html')});
+$('open').onclick = () => chrome.tabs.create({url: chrome.runtime.getURL('app.html#review')});
 async function extract(collectAll=false) {
   $('extract').disabled = $('collect').disabled = true;
   $('status').textContent=collectAll?'Собираю страницы. Держите окно расширения открытым…':'Читаю страницу…';
@@ -25,7 +26,7 @@ $('import').onclick = async () => {
   $('import').disabled = true;
   try {
     const result = await api('/api/imports', payload);
-    $('status').textContent = `Добавлено: ${result.added}. Уже были: ${result.duplicates}. Откройте интерфейс для проверки.`;
+    $('status').textContent = `Добавлено: ${result.added}. Уже были: ${result.duplicates}. Нажмите «Проверить операции». В ZenMoney ничего не отправлено.`;
   } catch (error) { $('status').textContent = error.message; }
   finally { $('import').disabled = false; }
 };
@@ -39,7 +40,7 @@ $('debug').onclick = () => {
 function showJson(data) {
   payload=data;
   const c=data.capture;
-  $('status').textContent=`VietinBank · ${data.account} · ${data.transactions.length} операций. Строки ${c.row_start}–${c.row_end} из ${c.total_rows}. ${c.complete?'Ответ охватывает весь результат поиска.':'Это часть истории; оставшиеся страницы нужно получить отдельно.'} Проверьте счёт перед импортом.`;
+  $('status').textContent=`VietinBank · ${data.account} · ${data.transactions.length} операций. Строки ${c.row_start}–${c.row_end} из ${c.total_rows}. ${c.complete?'Ответ охватывает весь результат поиска.':'Это часть истории; оставшиеся страницы нужно получить отдельно.'} Проверьте счёт и сохраните операции для проверки.`;
   $('import').hidden=$('debug').hidden=false;
 }
 async function restoreCapture() {
@@ -60,6 +61,7 @@ $('capture').onclick=async()=>{
   try {
     const [tab]=await chrome.tabs.query({active:true,currentWindow:true});
     if(!tab?.url?.startsWith('https://ipay.vietinbank.vn/payment-history'))throw Error('Откройте историю счёта VietinBank.');
+    await chrome.storage.local.set({historyPeriodMonths:Number($('history-period').value)});
     await chrome.storage.session.set({bankCapture:{tabId:tab.id,status:'waiting',startedAt:Date.now(),expires:Date.now()+600000}});
     await chrome.scripting.executeScript({target:{tabId:tab.id},files:['bank-bridge.js']});
     await chrome.scripting.executeScript({target:{tabId:tab.id},world:'MAIN',files:['bank-observer.js']});
@@ -86,3 +88,13 @@ $('json-file').onchange=async event=>{
 };
 chrome.storage.onChanged.addListener((changes,area)=>{if(area==='session'&&changes.bankCapture?.newValue)restoreCapture();});
 restoreCapture();
+
+function updatePeriodHint(){
+  const months=Number($('history-period').value);
+  $('period-hint').textContent=`Выберите в банке ${historyPeriod(months)}. Здесь показана подсказка дат: фильтр банка автоматически не меняется.${months===6?' Если банк ограничивает период, загружайте его частями.':''}`;
+}
+$('history-period').onchange=()=>{updatePeriodHint();chrome.storage.local.set({historyPeriodMonths:Number($('history-period').value)});};
+chrome.storage.local.get('historyPeriodMonths').then(settings=>{
+  if([1,6].includes(settings.historyPeriodMonths))$('history-period').value=String(settings.historyPeriodMonths);
+  updatePeriodHint();
+});
