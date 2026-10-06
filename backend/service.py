@@ -43,25 +43,38 @@ def mapped_account(db, account):
     return target
 
 
-def candidates(db, row, account):
-    if not account['zenmoney_account']:
-        return []
-    result = []
-    for tx in entities(db, 'transaction'):
+def candidate_index(db, accounts):
+    """One request-local index; never reused across synchronization/confirmation."""
+    scales = {a['zenmoney_account']: SCALES[a['currency']] for a in accounts if a['zenmoney_account']}
+    index = {}
+    if not scales:
+        return index
+    for position, tx in enumerate(entities(db, 'transaction')):
         if tx.get('deleted') or tx.get('hold') or not tx.get('date'):
             continue
-        delta = abs((date.fromisoformat(tx['date']) - date.fromisoformat(row['date'])).days)
-        if delta > 2:
-            continue
-        net = Decimal(0)
-        if tx.get('incomeAccount') == account['zenmoney_account']:
-            net += Decimal(str(tx.get('income', 0)))
-        if tx.get('outcomeAccount') == account['zenmoney_account']:
-            net -= Decimal(str(tx.get('outcome', 0)))
-        if net * SCALES[account['currency']] == row['amount_minor']:
-            result.append({'id': tx['id'], 'date': tx['date'], 'payee': tx.get('payee'),
-                           'comment': tx.get('comment'), 'reason': 'Сумма и счёт совпадают; дата ±2 дня'})
-    return result
+        for account_id in {tx.get('incomeAccount'), tx.get('outcomeAccount')} & scales.keys():
+            net = Decimal(0)
+            if tx.get('incomeAccount') == account_id:
+                net += Decimal(str(tx.get('income', 0)))
+            if tx.get('outcomeAccount') == account_id:
+                net -= Decimal(str(tx.get('outcome', 0)))
+            key = (account_id, date.fromisoformat(tx['date']).toordinal(), net * scales[account_id])
+            match = {'id': tx['id'], 'date': tx['date'], 'payee': tx.get('payee'),
+                     'comment': tx.get('comment'), 'reason': 'Сумма и счёт совпадают; дата ±2 дня'}
+            index.setdefault(key, []).append((position, match))
+    return index
+
+
+def candidates(db, row, account, index=None):
+    if not account['zenmoney_account']:
+        return []
+    if index is None:
+        index = candidate_index(db, [account])
+    day = date.fromisoformat(row['date']).toordinal()
+    found = []
+    for delta in range(-2, 3):
+        found.extend(index.get((account['zenmoney_account'], day + delta, row['amount_minor']), []))
+    return [match for _, match in sorted(found, key=lambda item: item[0])]
 
 
 def import_bank(db, data):
@@ -101,11 +114,13 @@ def import_bank(db, data):
 
 
 def review(db):
+    accounts = {r['id']: dict(r) for r in db.execute('SELECT * FROM bank_accounts')}
+    index = candidate_index(db, accounts.values())
     rows = []
     for r in db.execute('SELECT * FROM bank_transactions ORDER BY date DESC, id'):
         row = dict(r)
-        account = get_row(db, 'bank_accounts', row['bank_account'])
-        row.update(currency=account['currency'], candidates=candidates(db, row, account),
+        account = accounts[row['bank_account']]
+        row.update(currency=account['currency'], candidates=candidates(db, row, account, index),
                    mapped=bool(account['zenmoney_account']))
         row['raw'] = json.loads(row['raw'])
         rows.append(row)
