@@ -49,3 +49,20 @@ test('JSON refuses identical IDs within a response',async()=>{
 test('complete applies only to a single response covering the whole result',async()=>{
   assert.equal((await parseVietinBankJson(response({totalRecords:1}))).capture.complete,true);
 });
+
+test('DevTools captures only newly armed history responses, strips secrets, supports base64',async()=>{
+  const src=readFileSync(new URL('../extension/devtools.js',import.meta.url),'utf8').replace("import {detailKeys} from './vietinbank-json.js';",'');
+  const {detailKeys}=await import('../extension/vietinbank-json.js');
+  let listener;const sent=[];const now=Date.now();
+  const state={status:'waiting',tabId:42,startedAt:now-1000,expires:now+10000};
+  const chrome={devtools:{inspectedWindow:{tabId:42},network:{onRequestFinished:{addListener:fn=>listener=fn}}},runtime:{onMessage:{addListener:()=>{}},sendMessage:async m=>sent.push(m)},storage:{session:{get:async()=>({bankCapture:state})}}};
+  vm.runInNewContext(src,{chrome,detailKeys,URL,Date,JSON,Number,TextDecoder,Uint8Array,atob});
+  const request={request:{method:'POST',url:'https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions'},response:{status:200},startedDateTime:new Date(now).toISOString(),getContent:cb=>cb(btoa(JSON.stringify(response())),'base64')};
+  await listener(request);assert.equal(sent.length,1);assert.ok(!JSON.stringify(sent).includes('NEVER-SAVE'));assert.equal(sent[0].tabId,42);
+  await listener({...request,startedDateTime:new Date(now-5000).toISOString()});assert.equal(sent.length,1);
+  await listener({...request,request:{url:'https://api-ipay.vietinbank.vn/ipay/wa/login'}});assert.equal(sent.length,1);
+  await listener({...request,request:{...request.request,method:'OPTIONS'}});assert.equal(sent.length,1);
+  state.status='ready';await listener(request);assert.equal(sent.length,1);
+  state.status='waiting';await listener({...request,getContent:()=>Promise.resolve({content:JSON.stringify(response()),encoding:''})});assert.equal(sent.length,2);
+  await listener({...request,getContent:cb=>cb('invalid','')});assert.equal(sent[2].error,'network-response-unavailable');
+});

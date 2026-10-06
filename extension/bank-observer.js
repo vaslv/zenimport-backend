@@ -35,7 +35,7 @@
   }
   function wrappedOpen(method,url,...rest){urls.set(this,matches(url));return originalOpen.call(this,method,url,...rest);}
   function wrappedSend(...args){
-    if(urls.get(this))this.addEventListener('load',()=>{if(!active)return;try{
+    this.addEventListener('load',()=>{if(!active||!(urls.get(this)||matches(this.responseURL)))return;try{
       if(this.status<200||this.status>=300)throw Error();
       if(this.responseType==='json')receive(this.response);
       else if((this.responseType===''||this.responseType==='text')&&this.responseText.length<=1500000)receive(JSON.parse(this.responseText));

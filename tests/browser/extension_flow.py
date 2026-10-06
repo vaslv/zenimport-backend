@@ -328,10 +328,10 @@ def test_zenmoney_tabs_accounts_archive_and_transaction_details(browser):
     page.close()
 
 
-@pytest.mark.parametrize('transport',['fetch','xhr'])
+@pytest.mark.parametrize('transport',['fetch','xhr','cached-open'])
 def test_vietinbank_json_response_capture(browser,transport):
     context,identifier=browser
-    account='888822223333' if transport=='fetch' else '888822224444'
+    account='888822223333' if transport=='fetch' else ('888822224444' if transport=='xhr' else '888822225555')
     endpoint='https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions'
     source={'error':False,'accountNo':account,'currentPage':0,'nextPage':1,'pageSize':1,'totalRecords':2,
         'sessionId':'PRIVATE-SESSION','requestId':'PRIVATE-REQUEST','checksum':'PRIVATE-CHECKSUM',
@@ -342,12 +342,15 @@ def test_vietinbank_json_response_capture(browser,transport):
     bank.route('https://ipay.vietinbank.vn/**',lambda route:route.fulfill(content_type='text/html',body='<h1>History</h1>'))
     bank.route(endpoint,lambda route:route.fulfill(content_type='application/json',headers={'Access-Control-Allow-Origin':'*'},body=json.dumps(source)))
     bank.goto('https://ipay.vietinbank.vn/payment-history')
+    bank.evaluate('()=>{window.savedOpen=XMLHttpRequest.prototype.open;}')
     popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
     bank.bring_to_front();popup.locator('#capture').click()
     expect(popup.locator('#status')).to_contain_text('Ожидаю новый ответ')
     popup.close()
     if transport=='fetch':
         returned=bank.evaluate('(url)=>fetch(url).then(r=>r.json())',endpoint)
+    elif transport=='cached-open':
+        returned=bank.evaluate('''url=>new Promise((resolve,reject)=>{const x=new XMLHttpRequest();window.savedOpen.call(x,'GET',url);x.onload=()=>resolve(JSON.parse(x.responseText));x.onerror=reject;x.send();})''',endpoint)
     else:
         returned=bank.evaluate('''url=>new Promise((resolve,reject)=>{const x=new XMLHttpRequest();x.open('GET',url);x.onload=()=>resolve(JSON.parse(x.responseText));x.onerror=reject;x.send();})''',endpoint)
     assert returned['sessionId']=='PRIVATE-SESSION', 'Bank response must remain intact'

@@ -49,14 +49,18 @@ async function restoreCapture() {
   payload=undefined;$('import').hidden=$('debug').hidden=true;
   if(state.expires<Date.now()) {await chrome.storage.session.remove('bankCapture');$('status').textContent='Захват устарел. Начните заново.';return;}
   if(state.status==='ready')showJson(state.payload);
-  else $('status').textContent=state.status==='error'?state.error:'Ожидаю новый ответ истории. Закройте это окно, нажмите Search в банке, затем снова откройте расширение. При переходе/перезагрузке страницы начните захват заново.';
+  else if(state.status==='error') $('status').textContent=state.error;
+  else {
+    const tools=await chrome.runtime.sendMessage({type:'devtools-status',tabId:state.tabId}).catch(()=>null);
+    $('status').textContent='Ожидаю новый ответ истории. '+(tools?.connected?'Захват через Network подключён. ':'Для резервного захвата откройте DevTools (Network) в банковской вкладке. ')+(Date.now()-(state.startedAt||0)>15000?'Ответ ещё не получен: измените период и нажмите Search; проверьте, появился ли новый getHistTransactions в Network. ':'Закройте это окно, нажмите Search в банке, затем снова откройте расширение. ');
+  }
 }
 $('capture').onclick=async()=>{
   $('capture').disabled=true;payload=undefined;$('import').hidden=$('debug').hidden=true;
   try {
     const [tab]=await chrome.tabs.query({active:true,currentWindow:true});
     if(!tab?.url?.startsWith('https://ipay.vietinbank.vn/payment-history'))throw Error('Откройте историю счёта VietinBank.');
-    await chrome.storage.session.set({bankCapture:{tabId:tab.id,status:'waiting',expires:Date.now()+600000}});
+    await chrome.storage.session.set({bankCapture:{tabId:tab.id,status:'waiting',startedAt:Date.now(),expires:Date.now()+600000}});
     await chrome.scripting.executeScript({target:{tabId:tab.id},files:['bank-bridge.js']});
     await chrome.scripting.executeScript({target:{tabId:tab.id},world:'MAIN',files:['bank-observer.js']});
     await restoreCapture();

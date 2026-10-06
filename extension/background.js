@@ -5,12 +5,16 @@ chrome.runtime.onInstalled.addListener(()=>chrome.storage.local.setAccessLevel({
 let processing=false;
 chrome.runtime.onMessage.addListener((message,sender,reply)=>{
   if(message?.type!=='bank-response')return;
-  if(sender.id!==chrome.runtime.id||sender.frameId!==0||!sender.tab||!sender.url?.startsWith('https://ipay.vietinbank.vn/'))return;
+  if(sender.id!==chrome.runtime.id)return;
+  const devtools=sender.url===chrome.runtime.getURL('devtools.html');
+  if(!devtools&&(sender.frameId!==0||!sender.tab||!sender.url?.startsWith('https://ipay.vietinbank.vn/')))return;
+  const tabId=devtools?message.tabId:sender.tab.id;
   if(processing)return;
   processing=true;
   (async()=>{
     const {bankCapture:state}=await chrome.storage.session.get('bankCapture');
-    if(!state||state.status!=='waiting'||state.tabId!==sender.tab.id||state.expires<Date.now())return;
+    if(!state||state.status!=='waiting'||state.tabId!==tabId||state.expires<Date.now())return;
+    if(devtools&&message.captureId!==state.expires)return;
     try {
       if(message.error)throw Error('Ответ истории не получен. Начните захват заново.');
       if(JSON.stringify(message.data)?.length>1500000)throw Error('Ответ слишком большой.');
