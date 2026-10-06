@@ -326,3 +326,55 @@ def test_zenmoney_tabs_accounts_archive_and_transaction_details(browser):
     }''')
     assert result==['9 007 199 254 740 993,12 USD','0,00000001 BTC','12,23 USD']
     page.close()
+
+
+@pytest.mark.parametrize('transport',['fetch','xhr'])
+def test_vietinbank_json_response_capture(browser,transport):
+    context,identifier=browser
+    account='888822223333' if transport=='fetch' else '888822224444'
+    endpoint='https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions'
+    source={'error':False,'accountNo':account,'currentPage':0,'nextPage':1,'pageSize':1,'totalRecords':2,
+        'sessionId':'PRIVATE-SESSION','requestId':'PRIVATE-REQUEST','checksum':'PRIVATE-CHECKSUM',
+        'transactions':[{'currency':'VND','remark':'JSON synthetic shop','amount':'42000','balance':'958000',
+            'trxId':'SYNTHETIC-JSON-1','processDate':'06-10-2026 10:00:00','dorC':'D',
+            'corresponsiveName':'Example shop','corresponsiveAccount':'1234567890'}]}
+    bank=context.new_page()
+    bank.route('https://ipay.vietinbank.vn/**',lambda route:route.fulfill(content_type='text/html',body='<h1>History</h1>'))
+    bank.route(endpoint,lambda route:route.fulfill(content_type='application/json',headers={'Access-Control-Allow-Origin':'*'},body=json.dumps(source)))
+    bank.goto('https://ipay.vietinbank.vn/payment-history')
+    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+    bank.bring_to_front();popup.locator('#capture').click()
+    expect(popup.locator('#status')).to_contain_text('Ожидаю новый ответ')
+    popup.close()
+    if transport=='fetch':
+        returned=bank.evaluate('(url)=>fetch(url).then(r=>r.json())',endpoint)
+    else:
+        returned=bank.evaluate('''url=>new Promise((resolve,reject)=>{const x=new XMLHttpRequest();x.open('GET',url);x.onload=()=>resolve(JSON.parse(x.responseText));x.onerror=reject;x.send();})''',endpoint)
+    assert returned['sessionId']=='PRIVATE-SESSION', 'Bank response must remain intact'
+    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+    expect(popup.locator('#status')).to_contain_text('Строки 1–1 из 2')
+    expect(popup.locator('#status')).to_contain_text('Это часть истории')
+    stored=popup.evaluate('()=>chrome.storage.session.get("bankCapture")')
+    assert 'PRIVATE-' not in json.dumps(stored)
+    assert stored['bankCapture']['payload']['transactions'][0]['raw']['details']['corresponsiveName']=='Example shop'
+    popup.locator('#import').click();expect(popup.locator('#status')).to_contain_text('Добавлено: 1')
+    popup.locator('#import').click();expect(popup.locator('#status')).to_contain_text('Уже были: 1')
+    popup.locator('#clear-capture').click();expect(popup.locator('#import')).to_be_hidden()
+    # Disarmed / unsolicited messages cannot recreate a capture.
+    bank.evaluate("()=>window.postMessage({source:'zenimport-history',data:{error:false}},location.origin)")
+    assert popup.evaluate('()=>chrome.storage.session.get("bankCapture")')=={}
+    popup.close();bank.close()
+
+
+def test_json_file_preview_and_invalid_file_clears_import(browser):
+    context,identifier=browser
+    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+    data={'error':False,'accountNo':'777722223333','currentPage':0,'nextPage':0,'pageSize':100,'totalRecords':1,
+          'transactions':[{'currency':'VND','remark':'Synthetic file','amount':'100','balance':'1000','trxId':'',
+                           'processDate':'01-10-2026 00:00:00','dorC':'C'}]}
+    popup.locator('#json-file').set_input_files({'name':'history.json','mimeType':'application/json','buffer':json.dumps(data).encode()})
+    expect(popup.locator('#status')).to_contain_text('Ответ охватывает весь результат')
+    expect(popup.locator('#import')).to_be_visible()
+    popup.locator('#json-file').set_input_files({'name':'bad.json','mimeType':'application/json','buffer':b'{}'})
+    expect(popup.locator('#import')).to_be_hidden()
+    popup.close()

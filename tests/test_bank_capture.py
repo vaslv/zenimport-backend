@@ -52,3 +52,25 @@ def test_distinct_timestamp_same_amount_remains_distinct(client):
     data['transactions'][0]['external_id']='vib:f1:second'
     data['transactions'][0]['raw']['date']='01/10/2026 12:01:00'
     assert client.post('/api/imports',json=data).json()['added']==1
+
+
+def test_json_details_preserved_and_sensitive_envelope_rejected(client):
+    data=copy.deepcopy(PAYLOAD)
+    data['adapter_version']='2.0.0-json'
+    data['transactions'][0]['raw']['details']={'corresponsiveName':'Example shop','trxId':'FAKE-1','dorC':'D'}
+    assert client.post('/api/imports',json=data).json()['added']==1
+    assert client.get('/api/state').json()['review'][0]['raw']['details']['corresponsiveName']=='Example shop'
+    data['transactions'][0]['raw']['details']['sessionId']='must-not-be-stored'
+    assert client.post('/api/imports',json=data).status_code==422
+
+
+@pytest.mark.parametrize('reverse',[False,True])
+def test_switching_dom_and_bank_id_does_not_duplicate(client,reverse):
+    dom=copy.deepcopy(PAYLOAD)
+    api=copy.deepcopy(PAYLOAD)
+    api['transactions'][0]['external_id']='vib:id:FAKE-1'
+    api['transactions'][0]['raw']['reference_kind']='bank'
+    first,second=(api,dom) if reverse else (dom,api)
+    assert client.post('/api/imports',json=first).json()['added']==1
+    assert client.post('/api/imports',json=second).status_code==409
+    assert len(client.get('/api/state').json()['review'])==1

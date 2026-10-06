@@ -7,7 +7,33 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
 
+class BankDetails(StrictModel):
+    currency: str | None = Field(default=None, max_length=2000)
+    remark: str | None = Field(default=None, max_length=2000)
+    amount: str | None = Field(default=None, max_length=2000)
+    balance: str | None = Field(default=None, max_length=2000)
+    trxId: str | None = Field(default=None, max_length=2000)
+    processDate: str | None = Field(default=None, max_length=2000)
+    dorC: str | None = Field(default=None, max_length=2000)
+    refType: str | None = Field(default=None, max_length=2000)
+    refId: str | None = Field(default=None, max_length=2000)
+    tellerId: str | None = Field(default=None, max_length=2000)
+    corresponsiveAccount: str | None = Field(default=None, max_length=2000)
+    corresponsiveName: str | None = Field(default=None, max_length=2000)
+    channel: str | None = Field(default=None, max_length=2000)
+    serviceBranchId: str | None = Field(default=None, max_length=2000)
+    serviceBranchName: str | None = Field(default=None, max_length=2000)
+    pmtType: str | None = Field(default=None, max_length=2000)
+    sendingBankId: str | None = Field(default=None, max_length=2000)
+    sendingBranchId: str | None = Field(default=None, max_length=2000)
+    sendingBranchName: str | None = Field(default=None, max_length=2000)
+    receivingBankId: str | None = Field(default=None, max_length=2000)
+    receivingBranchId: str | None = Field(default=None, max_length=2000)
+    receivingBranchName: str | None = Field(default=None, max_length=2000)
+
+
 class RawRow(StrictModel):
+    details: BankDetails | None = None
     reference_kind: Literal['bank', 'fingerprint'] = 'bank'
     balance: str | None = Field(default=None, max_length=100)
     reference: str = Field(min_length=1, max_length=200)
