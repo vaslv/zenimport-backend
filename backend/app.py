@@ -65,7 +65,7 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
     def state():
         with transaction(path) as db:
             cursor = db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()
-            return {'mode': mode, 'capabilities': {'write': mode == 'demo'}, 'last_sync': int(cursor['value']) if cursor else None,
+            return {'mode': mode, 'capabilities': {'write': mode == 'demo', 'local_review': True}, 'last_sync': int(cursor['value']) if cursor else None,
                     'bank_accounts': [dict(r) for r in db.execute('SELECT * FROM bank_accounts')],
                     'bank_imports': [{'id': r['id'], 'received_at': r['received_at'], 'bank_account': r['bank_account'],
                                       'capture': json.loads(r['payload']).get('capture')}
@@ -120,6 +120,24 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
         with lock, transaction(path) as db:
             sync(db)
             return confirm(db, identifier, data)
+
+    @app.post('/api/review/{identifier}/link')
+    def local_link(identifier: str, data: Decision):
+        # This endpoint never calls the remote API or creates an outbox payload.
+        if data.action != 'link':
+            fail('Здесь доступно только подтверждение существующей связи', 422)
+        with lock, transaction(path) as db:
+            return confirm(db, identifier, data)
+
+    @app.delete('/api/review/{identifier}/link')
+    def unlink(identifier: str):
+        with lock, transaction(path) as db:
+            row = get_row(db, 'bank_transactions', identifier)
+            if row['state'] != 'linked':
+                fail('Отменить можно только локальную связь')
+            db.execute("UPDATE bank_transactions SET state='pending',linked_id=NULL WHERE id=?", (identifier,))
+            audit(db, 'unlink', {'id': identifier, 'previous': row['linked_id']})
+            return {'state': 'pending'}
 
     @app.post('/api/outbox/send')
     def send():

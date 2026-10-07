@@ -43,13 +43,13 @@ def mapped_account(db, account):
     return target
 
 
-def candidate_index(db, accounts):
+def candidate_index(db, accounts, transactions=None):
     """One request-local index; never reused across synchronization/confirmation."""
     scales = {a['zenmoney_account']: SCALES[a['currency']] for a in accounts if a['zenmoney_account']}
     index = {}
     if not scales:
         return index
-    for position, tx in enumerate(entities(db, 'transaction')):
+    for position, tx in enumerate(entities(db, 'transaction') if transactions is None else transactions):
         if tx.get('deleted') or tx.get('hold') or not tx.get('date'):
             continue
         for account_id in {tx.get('incomeAccount'), tx.get('outcomeAccount')} & scales.keys():
@@ -115,7 +115,8 @@ def import_bank(db, data):
 
 def review(db):
     accounts = {r['id']: dict(r) for r in db.execute('SELECT * FROM bank_accounts')}
-    index = candidate_index(db, accounts.values())
+    transactions = entities(db, 'transaction')
+    index = candidate_index(db, accounts.values(), transactions)
     rows = []
     for r in db.execute('SELECT * FROM bank_transactions ORDER BY date DESC, id'):
         row = dict(r)
@@ -124,7 +125,9 @@ def review(db):
                    mapped=bool(account['zenmoney_account']))
         row['raw'] = json.loads(row['raw'])
         rows.append(row)
-    return rows
+    from .reconciliation import enrich
+    from .db import entities as read_entities
+    return enrich(rows, accounts, transactions, read_entities(db, 'tag'))
 
 
 def confirm(db, identifier, decision):
