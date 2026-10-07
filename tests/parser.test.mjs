@@ -133,3 +133,20 @@ test('money format diagnostics identify field and shape without disclosing value
   await assert.rejects(parseVietinBankJson(response({transactions:[tx({balance:'-1234.00'})]})),/Строка 1: поле balance/);
   await assert.rejects(parseVietinBankJson(response({transactions:[tx({amount:'1,234'})]})),/Строка 1: поле amount/);
 });
+
+test('negative amounts require an independently matching older balance',async()=>{
+  const pair=(direction='D',balance='6000')=>response({pageSize:2,totalRecords:2,transactions:[
+    tx({trxId:'REVERSAL',amount:'-1000',balance,dorC:direction}),
+    tx({trxId:'OLDER',balance:'5000',processDate:'06-10-2026 12:28:59'})]});
+  assert.equal((await parseVietinBankJson(pair())).transactions[0].amount_minor,1000);
+  assert.equal((await parseVietinBankJson(pair('C','4000'))).transactions[0].amount_minor,-1000);
+  await assert.rejects(parseVietinBankJson(pair('D','4000')),/balance_mismatch/);
+  await assert.rejects(parseVietinBankJson(response({transactions:[tx({amount:'-1000'})]})),/missing_neighbor/);
+  const sameTime=pair();sameTime.transactions[1].processDate=sameTime.transactions[0].processDate;
+  await assert.rejects(parseVietinBankJson(sameTime),/chronology/);
+  const {describeResponse}=await import('../extension/response-diagnostics.js');
+  const report=describeResponse(pair(),{part:0,parts:[{}]});
+  assert.equal(report.negativeAmounts[0].balanceCheck,'verified');
+  assert.equal(report.negativeAmounts[0].direction,'D');assert.equal(report.moneyIssueCount,0);
+  assert.ok(!JSON.stringify(report).includes('-1000'));
+});

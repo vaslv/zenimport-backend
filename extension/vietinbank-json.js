@@ -1,4 +1,4 @@
-import {moneyIssue} from './money-diagnostics.js';
+import {moneyIssue,negativeAmountIssue} from './money-diagnostics.js';
 // Bank data is untrusted. Only transaction fields enter the normalized payload.
 export const detailKeys = ['currency','remark','amount','balance','trxId','processDate','dorC','refType','refId','tellerId','corresponsiveAccount','corresponsiveName','channel','serviceBranchId','serviceBranchName','pmtType','sendingBankId','sendingBranchId','sendingBranchName','receivingBankId','receivingBranchId','receivingBranchName'];
 export async function parseVietinBankJson(data) {
@@ -10,7 +10,7 @@ export async function parseVietinBankJson(data) {
   const start=page*size+1, end=start+rows.length-1;
   if (start>total || rows.length!==Math.min(size,total-start+1)) fail('Ответ неполный: число операций не совпадает со счётчиками банка.');
   const text=(v,max=2000)=>{if(typeof v!=='string'||v.length>max)fail('Некорректное текстовое поле операции.');return v;};
-  const money=(v,field,index)=>{const issue=moneyIssue(v);if(issue)fail(`Строка ${index+1}: поле ${field}, формат VND не поддерживается (${issue}). Подробности в отчёте диагностики.`);return Number(v);};
+  const money=(v,field,index)=>{const issue=moneyIssue(v,field==='amount');if(issue)fail(`Строка ${index+1}: поле ${field}, формат VND не поддерживается (${issue}). Подробности в отчёте диагностики.`);return Number(v);};
   const transactions=[], seen=new Set();
   for (const [index,row] of rows.entries()) {
     if (!row || row.currency!=='VND' || !['D','C'].includes(row.dorC)) fail('Неизвестная валюта или направление операции.');
@@ -19,6 +19,7 @@ export async function parseVietinBankJson(data) {
     const [,dd,mm,yyyy,hh,min,ss]=match, date=`${yyyy}-${mm}-${dd}`;
     if (+yyyy<1900 || +hh>23 || +min>59 || +ss>59 || Number.isNaN(Date.parse(date)) || new Date(date).toISOString().slice(0,10)!==date) fail('Некорректная дата операции.');
     const value=money(row.amount,'amount',index)*(row.dorC==='D'?-1:1), balance=money(row.balance,'balance',index);
+    if(Number(row.amount)<0){const issue=negativeAmountIssue(row,rows[index+1]);if(issue)fail(`Строка ${index+1}: направление отрицательной суммы не подтверждено остатками (${issue}).`);}
     if (!value) fail('Нулевая операция не поддерживается.');
     const description=text(row.remark), rawDate=`${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
     const bankId=text(row.trxId,160).trim();
