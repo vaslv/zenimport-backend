@@ -708,3 +708,46 @@ def test_readonly_full_day_comparison_shows_both_sources(browser):
     page.set_viewport_size({'width':390,'height':844})
     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
     page.close()
+
+
+def test_work_days_filter_keeps_all_rows_of_problem_days(browser):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True},recipient_profiles=[],outbox=[])
+    state['bank_accounts']=[{'id':'ba','bank':'bank','account':'1234','currency':'VND','zenmoney_account':'za'}]
+    state['zenmoney_accounts']=[{'id':'za','title':'Bank','instrument':1}]
+    state['review']=[];state['day_review']=[]
+    for i,(day,pending,categories,transfer) in enumerate([(1,False,['Food'],False),(2,True,['Food'],False),(2,False,['Food'],False),(3,False,[],False),(4,False,[],True)]):
+        date=f'2026-10-0{day}'
+        z={'id':f'z{i}','date':date,'amount_minor':'-100','currency':'VND','payee':'Shop','comment':'','categories':categories,
+           'transfer':transfer,'linked_bank_id':None if pending else f'b{i}','same_day_bank_ids':[f'b{i}']}
+        row={'id':f'b{i}','bank_account':'ba','date':date,'amount_minor':-100,'currency':'VND','description':'Bank purchase',
+             'raw':{},'state':'pending' if pending else 'linked','mapped':True,'candidates':[z],'category_suggestion':None,
+             'linked':None if pending else z,'linked_id':None if pending else z['id'],'reconciliation_status':'possible' if pending else 'synced'}
+        state['review'].append(row)
+        d=next((d for d in state['day_review'] if d['date']==date),None)
+        if d is None:
+            d={'bank_account':'ba','date':date,'bank_count':0,'zen_count':0,'equal':True,'pairs':[],'ambiguous':0,'bulk_eligible':False,'snapshot':'a'*64,'bank_ids':[],'zen_rows':[]}
+            state['day_review'].append(d)
+        d['bank_count']+=1;d['zen_count']+=1;d['bank_ids'].append(row['id']);d['zen_rows'].append(z)
+    state['day_review'].append({'bank_account':'ba','date':'2026-10-05','bank_count':0,'zen_count':1,'equal':False,'pairs':[],
+       'ambiguous':0,'bulk_eligible':False,'snapshot':'b'*64,'bank_ids':[],'zen_rows':[{**z,'id':'only','date':'2026-10-05','linked_bank_id':None,'same_day_bank_ids':[]}]})
+    page=context.new_page();page.route('**/api/state',lambda route:route.fulfill(content_type='application/json',body=json.dumps(state)))
+    page.goto(f'chrome-extension://{identifier}/app.html#review')
+    expect(page.locator('.ledger-entry')).to_have_count(5)
+    page.locator('[data-review-status="synced"]').click()
+    page.locator('#review-work-days').check()
+    expect(page.locator('.ledger-entry')).to_have_count(3)
+    expect(page.locator('[data-transaction="b1"]')).to_be_visible()
+    expect(page.locator('[data-transaction="b2"]')).to_be_visible()
+    expect(page.locator('[data-transaction="b3"]')).to_be_visible()
+    expect(page.locator('.full-day-review .comparison-day')).to_have_count(3)
+    expect(page.locator('.full-day-review .comparison-day[data-date="2026-10-05"]')).to_be_visible()
+    expect(page.locator('#review-search')).to_be_disabled()
+    page.locator('#review-start').fill('2026-10-04');page.locator('#review-end').fill('2026-10-04')
+    expect(page.locator('#review')).to_contain_text('Нет дней, требующих внимания')
+    page.locator('#review-start').fill('');page.locator('#review-end').fill('')
+    page.locator('#review-work-days').uncheck()
+    expect(page.locator('.ledger-entry')).to_have_count(5)
+    expect(page.locator('#review-search')).to_be_enabled()
+    page.close()

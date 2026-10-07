@@ -10,10 +10,20 @@ function icon(title,transfer){
   p.setAttribute('d',transfer?'M4 8h15m-4-4 4 4-4 4M20 16H5m4-4-4 4 4 4':/ресторан|еда|продукт|кофе/i.test(title)?'M4 9h16l-2 11H6L4 9Zm4 0 2-6m6 6-2-6M9 12v5m6-5v5':/транспорт|автомоб|такси/i.test(title)?'m5 9 2-5h10l2 5M4 9h16v9H4V9Zm3 9v2m10-2v2M7 13h1m8 0h1':'M5 5h14v14H5V5Zm4 4h6m-6 4h6');
   svg.append(p);return svg;
 }
-export function renderReview(container,state,{account='',status='all',query='',start='',end='',limit=100,onMore,onAction}){
+export function renderReview(container,state,{account='',status='all',query='',start='',end='',limit=100,workDays=false,onMore,onAction}){
   container.replaceChildren();
   const accounts=new Map(state.bank_accounts.map(a=>[a.id,a])),zen=new Map(state.zenmoney_accounts.map(a=>[a.id,a]));
-  const filtered=state.review.filter(t=>(!account||t.bank_account===account)&&(!start||t.date>=start)&&(!end||t.date<=end)&&(!query||[t.description,t.raw?.details?.corresponsiveName,t.linked?.payee].join(' ').toLocaleLowerCase('ru').includes(query.toLocaleLowerCase('ru'))));
+  const key=(account,date)=>JSON.stringify([account,date]);
+  const needsWork=new Set();
+  for(const t of state.review){
+    if(reviewStatus(t)!=='synced'||(t.linked&&!t.linked.transfer&&!t.linked.categories?.length))needsWork.add(key(t.bank_account,t.date));
+  }
+  for(const d of state.day_review||[]){
+    if(!d.equal||(d.zen_rows||[]).some(z=>!z.linked_bank_id||(!z.transfer&&!z.categories?.length)))needsWork.add(key(d.bank_account,d.date));
+  }
+  const showDay=(account,date)=>!workDays||needsWork.has(key(account,date));
+  if(workDays){status='all';query='';limit=Infinity;}
+  const filtered=state.review.filter(t=>showDay(t.bank_account,t.date)&&(!account||t.bank_account===account)&&(!start||t.date>=start)&&(!end||t.date<=end)&&(!query||[t.description,t.raw?.details?.corresponsiveName,t.linked?.payee].join(' ').toLocaleLowerCase('ru').includes(query.toLocaleLowerCase('ru'))));
   const counts={all:filtered.length,synced:0,new:0,attention:0};
   for(const t of filtered){const s=reviewStatus(t);if(s==='synced')counts.synced++;else if(s==='new')counts.new++;else counts.attention++;}
   const rows=filtered.filter(t=>status==='all'||(status==='attention'?!['synced','new'].includes(reviewStatus(t)):reviewStatus(t)===status)).sort((a,b)=>b.date.localeCompare(a.date)||(b.raw?.date||'').localeCompare(a.raw?.date||'')||a.id.localeCompare(b.id));
@@ -21,10 +31,10 @@ export function renderReview(container,state,{account='',status='all',query='',s
   const profiles=(state.recipient_profiles||[]).filter(p=>!account||p.bank_account===account);
   if(profiles.length){const box=node('details',undefined,'category-evidence');box.append(node('summary',`Получатели с подтверждённой историей · ${profiles.length}`));for(const p of profiles){box.append(node('strong',p.name));for(const c of p.categories)box.append(node('p',`${c.title} · ${c.count} ${c.repeated?'— повторяется':'— один пример'}`));}container.append(box);}
   const button=(text,fn)=>{const b=node('button',text,'secondary');b.dataset.apiAction='';b.onclick=()=>onAction(fn);return b;};
-  const scopedDays=(state.day_review||[]).filter(d=>(!account||d.bank_account===account)&&(!start||d.date>=start)&&(!end||d.date<=end));
+  const scopedDays=(state.day_review||[]).filter(d=>showDay(d.bank_account,d.date)&&(!account||d.bank_account===account)&&(!start||d.date>=start)&&(!end||d.date<=end));
   const comparisonDays=scopedDays.filter(d=>Array.isArray(d.zen_rows));
   if(comparisonDays.length){
-    const complete=node('details',undefined,'full-day-review');
+    const complete=node('details',undefined,'full-day-review');complete.open=workDays;
     complete.append(node('summary','Полная сверка по дням — банк и ZenMoney'));
     complete.append(node('p','Все операции выбранного счёта и периода из загруженной истории. Поиск, статус и пагинация основного списка здесь не применяются. Б/З — номера записей внутри дня; совпадение суммы ещё не подтверждает связь.'));
     for(const d of comparisonDays){
@@ -51,7 +61,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
   for(const t of rows.slice(0,limit)){
     if(day!==t.date){day=t.date;group=node('section',undefined,'ledger-day');group.dataset.date=day;
       group.append(node('h2',new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'long',weekday:'short',timeZone:'UTC'}).format(new Date(day+'T12:00:00Z'))));container.append(group);
-      for(const d of (state.day_review||[]).filter(d=>d.date===day&&(!account||d.bank_account===account))){
+      for(const d of (state.day_review||[]).filter(d=>d.date===day&&showDay(d.bank_account,d.date)&&(!account||d.bank_account===account))){
         const box=node('details',undefined,'day-proposal');
         const a=accounts.get(d.bank_account),title=zen.get(a?.zenmoney_account)?.title||a?.bank||'Счёт';
         box.append(node('summary',`${title}: банк ${d.bank_count} / ZenMoney ${d.zen_count} · ${d.equal?'Суммы дня совпадают':'День не совпадает'}`));
@@ -99,7 +109,8 @@ export function renderReview(container,state,{account='',status='all',query='',s
     }
     const raw=node('details',undefined,'raw-details');raw.append(node('summary','Исходные данные банка'),node('pre',JSON.stringify(t.raw,null,2)));detail.append(raw);item.append(detail);group.append(item);
   }
-  if(!rows.length)container.append(node('p',filtered.length?'Нет операций с выбранным статусом.':'За выбранный период операций нет.','empty'));
+  if(workDays&&!rows.length&&!comparisonDays.length)container.append(node('p','Нет дней, требующих внимания, в выбранном счёте и периоде.','empty'));
+  else if(!rows.length&&!comparisonDays.length)container.append(node('p',filtered.length?'Нет операций с выбранным статусом.':'За выбранный период операций нет.','empty'));
   if(rows.length>limit){const more=node('button',`Показать ещё · осталось ${rows.length-limit}`,'secondary');more.onclick=onMore;container.append(more);}
   return {counts,total:rows.length,shown:Math.min(limit,rows.length)};
 }
