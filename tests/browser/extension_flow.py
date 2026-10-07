@@ -497,10 +497,10 @@ def test_automatic_history_background_pagination_and_dedup(browser,continuation_
     context.unroute('https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions',response)
 
 
-@pytest.mark.parametrize('failure',['wrong_account','wrong_period','changing_total','cancel','logout','empty'])
+@pytest.mark.parametrize('failure',['wrong_account','wrong_period','changing_total','cancel','logout','empty','money_format'])
 def test_automatic_history_failures_are_persisted(browser,failure):
     context, identifier=browser
-    account='88889999000'+str(2+['wrong_account','wrong_period','changing_total','cancel','logout','empty'].index(failure))
+    account='88889999000'+str(2+['wrong_account','wrong_period','changing_total','cancel','logout','empty','money_format'].index(failure))
     fixture=Path(__file__).with_name('auto-bank.html').read_text()
     if failure=='logout':fixture=fixture.replace("tablePage=1;fetchPage(0);","location.href='/login';")
     url='https://ipay.vietinbank.vn/payment-history?accountNo='+account
@@ -514,6 +514,7 @@ def test_automatic_history_failures_are_persisted(browser,failure):
         rows=[{'currency':'VND','remark':'Failure fixture','amount':'2000','balance':'8000',
                'trxId':f"{account}-{body['from']}-{n}",'processDate':date+' 10:00:00','dorC':'D'}
               for n in range(body['page']*100,min(body['page']*100+100,total))]
+        if failure=='money_format':rows[0]['balance']='-1234.00'
         route.fulfill(content_type='application/json',headers={'Access-Control-Allow-Origin':'*'},body=json.dumps({
             'error':False,'accountNo':'99999999' if failure=='wrong_account' else account,
             'currentPage':body['page'],'pageSize':100,'totalRecords':total,'transactions':rows}))
@@ -537,6 +538,12 @@ def test_automatic_history_failures_are_persisted(browser,failure):
         popup.wait_for_timeout(300)
     assert job['status']==wanted, str(job.get('error'))+' '+json.dumps(job,ensure_ascii=False)[-2000:]
     assert job['added']==(100 if failure=='changing_total' else 0), str(job.get('error'))+' '+json.dumps(job,ensure_ascii=False)[-2000:]
+    if failure=='money_format':
+        assert 'balance' in job['error'] and 'Строка 1' in job['error']
+        issue=job['responses'][-1]['moneyIssues'][0]
+        assert issue['field']=='balance' and issue['shape']=='-####.##'
+        assert issue['fractionAllZero'] is True
+        assert '-1234' not in json.dumps(job)
     if failure=='changing_total':
         assert not job['completed'] and job['current']['rows']==100
         assert job['responses'][-1]['expected']['total']==103

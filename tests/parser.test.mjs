@@ -119,3 +119,17 @@ test('response diagnostics retain rejected counters and types without bank secre
   assert.equal(describeResponse({totalRecords:'SECRET'}, {part:0,parts:[{}]}).counters.totalRecords.value,undefined);
   assert.equal(describeResponse(null,{part:0,parts:[{}]}).transactionsType,'missing');
 });
+
+test('money format diagnostics identify field and shape without disclosing values',async()=>{
+  const {describeMoney,moneyIssue}=await import('../extension/money-diagnostics.js');
+  assert.equal(moneyIssue('9000000000000'),null);
+  assert.equal(moneyIssue('9000000000001'),'limit');
+  assert.equal(describeMoney('-1234.00').shape,'-####.##');
+  assert.equal(describeMoney('-1234.00').fractionAllZero,true);
+  assert.equal(describeMoney('1234.50').fractionAllZero,false);
+  assert.equal(describeMoney('SECRET').shape,'??????');
+  assert.equal(describeMoney(null).issue,'type');
+  assert.equal(describeMoney(1234).type,'number');
+  await assert.rejects(parseVietinBankJson(response({transactions:[tx({balance:'-1234.00'})]})),/Строка 1: поле balance/);
+  await assert.rejects(parseVietinBankJson(response({transactions:[tx({amount:'1,234'})]})),/Строка 1: поле amount/);
+});
