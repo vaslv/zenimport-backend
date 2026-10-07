@@ -63,7 +63,7 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
 
     @app.get('/api/state')
     def state():
-        with transaction(path) as db:
+        with transaction(path, read_only=True) as db:
             cursor = db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()
             rows = review(db)
             from .day_review import proposals
@@ -86,7 +86,7 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
                     account: str | None = None, include_deleted: bool = False):
         if start and end and start > end:
             fail('Начало периода позже конца', 422)
-        with transaction(path) as db:
+        with transaction(path, read_only=True) as db:
             return history(db, limit=limit, offset=offset, start=start, end=end,
                            account=account, include_deleted=include_deleted)
 

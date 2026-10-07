@@ -130,13 +130,13 @@ def review(db):
     return enrich(rows, accounts, transactions, read_entities(db, 'tag'))
 
 
-def confirm(db, identifier, decision):
+def confirm(db, identifier, decision, *, index=None):
     row = get_row(db, 'bank_transactions', identifier)
     if row['state'] != 'pending':
         fail('Операция уже обработана; обновите список')
     account = get_row(db, 'bank_accounts', row['bank_account'])
     target = mapped_account(db, account)
-    matches = candidates(db, row, account)
+    matches = candidates(db, row, account, index)
     if sorted(decision.reviewed_candidates) != sorted(x['id'] for x in matches):
         fail('Совпадения изменились после синхронизации; обновите список')
     if decision.action == 'link':

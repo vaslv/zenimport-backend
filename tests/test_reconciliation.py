@@ -217,3 +217,43 @@ def test_bulk_respects_selected_days_and_rejects_shared_zen_claims(tmp_path):
     with transaction(path) as db: db.execute('UPDATE bank_accounts SET zenmoney_account=?',(DEMO_ACCOUNT,))
     days=[d for d in client.get('/api/state').json()['day_review'] if d['date']=='2026-10-02']
     assert len(days)==2 and all(not d['bulk_eligible'] for d in days)
+
+
+def test_bulk_builds_candidate_index_once_not_per_pair(tmp_path, monkeypatch):
+    import backend.service as service
+    import backend.day_review as days
+    client,path=bulk_fixture(tmp_path)
+    body=bulk_body(client.get('/api/state').json())
+    calls=[];original=service.candidate_index
+    def counted(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(service,'candidate_index',counted)
+    monkeypatch.setattr(days,'candidate_index',counted)
+    assert client.post('/api/review-days/confirm',json=body).json()=={'days':2,'linked':3}
+    # Review, day proposal and one shared confirmation index; not one per linked row.
+    assert len(calls)==3
+
+
+def test_state_and_history_read_committed_snapshot_during_write(tmp_path):
+    import sqlite3
+    from concurrent.futures import ThreadPoolExecutor
+    client,path=bulk_fixture(tmp_path)
+    before=client.get('/api/state').json()
+    writer=sqlite3.connect(path)
+    writer.execute('BEGIN IMMEDIATE')
+    writer.execute("UPDATE bank_transactions SET state='ignored'")
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            state=pool.submit(client.get,'/api/state')
+            history=pool.submit(client.get,'/api/zenmoney/history')
+            response=state.result(timeout=5)
+            assert response.status_code==200
+            assert response.json()['review']==before['review']
+            assert history.result(timeout=5).status_code==200
+    finally:
+        writer.rollback();writer.close()
+    with transaction(path,read_only=True) as db:
+        import pytest
+        with pytest.raises(sqlite3.OperationalError):
+            db.execute("UPDATE bank_transactions SET state='ignored'")

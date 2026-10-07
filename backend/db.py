@@ -54,10 +54,12 @@ def initialize(path, mode):
 
 
 @contextmanager
-def transaction(path):
+def transaction(path, *, read_only=False):
     db = connect(path)
     try:
-        db.execute('BEGIN IMMEDIATE')
+        if read_only:
+            db.execute('PRAGMA query_only=ON')
+        db.execute('BEGIN' if read_only else 'BEGIN IMMEDIATE')
         yield db
         db.commit()
     except Exception:

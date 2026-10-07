@@ -68,9 +68,10 @@ def confirm_day(db, account_id, day, snapshot, rows):
     if not proposal or proposal['snapshot'] != snapshot or not proposal['pairs']:
         fail('Сверка дня изменилась или однозначных пар нет. Обновите список.')
     by_id = {r['id']: r for r in rows}
+    index = candidate_index(db, [dict(a) for a in db.execute('SELECT * FROM bank_accounts')])
     for pair in proposal['pairs']:
         row = by_id[pair['bank_id']]
-        confirm(db, row['id'], Decision(action='link', match_id=pair['zen_id'], reviewed_candidates=[c['id'] for c in row['candidates']]))
+        confirm(db, row['id'], Decision(action='link', match_id=pair['zen_id'], reviewed_candidates=[c['id'] for c in row['candidates']]), index=index)
     audit(db, 'confirm_day', {'account': account_id, 'date': day, 'pairs': proposal['pairs'], 'snapshot': snapshot})
     return {'linked': len(proposal['pairs'])}
 
@@ -87,12 +88,14 @@ def confirm_days(db, decisions, rows):
         seen.add(key)
         chosen.append(proposal)
     by_id = {row['id']: row for row in rows}
+    # Fresh once inside the write transaction; no concurrent imports/sync can change it.
+    index = candidate_index(db, [dict(a) for a in db.execute('SELECT * FROM bank_accounts')])
     linked = 0
     for proposal in chosen:
         for pair in proposal['pairs']:
             row = by_id[pair['bank_id']]
             confirm(db, row['id'], Decision(action='link', match_id=pair['zen_id'],
-                    reviewed_candidates=[c['id'] for c in row['candidates']]))
+                    reviewed_candidates=[c['id'] for c in row['candidates']]), index=index)
             linked += 1
     audit(db, 'confirm_days', {'days': [d.model_dump(mode='json') for d in decisions], 'linked': linked})
     return {'days': len(chosen), 'linked': linked}
