@@ -105,3 +105,17 @@ test('automatic history plan covers six months with contiguous bounded intervals
   assert.equal(planHistory(1,new Date('2026-03-31T00:00:00Z')).from,'2026-02-28');
   assert.deepEqual(publicJob({account:'private',url:'secret',tabId:1,events:[]}),{events:[]});
 });
+
+test('response diagnostics retain rejected counters and types without bank secrets',async()=>{
+  const {describeResponse}=await import('../extension/response-diagnostics.js');
+  const data={currentPage:1,nextPage:'0',pageSize:100,totalRecords:'32',error:false,accountNo:'PRIVATE',sessionId:'SECRET',transactions:[
+    {trxId:'PRIVATE-ID',processDate:'07-09-2026 10:00:00',remark:'SECRET',corresponsiveName:'SECRET',amount:'SECRET'},
+    {trxId:'PRIVATE-ID',processDate:'SECRET'}]};
+  const report=describeResponse(data,{part:0,account:'PRIVATE',parts:[{from:'2026-09-07',to:'2026-10-06'}],current:{page:1,total:132,rows:100}});
+  assert.equal(report.counters.totalRecords.value,'32');assert.equal(report.counters.totalRecords.type,'string');
+  assert.equal(report.expected.total,132);assert.equal(report.rowCount,2);assert.equal(report.identifiers.repeated,1);
+  assert.equal(report.dates.invalid,1);assert.ok(report.accountMatches);
+  assert.ok(!JSON.stringify(report).includes('SECRET'));assert.ok(!JSON.stringify(report).includes('PRIVATE'));
+  assert.equal(describeResponse({totalRecords:'SECRET'}, {part:0,parts:[{}]}).counters.totalRecords.value,undefined);
+  assert.equal(describeResponse(null,{part:0,parts:[{}]}).transactionsType,'missing');
+});

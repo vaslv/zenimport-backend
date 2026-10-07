@@ -55,7 +55,10 @@
     await wait(()=>input.value===`${display(period.from)} - ${display(period.to)}`,'dates_applied');
     await event('filter',period);
   }
-  const accept=(data,startedAt,error)=>{if(!stopped&&startedAt>=gate)inbox.push({data,error});};
+  const accept=(data,startedAt,error)=>{
+    if(stopped||!(startedAt>=gate))return;
+    rpc('auto-observed',{data,readError:!!error}).then(()=>{if(!stopped)inbox.push({data,error});}).catch(()=>{if(!stopped)inbox.push({error:true});});
+  };
   const onWindow=e=>{if(e.source===window&&e.origin===location.origin&&e.data?.source==='zenimport-history')accept(e.data.data,e.data.startedAt,e.data.error);};
   const onExtension=m=>{if(m?.type==='auto-bank-data'&&m.id===config.id)accept(m.data,m.startedAt,m.error);};
   window.addEventListener('message',onWindow);chrome.runtime.onMessage.addListener(onExtension);

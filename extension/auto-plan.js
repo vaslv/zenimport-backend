@@ -8,5 +8,5 @@ export function planHistory(months,today=new Date()){
   return {from:iso(start),to:iso(end),parts};
 }
 export const activeJob=j=>j&&['starting','navigating','running','saving'].includes(j.status);
-export const jobLabels={start:'Загрузка запущена',navigation:'Открытие истории',attached:'Загрузчик подключён',click:'Действие на странице',filter:'Период установлен',search:'Поиск истории',response:'Ответ истории получен',save:'Страница сохранена',segment:'Интервал полностью загружен',done:'Весь период загружен',error:'Загрузка остановлена с ошибкой',cancel:'Загрузка отменена',wait:'Ожидание страницы',wait_done:'Ожидание завершено',network:'Запрос банка завершён'};
+export const jobLabels={observed:'Диагностика ответа сохранена',start:'Загрузка запущена',navigation:'Открытие истории',attached:'Загрузчик подключён',click:'Действие на странице',filter:'Период установлен',search:'Поиск истории',response:'Ответ истории получен',save:'Страница сохранена',segment:'Интервал полностью загружен',done:'Весь период загружен',error:'Загрузка остановлена с ошибкой',cancel:'Загрузка отменена',wait:'Ожидание страницы',wait_done:'Ожидание завершено',network:'Запрос банка завершён'};
 export function publicJob(job){if(!job)return null;const {account,seen,url,tabId,...rest}=job;return rest;}

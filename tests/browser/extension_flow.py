@@ -528,6 +528,15 @@ def test_automatic_history_failures_are_persisted(browser,failure):
         popup.wait_for_timeout(300)
     assert job['status']==wanted, str(job.get('error'))+' '+json.dumps(job,ensure_ascii=False)[-2000:]
     assert job['added']==(100 if failure=='changing_total' else 0), str(job.get('error'))+' '+json.dumps(job,ensure_ascii=False)[-2000:]
-    if failure=='changing_total':assert not job['completed'] and job['current']['rows']==100
+    if failure=='changing_total':
+        assert not job['completed'] and job['current']['rows']==100
+        assert job['responses'][-1]['expected']['total']==103
+        assert job['responses'][-1]['counters']['totalRecords']['value']==104
+        assert job['responses'][-1]['counters']['currentPage']['value']==1
+        assert job['responses'][-1]['rowCount']==4
+        with popup.expect_download() as downloaded:popup.locator('#auto-export').click()
+        report=json.loads(Path(downloaded.value.path()).read_text())
+        assert report['current']['responses'][-1]['rowCount']==4
+        assert account not in json.dumps(report)
     popup.reload();expect(popup.locator('#auto-status')).to_contain_text('Добавлено: '+str(job['added']))
     popup.close();bank.close();context.unroute(endpoint,respond)

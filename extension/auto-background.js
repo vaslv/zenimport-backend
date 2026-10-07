@@ -1,3 +1,4 @@
+import {describeResponse} from './response-diagnostics.js';
 import {api} from './api.js';
 import {parseVietinBankJson} from './vietinbank-json.js';
 import {planHistory,activeJob,jobLabels} from './auto-plan.js';
@@ -62,6 +63,12 @@ async function handle(message,sender){
   }
   if(sender.id!==chrome.runtime.id||sender.tab?.id!==j.tabId||sender.frameId!==0||sender.url!==j.url||message.id!==j.id)throw Error('Контекст загрузки изменился.');
   if(Date.now()-j.startedAt>20*60000){await stop(j,'Превышено время запуска. Повторите загрузку меньшего периода.');throw Error(j.error);}
+  if(message.type==='auto-observed'){
+    const report=describeResponse(message.data,j);
+    report.readError=message.readError===true;
+    j.responses??=[];if(j.responses.length>=200){j.responses.shift();j.responsesDropped=(j.responsesDropped||0)+1;}
+    j.responses.push(report);log(j,'observed',{part:j.part,rows:report.rowCount});await put(j);return {ok:true};
+  }
   if(message.type==='auto-check')return {ok:true};
   if(message.type==='auto-event'){log(j,message.stage,message.details);await put(j);return {ok:true};}
   if(message.type==='auto-error'){await stop(j,typeof message.error==='string'?message.error.slice(0,250):'Ошибка страницы банка.');return {ok:true};}
@@ -73,7 +80,7 @@ async function handle(message,sender){
     if(!j.current||message.part!==j.part)throw Error('Неожиданный интервал.');
     const d=message.data,period=j.parts[j.part];
     if(d?.accountNo!==j.account||d.error!==false||d.currentPage!==j.current.page)throw Error('Ответ другого счёта, страницы или ошибка банка.');
-    if(j.current.total!==null&&d.totalRecords!==j.current.total)throw Error('Число операций изменилось во время загрузки. Повторите интервал.');
+    if(j.current.total!==null&&d.totalRecords!==j.current.total)throw Error('Счётчик totalRecords следующей страницы отличается. Диагностика сохранена: скачайте отчёт.');
     if(d.totalRecords===0){
       if(d.currentPage!==0||!Array.isArray(d.transactions)||d.transactions.length!==0)throw Error('Некорректный пустой ответ.');
       j.current.total=0;log(j,'response',{part:j.part,total:0,rows:0});await put(j);return {ok:true,rows:0,total:0};
