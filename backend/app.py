@@ -8,7 +8,7 @@ from datetime import date
 from .zenstore import history, summary
 from fastapi.responses import FileResponse, JSONResponse
 from .db import initialize, transaction, entities
-from .models import BankImport, Mapping, Decision
+from .models import BankImport, Mapping, Decision, DayDecision
 from .service import (audit, candidates, confirm, fail, get_row, import_bank,
                       mapped_account, review, same_transaction)
 from .zenmoney import ZenMoney, request_diff
@@ -65,6 +65,11 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
     def state():
         with transaction(path) as db:
             cursor = db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()
+            rows = review(db)
+            from .day_review import proposals
+            days = proposals(db, rows)
+            from .reconciliation import recipient_profiles
+            profiles = recipient_profiles(rows, {}, entities(db, 'transaction'), entities(db, 'tag'))
             return {'mode': mode, 'capabilities': {'write': mode == 'demo', 'local_review': True}, 'last_sync': int(cursor['value']) if cursor else None,
                     'bank_accounts': [dict(r) for r in db.execute('SELECT * FROM bank_accounts')],
                     'bank_imports': [{'id': r['id'], 'received_at': r['received_at'], 'bank_account': r['bank_account'],
@@ -72,7 +77,7 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
                                      for r in db.execute('SELECT id,received_at,bank_account,payload FROM imports ORDER BY received_at DESC,id DESC LIMIT 50')],
                     'zenmoney_accounts': entities(db, 'account'), 'categories': entities(db, 'tag'),
                     'zenmoney_instruments': entities(db, 'instrument'), 'zenmoney_merchants': entities(db, 'merchant'),
-                    'zenmoney_transactions': history(db)['items'], 'zenmoney_summary': summary(db), 'review': review(db),
+                    'zenmoney_transactions': history(db)['items'], 'zenmoney_summary': summary(db), 'review': rows, 'day_review': days, 'recipient_profiles': profiles,
                     'outbox': [dict(r) for r in db.execute('SELECT bank_transaction,zen_id,state,error FROM outbox')]}
 
     @app.get('/api/zenmoney/history')
@@ -120,6 +125,12 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
         with lock, transaction(path) as db:
             sync(db)
             return confirm(db, identifier, data)
+
+    @app.post('/api/review-days/{account_id}/{day}/confirm')
+    def local_day(account_id: str, day: date, data: DayDecision):
+        from .day_review import confirm_day
+        with lock, transaction(path) as db:
+            return confirm_day(db, account_id, str(day), data.snapshot, review(db))
 
     @app.post('/api/review/{identifier}/link')
     def local_link(identifier: str, data: Decision):

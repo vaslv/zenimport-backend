@@ -17,10 +17,23 @@ export function renderReview(container,state,{account='',status='all',query='',s
   for(const t of filtered){const s=reviewStatus(t);if(s==='synced')counts.synced++;else if(s==='new')counts.new++;else counts.attention++;}
   const rows=filtered.filter(t=>status==='all'||(status==='attention'?!['synced','new'].includes(reviewStatus(t)):reviewStatus(t)===status)).sort((a,b)=>b.date.localeCompare(a.date)||(b.raw?.date||'').localeCompare(a.raw?.date||'')||a.id.localeCompare(b.id));
   let day,group;
+  const profiles=(state.recipient_profiles||[]).filter(p=>!account||p.bank_account===account);
+  if(profiles.length){const box=node('details',undefined,'category-evidence');box.append(node('summary',`Получатели с подтверждённой историей · ${profiles.length}`));for(const p of profiles){box.append(node('strong',p.name));for(const c of p.categories)box.append(node('p',`${c.title} · ${c.count} ${c.repeated?'— повторяется':'— один пример'}`));}container.append(box);}
   const button=(text,fn)=>{const b=node('button',text,'secondary');b.dataset.apiAction='';b.onclick=()=>onAction(fn);return b;};
   for(const t of rows.slice(0,limit)){
     if(day!==t.date){day=t.date;group=node('section',undefined,'ledger-day');group.dataset.date=day;
-      group.append(node('h2',new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'long',weekday:'short',timeZone:'UTC'}).format(new Date(day+'T12:00:00Z'))));container.append(group);}
+      group.append(node('h2',new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'long',weekday:'short',timeZone:'UTC'}).format(new Date(day+'T12:00:00Z'))));container.append(group);
+      for(const d of (state.day_review||[]).filter(d=>d.date===day&&(!account||d.bank_account===account))){
+        const box=node('details',undefined,'day-proposal');
+        const a=accounts.get(d.bank_account),title=zen.get(a?.zenmoney_account)?.title||a?.bank||'Счёт';
+        box.append(node('summary',`${title}: банк ${d.bank_count} / ZenMoney ${d.zen_count} · ${d.equal?'Суммы дня совпадают':'День не совпадает'}`));
+        box.append(node('p','Проверка всех загруженных операций счёта за день, включая скрытые фильтрами. Перед подтверждением убедитесь, что история банка за день загружена полностью.'));
+        if(d.ambiguous)box.append(node('p',`Неоднозначных операций: ${d.ambiguous}. Повторяющиеся суммы требуют отдельной проверки.`));
+        for(const pair of d.pairs){const r=state.review.find(r=>r.id===pair.bank_id),c=r?.candidates.find(c=>c.id===pair.zen_id);if(r)box.append(node('p',`${money(r)} · ${r.description} → ${c?.payee||c?.comment||'ZenMoney'} · ${c?.categories?.join(', ')||'Без категории'}`));}
+        if(d.pairs.length&&state.capabilities?.local_review)box.append(button(`Подтвердить пары дня · ${d.pairs.length}`,()=>({path:`/api/review-days/${d.bank_account}/${d.date}/confirm`,body:{snapshot:d.snapshot}})));
+        group.append(box);
+      }
+    }
     const s=reviewStatus(t),suggestion=t.category_suggestion,linked=t.linked;
     const categories=linked?.categories||[],title=categories.length?categories.join(', '):suggestion?.title||t.raw?.details?.corresponsiveName||'Без категории';
     const a=accounts.get(t.bank_account),accountTitle=zen.get(a?.zenmoney_account)?.title||`${a?.bank||'Банк'} · ${a?.account?.slice(-4)||''}`;
@@ -30,7 +43,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
     const content=node('span',undefined,'ledger-text');content.append(node('strong',title,'ledger-title'),node('span','▱ '+accountTitle,'ledger-account'));
     if(t.description&&t.description!==title)content.append(node('span',t.description,'ledger-description'));
     const statusLabel=node('span',labels[s]||s,'sync-status status-'+s);content.append(statusLabel);
-    if(suggestion?.title)content.append(node('span',`Предположение · ${suggestion.count} примера`,'suggestion-label'));
+    if(suggestion)content.append(node('span',`${suggestion.conflict?'Категория неоднозначна':'Уверенная подсказка'} · ${suggestion.count} примера · требуется подтверждение`,'suggestion-label '+(suggestion.conflict?'confidence-low':'confidence-high')));
     const sum=node('span',money(t),'ledger-amount'+(t.amount_minor>0?' income':''));summary.append(symbol,content,sum);item.append(summary);
     const detail=node('div',undefined,'ledger-detail');detail.append(node('p',t.description));
     if(!t.mapped)detail.append(node('p','Сопоставьте банковский счёт со счётом ZenMoney в разделе «Счета банка».','notice'));

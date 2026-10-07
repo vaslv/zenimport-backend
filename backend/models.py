@@ -95,3 +95,7 @@ class Decision(StrictModel):
     match_id: str | None = None
     # Optimistic concurrency: the operator must have seen these candidates.
     reviewed_candidates: list[str] = Field(default_factory=list, max_length=2000)
+
+
+class DayDecision(StrictModel):
+    snapshot: str = Field(pattern=r'^[a-f0-9]{64}$')

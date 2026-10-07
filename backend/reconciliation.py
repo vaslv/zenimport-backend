@@ -75,13 +75,44 @@ def enrich(rows, accounts, transactions, categories):
         if len(examples) < 2:
             continue
         counts = Counter(e['category'] for e in examples)
-        conflicts = [{'id': k, 'title': tags[k], 'count': n} for k, n in counts.most_common()]
+        conflicts = [{'id': k, 'title': tags[k], 'count': n, 'repeated': n >= 2} for k, n in counts.most_common()]
         agreed = len(counts) == 1
         row['category_suggestion'] = {
             'category': conflicts[0]['id'] if agreed else None,
             'title': conflicts[0]['title'] if agreed else None,
             'count': len(examples), 'conflict': not agreed, 'distribution': conflicts,
+            'confidence': 'high' if agreed else 'ambiguous',
+            'requires_confirmation': True,
             'reason': ('То же описание в подтверждённых связях этого счёта' if key and key.startswith('description:')
                        else 'Тот же получатель в истории этого счёта; направление совпадает'),
             'examples': sorted(examples, key=lambda e: e['date'], reverse=True)[:3]}
     return rows
+
+
+def recipient_profiles(rows, accounts, transactions, categories):
+    """One-to-many projection of durable confirmed links; unlink removes evidence."""
+    profiles = {}
+    zen = {t['id']: t for t in transactions if not t.get('deleted') and not t.get('hold')}
+    tags = {t['id']: t['title'] for t in categories if not t.get('deleted')}
+    for row in rows:
+        if row.get('reconciliation_status') != 'synced':
+            continue
+        key, name = recipient(row)
+        tx = zen.get(row.get('linked_id'))
+        if not key or not tx or tx.get('incomeAccount') != tx.get('outcomeAccount'):
+            continue
+        cats = tx.get('tag') or []
+        if len(cats) != 1 or cats[0] not in tags:
+            continue
+        profile = profiles.setdefault((row['bank_account'], key, row['amount_minor'] > 0),
+            {'bank_account': row['bank_account'], 'key': key, 'name': name or row.get('description', key),
+             'direction': 'income' if row['amount_minor'] > 0 else 'expense', 'categories': {}})
+        category = profile['categories'].setdefault(cats[0], {'id': cats[0], 'title': tags[cats[0]], 'count': 0})
+        category['count'] += 1
+    result = []
+    for profile in profiles.values():
+        profile['categories'] = sorted(profile['categories'].values(), key=lambda c: (-c['count'], c['id']))
+        for c in profile['categories']:
+            c['repeated'] = c['count'] >= 2
+        result.append(profile)
+    return result

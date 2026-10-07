@@ -606,3 +606,32 @@ def test_unified_ledger_filters_local_links_and_category_evidence(browser):
     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
     assert not page.locator('#review button').filter(has_text='Подтвердить создание').count()
     page.close()
+
+
+def test_day_proposal_requires_explicit_confirmation(browser):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True},outbox=[],recipient_profiles=[])
+    state['bank_accounts']=[{'id':'ba','bank':'vietinbank','account':'1234','currency':'VND','zenmoney_account':'za'}]
+    state['zenmoney_accounts']=[{'id':'za','title':'Bank','instrument':1}]
+    c={'id':'z','date':'2026-10-01','payee':'Shop','categories':['Food'],'reason':'Exact day'}
+    state['review']=[{'id':'b','bank_account':'ba','date':'2026-10-01','amount_minor':-100,'currency':'VND','description':'Bank Shop',
+       'raw':{},'mapped':True,'state':'pending','reconciliation_status':'possible','candidates':[c],'category_suggestion':None}]
+    state['day_review']=[{'bank_account':'ba','date':'2026-10-01','equal':True,'bank_count':1,'zen_count':1,'pairs':[{'bank_id':'b','zen_id':'z'}],'ambiguous':0,'snapshot':'a'*64}]
+    page=context.new_page();calls=[]
+    page.route('**/api/state',lambda route:route.fulfill(content_type='application/json',body=json.dumps(state)))
+    def confirm_day(route):
+        calls.append(json.loads(route.request.post_data))
+        state['review'][0].update(state='linked',linked_id='z',linked=c,reconciliation_status='synced')
+        state['day_review'][0]['pairs']=[]
+        route.fulfill(content_type='application/json',body='{"linked":1}')
+    page.route('**/api/review-days/ba/2026-10-01/confirm',confirm_day)
+    page.goto(f'chrome-extension://{identifier}/app.html#review')
+    expect(page.locator('.day-proposal')).to_contain_text('Суммы дня совпадают')
+    assert not calls
+    page.locator('.day-proposal summary').click()
+    expect(page.locator('.day-proposal')).to_contain_text('Bank Shop → Shop · Food')
+    page.get_by_role('button',name='Подтвердить пары дня · 1',exact=True).click()
+    expect(page.locator('[data-transaction="b"]')).to_have_attribute('data-state','synced')
+    assert calls==[{'snapshot':'a'*64}]
+    page.close()

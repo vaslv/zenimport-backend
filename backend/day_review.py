@@ -1,0 +1,69 @@
+"""Exact-day proposals built from the complete local mirrors, never UI filters."""
+import hashlib
+import json
+from collections import Counter, defaultdict
+from datetime import date
+from fastapi import HTTPException
+from .service import candidate_index, mapped_account, fail, confirm, audit
+from .models import Decision
+from .db import entities
+
+
+def proposals(db, rows):
+    accounts = {r['id']: dict(r) for r in db.execute('SELECT * FROM bank_accounts')}
+    transactions = entities(db, 'transaction')
+    index = candidate_index(db, accounts.values(), transactions)
+    groups = defaultdict(list)
+    for row in rows:
+        groups[(row['bank_account'], row['date'])].append(row)
+    used = {r['linked_id']: r['id'] for r in rows if r['state'] in ('linked', 'sent')}
+    result = []
+    for (account_id, day), bank in sorted(groups.items(), reverse=True):
+        account = accounts[account_id]
+        if not account['zenmoney_account']:
+            continue
+        zen = defaultdict(list)
+        for (target, ordinal, amount), matches in index.items():
+            if target == account['zenmoney_account'] and ordinal == date.fromisoformat(day).toordinal():
+                zen[amount].extend(m for _, m in matches)
+        equal = Counter(r['amount_minor'] for r in bank) == Counter({a: len(v) for a, v in zen.items()})
+        pairs, ambiguous = [], 0
+        valid = True
+        for row in bank:
+            matches = zen.get(row['amount_minor'], [])
+            if row['state'] in ('linked', 'sent'):
+                valid &= any(m['id'] == row['linked_id'] for m in matches)
+            elif row['state'] != 'pending':
+                valid = False
+        remaining = {a: [m for m in v if m['id'] not in used] for a, v in zen.items()}
+        for amount in {r['amount_minor'] for r in bank if r['state'] == 'pending'}:
+            pending = [r for r in bank if r['state'] == 'pending' and r['amount_minor'] == amount]
+            matches = remaining.get(amount, [])
+            if len(pending) == len(matches) == 1:
+                pairs.append({'bank_id': pending[0]['id'], 'zen_id': matches[0]['id']})
+            else:
+                ambiguous += len(pending)
+        try:
+            mapped_account(db, account)
+        except HTTPException:
+            valid = False
+        # Hash includes full rows/candidate details/tags so stale previews cannot be accepted.
+        payload = {'account': account, 'bank': bank, 'zen': [t for t in transactions if t.get('date') == day and account['zenmoney_account'] in (t.get('incomeAccount'), t.get('outcomeAccount'))]}
+        snapshot = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        result.append({'bank_account': account_id, 'date': day, 'bank_count': len(bank),
+                       'zen_count': sum(map(len, zen.values())), 'equal': equal,
+                       'pairs': sorted(pairs, key=lambda p: p['bank_id']) if equal and valid else [],
+                       'ambiguous': ambiguous if equal else 0, 'snapshot': snapshot})
+    return result
+
+
+def confirm_day(db, account_id, day, snapshot, rows):
+    proposal = next((p for p in proposals(db, rows) if p['bank_account'] == account_id and p['date'] == day), None)
+    if not proposal or proposal['snapshot'] != snapshot or not proposal['pairs']:
+        fail('Сверка дня изменилась или однозначных пар нет. Обновите список.')
+    by_id = {r['id']: r for r in rows}
+    for pair in proposal['pairs']:
+        row = by_id[pair['bank_id']]
+        confirm(db, row['id'], Decision(action='link', match_id=pair['zen_id'], reviewed_candidates=[c['id'] for c in row['candidates']]))
+    audit(db, 'confirm_day', {'account': account_id, 'date': day, 'pairs': proposal['pairs'], 'snapshot': snapshot})
+    return {'linked': len(proposal['pairs'])}

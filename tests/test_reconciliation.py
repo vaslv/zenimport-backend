@@ -96,3 +96,54 @@ def test_confirmed_card_descriptions_can_train_without_recipient_fields():
     assert enrich(copy.deepcopy(rows),accounts,history,categories)[0]['category_suggestion']['count']==2
     rows[0]['description']='Phi GD thanh toan tai SHOP, the 1234'
     assert enrich(copy.deepcopy(rows),accounts,history,categories)[0]['category_suggestion'] is None
+
+
+def test_day_confirmation_is_explicit_atomic_and_stale_safe(tmp_path):
+    path=tmp_path/'days.db';client=TestClient(create_app(path,TOKEN,'demo'))
+    client.headers['Authorization']='Bearer '+TOKEN
+    first=prepare(client);add_candidate(path)
+    with transaction(path) as db: db.execute("UPDATE bank_transactions SET date='2026-10-02'")
+    state=client.get('/api/state').json();day=state['day_review'][0]
+    assert day['equal'] and len(day['pairs'])==1
+    assert state['review'][0]['state']=='pending'
+    url=f"/api/review-days/{day['bank_account']}/{day['date']}/confirm"
+    assert client.post(url,json={'snapshot':'0'*64}).status_code==409
+    assert client.post(url,json={'snapshot':day['snapshot']}).json()=={'linked':1}
+    assert client.post(url,json={'snapshot':day['snapshot']}).status_code==409
+    state=client.get('/api/state').json()
+    assert state['review'][0]['state']=='linked' and not state['outbox']
+    client.delete(f'/api/review/{first}/link')
+    day=client.get('/api/state').json()['day_review'][0]
+    add_candidate(path,'extra')
+    assert client.post(url,json={'snapshot':day['snapshot']}).status_code==409
+    state=client.get('/api/state').json()
+    assert not state['day_review'][0]['equal'] and not state['day_review'][0]['pairs']
+    assert state['review'][0]['state']=='pending'
+
+
+def test_duplicate_amounts_require_individual_links(tmp_path):
+    path=tmp_path/'duplicate.db';client=TestClient(create_app(path,TOKEN,'demo'))
+    client.headers['Authorization']='Bearer '+TOKEN
+    first=prepare(client);add_candidate(path);add_candidate(path,'second')
+    imported=copy.deepcopy(IMPORT);imported['transactions'][0]['external_id']='second'
+    client.post('/api/imports',json=imported)
+    with transaction(path) as db: db.execute("UPDATE bank_transactions SET date='2026-10-02'")
+    day=client.get('/api/state').json()['day_review'][0]
+    assert day['equal'] and day['ambiguous']==2 and not day['pairs']
+    client.post(f'/api/review/{first}/link',json={'action':'link','match_id':'existing','reviewed_candidates':['existing','second']})
+    day=client.get('/api/state').json()['day_review'][0]
+    assert day['equal'] and day['ambiguous']==0 and len(day['pairs'])==1
+
+
+def test_recipient_profile_keeps_multiple_categories_and_removes_unlinked_evidence():
+    from backend.reconciliation import recipient_profiles
+    rows,accounts,history,categories=data()
+    history.append({**history[0],'id':'third','tag':['other']})
+    linked=[]
+    for tx in history:
+        linked.append({**copy.deepcopy(rows[0]),'id':tx['id'],'date':tx['date'],'state':'linked','linked_id':tx['id'],'candidates':[{'id':tx['id']}]})
+    profiles=recipient_profiles(enrich(linked,accounts,history,categories),accounts,history,categories)
+    assert [(c['id'],c['count'],c['repeated']) for c in profiles[0]['categories']]==[('food',2,True),('other',1,False)]
+    linked[0]['state']='pending'
+    profiles=recipient_profiles(enrich(linked,accounts,history,categories),accounts,history,categories)
+    assert all(c['count']==1 for c in profiles[0]['categories'])
