@@ -20,6 +20,21 @@ export function renderReview(container,state,{account='',status='all',query='',s
   const profiles=(state.recipient_profiles||[]).filter(p=>!account||p.bank_account===account);
   if(profiles.length){const box=node('details',undefined,'category-evidence');box.append(node('summary',`Получатели с подтверждённой историей · ${profiles.length}`));for(const p of profiles){box.append(node('strong',p.name));for(const c of p.categories)box.append(node('p',`${c.title} · ${c.count} ${c.repeated?'— повторяется':'— один пример'}`));}container.append(box);}
   const button=(text,fn)=>{const b=node('button',text,'secondary');b.dataset.apiAction='';b.onclick=()=>onAction(fn);return b;};
+  const scopedDays=(state.day_review||[]).filter(d=>(!account||d.bank_account===account)&&(!start||d.date>=start)&&(!end||d.date<=end));
+  const readyDays=scopedDays.filter(d=>d.bulk_eligible===true);
+  if(state.capabilities?.local_review&&scopedDays.length){
+    const box=node('section',undefined,'bulk-day-review day-proposal');
+    const pairs=readyDays.reduce((sum,d)=>sum+d.pairs.length,0);
+    box.append(node('h3','Массовое сопоставление истории'));
+    box.append(node('p',`Полностью однозначных дней: ${readyDays.length}. Операций для связи: ${pairs}.`));
+    box.append(node('p','Используются выбранные счёт и период целиком, включая следующие страницы. Поиск и фильтр статуса не ограничивают действие. Дни с сомнениями целиком остаются для ручной проверки.'));
+    if(readyDays.length){
+      const preview=node('details');preview.append(node('summary','Посмотреть список дней'));
+      for(const d of readyDays){const a=accounts.get(d.bank_account);preview.append(node('p',`${d.date} · ${zen.get(a?.zenmoney_account)?.title||a?.bank||'Счёт'} · ${d.pairs.length} операций`));}box.append(preview);
+      box.append(button(`Сопоставить все однозначные дни · ${pairs} операций`,()=>({path:'/api/review-days/confirm',body:{days:readyDays.map(d=>({bank_account:d.bank_account,date:d.date,snapshot:d.snapshot}))}})));
+    }else box.append(node('p','Нет полностью однозначных дней для массового сопоставления.'));
+    container.prepend(box);
+  }
   for(const t of rows.slice(0,limit)){
     if(day!==t.date){day=t.date;group=node('section',undefined,'ledger-day');group.dataset.date=day;
       group.append(node('h2',new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'long',weekday:'short',timeZone:'UTC'}).format(new Date(day+'T12:00:00Z'))));container.append(group);

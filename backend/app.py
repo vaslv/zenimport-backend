@@ -8,7 +8,7 @@ from datetime import date
 from .zenstore import history, summary
 from fastapi.responses import FileResponse, JSONResponse
 from .db import initialize, transaction, entities
-from .models import BankImport, Mapping, Decision, DayDecision
+from .models import BankImport, Mapping, Decision, DayDecision, BulkDayDecision
 from .service import (audit, candidates, confirm, fail, get_row, import_bank,
                       mapped_account, review, same_transaction)
 from .zenmoney import ZenMoney, request_diff
@@ -125,6 +125,12 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
         with lock, transaction(path) as db:
             sync(db)
             return confirm(db, identifier, data)
+
+    @app.post('/api/review-days/confirm')
+    def local_days(data: BulkDayDecision):
+        from .day_review import confirm_days
+        with lock, transaction(path) as db:
+            return confirm_days(db, data.days, review(db))
 
     @app.post('/api/review-days/{account_id}/{day}/confirm')
     def local_day(account_id: str, day: date, data: DayDecision):

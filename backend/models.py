@@ -99,3 +99,12 @@ class Decision(StrictModel):
 
 class DayDecision(StrictModel):
     snapshot: str = Field(pattern=r'^[a-f0-9]{64}$')
+
+
+class ReviewedDay(DayDecision):
+    bank_account: str = Field(min_length=1, max_length=200)
+    date: date
+
+
+class BulkDayDecision(StrictModel):
+    days: list[ReviewedDay] = Field(min_length=1, max_length=5000)

@@ -627,11 +627,54 @@ def test_day_proposal_requires_explicit_confirmation(browser):
         route.fulfill(content_type='application/json',body='{"linked":1}')
     page.route('**/api/review-days/ba/2026-10-01/confirm',confirm_day)
     page.goto(f'chrome-extension://{identifier}/app.html#review')
-    expect(page.locator('.day-proposal')).to_contain_text('Суммы дня совпадают')
+    expect(page.locator('details.day-proposal')).to_contain_text('Суммы дня совпадают')
     assert not calls
-    page.locator('.day-proposal summary').click()
-    expect(page.locator('.day-proposal')).to_contain_text('Bank Shop → Shop · Food')
+    page.locator('details.day-proposal summary').click()
+    expect(page.locator('details.day-proposal')).to_contain_text('Bank Shop → Shop · Food')
     page.get_by_role('button',name='Подтвердить пары дня · 1',exact=True).click()
     expect(page.locator('[data-transaction="b"]')).to_have_attribute('data-state','synced')
     assert calls==[{'snapshot':'a'*64}]
+    page.close()
+
+
+def test_bulk_day_button_confirms_only_eligible_days_in_selected_scope(browser):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True},outbox=[],recipient_profiles=[])
+    state['bank_accounts']=[{'id':'ba','bank':'vietinbank','account':'1234','currency':'VND','zenmoney_account':'za'},
+                            {'id':'bb','bank':'other','account':'5678','currency':'VND','zenmoney_account':'zb'}]
+    state['zenmoney_accounts']=[{'id':'za','title':'Bank','instrument':1},{'id':'zb','title':'Other','instrument':1}]
+    state['review']=[];state['day_review']=[]
+    for i,(day,account,eligible) in enumerate([('2026-10-01','ba',True),('2026-10-02','ba',True),('2026-10-03','ba',False),('2026-10-04','bb',True)]):
+        c={'id':f'z{i}','date':day,'payee':'Shop','categories':['Food'],'reason':'Exact day'}
+        state['review'].append({'id':f'b{i}','bank_account':account,'date':day,'amount_minor':-100,'currency':'VND','description':'Bank Shop',
+          'raw':{},'mapped':True,'state':'pending','reconciliation_status':'possible','candidates':[c],'category_suggestion':None})
+        state['day_review'].append({'bank_account':account,'date':day,'equal':True,'bank_count':1,'zen_count':1,
+          'pairs':[{'bank_id':f'b{i}','zen_id':f'z{i}'}],'ambiguous':0 if eligible else 2,'bulk_eligible':eligible,'snapshot':str(i)*64})
+    page=context.new_page();calls=[]
+    page.route('**/api/state',lambda route:route.fulfill(content_type='application/json',body=json.dumps(state)))
+    def confirm_bulk(route):
+        body=json.loads(route.request.post_data);calls.append(body)
+        assert [d['date'] for d in body['days']]==['2026-10-01','2026-10-02']
+        for d in state['day_review']:
+            if d['date'] in ['2026-10-01','2026-10-02']:
+                d.update(bulk_eligible=False,pairs=[])
+        for row in state['review'][:2]:row.update(state='linked',linked=row['candidates'][0],reconciliation_status='synced')
+        route.fulfill(content_type='application/json',body='{"days":2,"linked":2}')
+    page.route('**/api/review-days/confirm',confirm_bulk)
+    page.goto(f'chrome-extension://{identifier}/app.html#review')
+    page.locator('#review-account').select_option('ba')
+    page.locator('#review-start').fill('2026-10-02')
+    expect(page.locator('.bulk-day-review')).to_contain_text('Полностью однозначных дней: 1.')
+    page.locator('#review-start').fill('')
+    page.locator('#review-search').fill('no matching rows')
+    expect(page.locator('.ledger-entry')).to_have_count(0)
+    expect(page.locator('.bulk-day-review')).to_contain_text('Полностью однозначных дней: 2.')
+    assert not calls
+    page.get_by_role('button',name='Сопоставить все однозначные дни · 2 операций',exact=True).click()
+    expect(page.locator('.bulk-day-review')).to_contain_text('Нет полностью однозначных дней')
+    assert len(calls)==1
+    page.locator('#review-search').fill('')
+    expect(page.locator('[data-transaction="b2"]')).to_have_attribute('data-state','possible')
+    expect(page.locator('[data-transaction="b0"]')).to_have_attribute('data-state','synced')
     page.close()

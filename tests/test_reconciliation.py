@@ -147,3 +147,73 @@ def test_recipient_profile_keeps_multiple_categories_and_removes_unlinked_eviden
     linked[0]['state']='pending'
     profiles=recipient_profiles(enrich(linked,accounts,history,categories),accounts,history,categories)
     assert all(c['count']==1 for c in profiles[0]['categories'])
+
+
+def bulk_fixture(tmp_path):
+    path=tmp_path/'bulk.db';client=TestClient(create_app(path,TOKEN,'demo'))
+    client.headers['Authorization']='Bearer '+TOKEN
+    prepare(client)
+    txs=[]
+    for day, amounts in [('2026-10-01',[65000]),('2026-10-02',[100,200]),('2026-10-03',[300,400,400])]:
+        for i,amount in enumerate(amounts):
+            identifier=f'{day}-{i}'
+            if day!='2026-10-01':
+                imported=copy.deepcopy(IMPORT);row=imported['transactions'][0]
+                row.update(external_id=identifier,date=day,amount_minor=-amount)
+                assert client.post('/api/imports',json=imported).status_code==200
+            txs.append({'id':identifier,'date':day,'incomeAccount':DEMO_ACCOUNT,'outcomeAccount':DEMO_ACCOUNT,
+                        'income':0,'outcome':amount,'tag':[]})
+    with transaction(path) as db:apply_diff(db,{'serverTimestamp':1,'transaction':txs})
+    return client,path
+
+
+def bulk_body(state):
+    return {'days':[{k:d[k] for k in ('bank_account','date','snapshot')} for d in state['day_review'] if d['bulk_eligible']]}
+
+
+def test_bulk_days_excludes_whole_ambiguous_day_and_is_reversible(tmp_path):
+    client,path=bulk_fixture(tmp_path)
+    state=client.get('/api/state').json();body=bulk_body(state)
+    assert len(body['days'])==2
+    doubtful=next(d for d in state['day_review'] if d['date']=='2026-10-03')
+    assert len(doubtful['pairs'])==1 and doubtful['ambiguous']==2 and not doubtful['bulk_eligible']
+    assert client.post('/api/review-days/confirm',json=body).json()=={'days':2,'linked':3}
+    state=client.get('/api/state').json()
+    assert all(r['state']=='pending' for r in state['review'] if r['date']=='2026-10-03')
+    assert not state['outbox']
+    assert client.post('/api/review-days/confirm',json=body).status_code==409
+    linked=next(r for r in state['review'] if r['state']=='linked')
+    assert client.delete(f"/api/review/{linked['id']}/link").status_code==200
+
+
+def test_bulk_stale_or_ambiguous_day_rejects_entire_batch(tmp_path):
+    client,path=bulk_fixture(tmp_path)
+    state=client.get('/api/state').json();body=bulk_body(state)
+    bad=copy.deepcopy(body);bad['days'][-1]['snapshot']='0'*64
+    assert client.post('/api/review-days/confirm',json=bad).status_code==409
+    doubtful=next(d for d in state['day_review'] if not d['bulk_eligible'])
+    bad=copy.deepcopy(body);bad['days'].append({k:doubtful[k] for k in ('bank_account','date','snapshot')})
+    assert client.post('/api/review-days/confirm',json=bad).status_code==409
+    assert client.post('/api/review-days/confirm',json={'days':[body['days'][0]]*2}).status_code==409
+    assert client.post('/api/review-days/confirm',json={'days':[]}).status_code==422
+    with transaction(path) as db:
+        tx=json.loads(db.execute("SELECT data FROM zen_entities WHERE kind='transaction' AND id='2026-10-01-0'").fetchone()[0])
+        tx['comment']='Changed after preview'
+        apply_diff(db,{'serverTimestamp':2,'transaction':[tx]})
+    assert client.post('/api/review-days/confirm',json=body).status_code==409
+    assert all(r['state']=='pending' for r in client.get('/api/state').json()['review'])
+
+
+def test_bulk_respects_selected_days_and_rejects_shared_zen_claims(tmp_path):
+    client,path=bulk_fixture(tmp_path)
+    state=client.get('/api/state').json();body=bulk_body(state)
+    chosen=next(d for d in body['days'] if d['date']=='2026-10-01')
+    assert client.post('/api/review-days/confirm',json={'days':[chosen]}).json()=={'days':1,'linked':1}
+    imported=copy.deepcopy(IMPORT);imported['account']='other-bank-account'
+    row=imported['transactions'][0];row.update(date='2026-10-02',amount_minor=-100)
+    other=copy.deepcopy(row);other.update(external_id='other',amount_minor=-200)
+    imported['transactions'].append(other)
+    client.post('/api/imports',json=imported)
+    with transaction(path) as db: db.execute('UPDATE bank_accounts SET zenmoney_account=?',(DEMO_ACCOUNT,))
+    days=[d for d in client.get('/api/state').json()['day_review'] if d['date']=='2026-10-02']
+    assert len(days)==2 and all(not d['bulk_eligible'] for d in days)
