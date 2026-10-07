@@ -438,9 +438,10 @@ def test_capture_failure_keeps_visible_diagnostic_steps(browser):
     popup.close();other.close()
 
 
-def test_automatic_history_background_pagination_and_dedup(browser):
+@pytest.mark.parametrize('continuation_zero',[False,True])
+def test_automatic_history_background_pagination_and_dedup(browser,continuation_zero):
     context, identifier = browser
-    account = '888899990001'
+    account = '888899990011' if continuation_zero else '888899990001'
     requests = []
     fixture = Path(__file__).with_name('auto-bank.html').read_text()
     context.route('https://ipay.vietinbank.vn/payment-history?accountNo='+account,
@@ -456,14 +457,19 @@ def test_automatic_history_background_pagination_and_dedup(browser):
                 for n in range(page*100, min(page*100+100,103))]
         route.fulfill(content_type='application/json', headers={'Access-Control-Allow-Origin':'*'},
                       body=json.dumps({'error':False,'accountNo':account,'currentPage':page,'nextPage':page+1,
-                                       'pageSize':100,'totalRecords':103,'transactions':rows,'sessionId':'DO-NOT-LOG'}))
+                                       'pageSize':100,'totalRecords':0 if continuation_zero and page else 103,'transactions':rows,'sessionId':'DO-NOT-LOG'}))
     context.route('https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions', response)
     bank = context.new_page();bank.goto('https://ipay.vietinbank.vn/payment-history?accountNo='+account)
     popup = context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
-    popup.locator('#history-period').select_option('6');bank.bring_to_front();popup.locator('#capture').click()
-    expect(popup.locator('#auto-status')).to_contain_text('Интервалы:',timeout=10000)
-    popup.close()  # Work must continue without the popup.
     worker = context.service_workers[0]
+    previous=worker.evaluate("async()=>(await chrome.storage.local.get('autoJob')).autoJob?.id")
+    popup.locator('#history-period').select_option('6');bank.bring_to_front();popup.locator('#capture').click()
+    for _ in range(100):
+        started=worker.evaluate("async()=>(await chrome.storage.local.get('autoJob')).autoJob")
+        if started and started['id']!=previous:break
+        bank.wait_for_timeout(100)
+    assert started['id']!=previous
+    popup.close()  # Work must continue without the popup.
     for _ in range(180):
         job = worker.evaluate("async()=> (await chrome.storage.local.get('autoJob')).autoJob")
         if job['status'] not in ['starting','navigating','running','saving']:break
@@ -473,6 +479,9 @@ def test_automatic_history_background_pagination_and_dedup(browser):
     assert job['added']==expected and job['duplicates']==0
     assert len(requests)==len(job['parts'])*2
     assert all(x['rows']==103 for x in job['completed'])
+    if continuation_zero:
+        assert job['responses'][-1]['counters']['totalRecords']['value']==0
+        assert job['responses'][-1]['rowCount']==3
     assert 'DO-NOT-LOG' not in json.dumps(job)
     popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
     expect(popup.locator('#auto-status')).to_contain_text('Весь период сохранён')

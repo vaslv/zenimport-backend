@@ -78,8 +78,13 @@ async function handle(message,sender){
   }
   if(message.type==='auto-page'){
     if(!j.current||message.part!==j.part)throw Error('Неожиданный интервал.');
-    const d=message.data,period=j.parts[j.part];
+    let d=message.data;const period=j.parts[j.part];
     if(d?.accountNo!==j.account||d.error!==false||d.currentPage!==j.current.page)throw Error('Ответ другого счёта, страницы или ошибка банка.');
+    // Observed VietinBank contract: the first page supplies the total;
+    // continuation pages can carry 0 even when they contain remaining rows.
+    // Diagnostics retain the original response. The strict parser still verifies
+    // the exact row count against the first page's total.
+    if(d.currentPage>0&&d.totalRecords===0&&j.current.total>0)d={...d,totalRecords:j.current.total};
     if(j.current.total!==null&&d.totalRecords!==j.current.total)throw Error('Счётчик totalRecords следующей страницы отличается. Диагностика сохранена: скачайте отчёт.');
     if(d.totalRecords===0){
       if(d.currentPage!==0||!Array.isArray(d.transactions)||d.transactions.length!==0)throw Error('Некорректный пустой ответ.');
