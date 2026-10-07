@@ -1,3 +1,4 @@
+import {dayComparison} from './day-comparison.js';
 import {formatMoney} from './zenmoney-view.js';
 const node=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const labels={synced:'Уже в ZenMoney',possible:'Проверить совпадение',new:'Новая',unmapped:'Выберите счёт',conflict:'Связь изменилась',queued:'В очереди',sent:'Отправлена',ignored:'Пропущена'};
@@ -21,6 +22,18 @@ export function renderReview(container,state,{account='',status='all',query='',s
   if(profiles.length){const box=node('details',undefined,'category-evidence');box.append(node('summary',`Получатели с подтверждённой историей · ${profiles.length}`));for(const p of profiles){box.append(node('strong',p.name));for(const c of p.categories)box.append(node('p',`${c.title} · ${c.count} ${c.repeated?'— повторяется':'— один пример'}`));}container.append(box);}
   const button=(text,fn)=>{const b=node('button',text,'secondary');b.dataset.apiAction='';b.onclick=()=>onAction(fn);return b;};
   const scopedDays=(state.day_review||[]).filter(d=>(!account||d.bank_account===account)&&(!start||d.date>=start)&&(!end||d.date<=end));
+  const comparisonDays=scopedDays.filter(d=>Array.isArray(d.zen_rows));
+  if(comparisonDays.length){
+    const complete=node('details',undefined,'full-day-review');
+    complete.append(node('summary','Полная сверка по дням — банк и ZenMoney'));
+    complete.append(node('p','Все операции выбранного счёта и периода из загруженной истории. Поиск, статус и пагинация основного списка здесь не применяются. Б/З — номера записей внутри дня; совпадение суммы ещё не подтверждает связь.'));
+    for(const d of comparisonDays){
+      const a=accounts.get(d.bank_account),entry=node('details',undefined,'comparison-day');entry.dataset.date=d.date;
+      entry.append(node('summary',`${d.date} · ${zen.get(a?.zenmoney_account)?.title||a?.bank} · Банк ${d.bank_count} / ZenMoney ${d.zen_count} · ${d.equal?'Суммы совпадают':'Есть расхождения'}`));
+      entry.append(dayComparison(d,state));complete.append(entry);
+    }
+    container.append(complete);
+  }
   const readyDays=scopedDays.filter(d=>d.bulk_eligible===true);
   if(state.capabilities?.local_review&&scopedDays.length){
     const box=node('section',undefined,'bulk-day-review day-proposal');
@@ -43,6 +56,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
         const a=accounts.get(d.bank_account),title=zen.get(a?.zenmoney_account)?.title||a?.bank||'Счёт';
         box.append(node('summary',`${title}: банк ${d.bank_count} / ZenMoney ${d.zen_count} · ${d.equal?'Суммы дня совпадают':'День не совпадает'}`));
         box.append(node('p','Проверка всех загруженных операций счёта за день, включая скрытые фильтрами. Перед подтверждением убедитесь, что история банка за день загружена полностью.'));
+        if(Array.isArray(d.zen_rows))box.append(dayComparison(d,state));
         if(d.ambiguous)box.append(node('p',`Неоднозначных операций: ${d.ambiguous}. Повторяющиеся суммы требуют отдельной проверки.`));
         for(const pair of d.pairs){const r=state.review.find(r=>r.id===pair.bank_id),c=r?.candidates.find(c=>c.id===pair.zen_id);if(r)box.append(node('p',`${money(r)} · ${r.description} → ${c?.payee||c?.comment||'ZenMoney'} · ${c?.categories?.join(', ')||'Без категории'}`));}
         if(d.pairs.length&&state.capabilities?.local_review)box.append(button(`Подтвердить пары дня · ${d.pairs.length}`,()=>({path:`/api/review-days/${d.bank_account}/${d.date}/confirm`,body:{snapshot:d.snapshot}})));

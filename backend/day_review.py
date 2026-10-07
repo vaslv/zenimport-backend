@@ -16,6 +16,19 @@ def proposals(db, rows):
     groups = defaultdict(list)
     for row in rows:
         groups[(row['bank_account'], row['date'])].append(row)
+    # Include ZenMoney-only days within the observed bank-history range.
+    ranges = {}
+    for row in rows:
+        lo, hi = ranges.get(row['bank_account'], (row['date'], row['date']))
+        ranges[row['bank_account']] = (min(lo, row['date']), max(hi, row['date']))
+    for account_id, (lo, hi) in ranges.items():
+        target = accounts[account_id]['zenmoney_account']
+        for (zen_account, ordinal, _amount) in index:
+            day = date.fromordinal(ordinal).isoformat()
+            if zen_account == target and lo <= day <= hi:
+                groups.setdefault((account_id, day), [])
+    tx_by_id = {t['id']: t for t in transactions}
+    tags = {t['id']: t['title'] for t in entities(db, 'tag')}
     used = {r['linked_id']: r['id'] for r in rows if r['state'] in ('linked', 'sent')}
     result = []
     for (account_id, day), bank in sorted(groups.items(), reverse=True):
@@ -26,6 +39,15 @@ def proposals(db, rows):
         for (target, ordinal, amount), matches in index.items():
             if target == account['zenmoney_account'] and ordinal == date.fromisoformat(day).toordinal():
                 zen[amount].extend(m for _, m in matches)
+        zen_rows = []
+        for amount, matches in zen.items():
+            for match in matches:
+                tx = tx_by_id[match['id']]
+                zen_rows.append({**match, 'amount_minor': str(amount), 'currency': account['currency'],
+                    'categories': [tags.get(t, t) for t in tx.get('tag') or []],
+                    'transfer': tx.get('incomeAccount') != tx.get('outcomeAccount'),
+                    'linked_bank_id': used.get(match['id']),
+                    'same_day_bank_ids': [r['id'] for r in bank if r['amount_minor'] == amount]})
         equal = Counter(r['amount_minor'] for r in bank) == Counter({a: len(v) for a, v in zen.items()})
         pairs, ambiguous = [], 0
         valid = True
@@ -52,6 +74,7 @@ def proposals(db, rows):
         snapshot = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         result.append({'bank_account': account_id, 'date': day, 'bank_count': len(bank),
                        'zen_count': sum(map(len, zen.values())), 'equal': equal,
+                       'bank_ids': [r['id'] for r in bank], 'zen_rows': zen_rows,
                        'pairs': sorted(pairs, key=lambda p: p['bank_id']) if equal and valid else [],
                        'ambiguous': ambiguous if equal else 0, 'snapshot': snapshot,
                        'bulk_eligible': bool(equal and valid and pairs and ambiguous == 0)})

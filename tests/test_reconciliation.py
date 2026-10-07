@@ -257,3 +257,28 @@ def test_state_and_history_read_committed_snapshot_during_write(tmp_path):
         import pytest
         with pytest.raises(sqlite3.OperationalError):
             db.execute("UPDATE bank_transactions SET state='ignored'")
+
+
+def test_day_details_include_all_zen_rows_and_zen_only_days(tmp_path):
+    client,path=bulk_fixture(tmp_path)
+    with transaction(path) as db:
+        db.execute("DELETE FROM bank_transactions WHERE date='2026-10-02'")
+        apply_diff(db,{'serverTimestamp':2,'transaction':[
+            {'id':'extra','date':'2026-10-01','incomeAccount':DEMO_ACCOUNT,'outcomeAccount':DEMO_ACCOUNT,'income':0,'outcome':123,'payee':'Only Zen'},
+            {'id':'deleted','date':'2026-10-01','incomeAccount':DEMO_ACCOUNT,'outcomeAccount':DEMO_ACCOUNT,'income':0,'outcome':123,'deleted':True},
+            {'id':'transfer','date':'2026-10-03','incomeAccount':DEMO_ACCOUNT,'outcomeAccount':'elsewhere','income':700,'outcome':800},
+            {'id':'foreign','date':'2026-10-01','incomeAccount':'elsewhere','outcomeAccount':'elsewhere','income':0,'outcome':123}]})
+    state=client.get('/api/state').json()
+    days={d['date']:d for d in state['day_review']}
+    assert days['2026-10-02']['bank_ids']==[] and days['2026-10-02']['zen_count']==2
+    assert len(days['2026-10-02']['zen_rows'])==2 and not days['2026-10-02']['bulk_eligible']
+    first=days['2026-10-01'];assert first['bank_count']==1 and first['zen_count']==2
+    extra=next(z for z in first['zen_rows'] if z['id']=='extra')
+    assert extra['same_day_bank_ids']==[] and extra['amount_minor']=='-123'
+    assert not extra['linked_bank_id']
+    third=days['2026-10-03'];assert len(third['zen_rows'])==4
+    transfer=next(z for z in third['zen_rows'] if z['id']=='transfer')
+    assert transfer['transfer'] and transfer['amount_minor']=='700'
+    repeated=[z for z in third['zen_rows'] if z['amount_minor']=='-400']
+    assert len(repeated)==2 and all(len(z['same_day_bank_ids'])==2 for z in repeated)
+    assert all(r['state']=='pending' for r in state['review'])

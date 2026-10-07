@@ -678,3 +678,33 @@ def test_bulk_day_button_confirms_only_eligible_days_in_selected_scope(browser):
     expect(page.locator('[data-transaction="b2"]')).to_have_attribute('data-state','possible')
     expect(page.locator('[data-transaction="b0"]')).to_have_attribute('data-state','synced')
     page.close()
+
+
+def test_readonly_full_day_comparison_shows_both_sources(browser):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True},recipient_profiles=[],outbox=[])
+    state['bank_accounts']=[{'id':'ba','bank':'bank','account':'1234','currency':'VND','zenmoney_account':'za'}]
+    state['zenmoney_accounts']=[{'id':'za','title':'Bank','instrument':1}]
+    state['review']=[{'id':'b','bank_account':'ba','date':'2026-10-01','amount_minor':-100,'currency':'VND','description':'Bank purchase',
+      'raw':{},'state':'pending','mapped':True,'candidates':[],'category_suggestion':None,'reconciliation_status':'new'}]
+    z={'id':'z','date':'2026-10-01','amount_minor':'-200','currency':'VND','payee':'Only Zen <img src=x>','comment':'Comment',
+       'categories':['Food'],'transfer':False,'linked_bank_id':None,'same_day_bank_ids':[]}
+    state['day_review']=[{'bank_account':'ba','date':'2026-10-01','bank_count':1,'zen_count':1,'equal':False,'pairs':[],'ambiguous':0,
+      'bulk_eligible':False,'snapshot':'a'*64,'bank_ids':['b'],'zen_rows':[z]},
+      {'bank_account':'ba','date':'2026-10-02','bank_count':0,'zen_count':1,'equal':False,'pairs':[],'ambiguous':0,
+      'bulk_eligible':False,'snapshot':'b'*64,'bank_ids':[],'zen_rows':[{**z,'id':'z2','date':'2026-10-02'}]}]
+    page=context.new_page();page.route('**/api/state',lambda route:route.fulfill(content_type='application/json',body=json.dumps(state)))
+    page.goto(f'chrome-extension://{identifier}/app.html#review')
+    page.locator('.full-day-review > summary').click()
+    first=page.locator('.full-day-review .comparison-day[data-date="2026-10-01"]')
+    first.locator('summary').click()
+    expect(first).to_contain_text('Bank purchase');expect(first).to_contain_text('Only Zen <img src=x>')
+    expect(first).to_contain_text('Нет пары по сумме в этот день')
+    expect(first).to_contain_text('Нет пары по сумме в банке в этот день')
+    assert first.locator('img').count()==0 and first.locator('button').count()==0
+    second=page.locator('.full-day-review .comparison-day[data-date="2026-10-02"]')
+    second.locator('summary').click();expect(second).to_contain_text('Банковских операций за этот день не загружено')
+    page.set_viewport_size({'width':390,'height':844})
+    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+    page.close()
