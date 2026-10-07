@@ -1,8 +1,10 @@
+import {progress} from './capture-progress.js';
 import {api} from './api.js';
 import {historyPeriod} from './history-period.js';
 import {parseVietinBankJson} from './vietinbank-json.js';
-let payload;
+let payload, restoreGeneration=0;
 const $ = id => document.getElementById(id);
+$('extension-version').textContent=chrome.runtime.getManifest().version;
 $('open').onclick = () => chrome.tabs.create({url: chrome.runtime.getURL('app.html#review')});
 async function extract(collectAll=false) {
   $('extract').disabled = $('collect').disabled = true;
@@ -24,8 +26,13 @@ $('extract').onclick=()=>extract(false);
 $('collect').onclick=()=>extract(true);
 $('import').onclick = async () => {
   $('import').disabled = true;
+  $('status').textContent='Сохраняю операции в локальную базу…';
+  const {bankCapture:importState}=await chrome.storage.session.get('bankCapture');
+  const tracked=importState?.payload?.transactions?.[0]?.external_id===payload?.transactions?.[0]?.external_id&&importState?.payload?.account===payload?.account;
+  if(tracked)await progress('Popup',importState.expires,'saving');
   try {
     const result = await api('/api/imports', payload);
+    if(tracked)await progress('Popup',importState.expires,'saved');
     $('status').textContent = `Добавлено: ${result.added}. Уже были: ${result.duplicates}. Нажмите «Проверить операции». В ZenMoney ничего не отправлено.`;
   } catch (error) { $('status').textContent = error.message; }
   finally { $('import').disabled = false; }
@@ -44,38 +51,50 @@ function showJson(data) {
   $('import').hidden=$('debug').hidden=false;
 }
 async function restoreCapture() {
+  const generation=++restoreGeneration;
   const {bankCapture:state}=await chrome.storage.session.get('bankCapture');
   if(!state)return;
   $('clear-capture').hidden=false;
   payload=undefined;$('import').hidden=$('debug').hidden=true;
-  if(state.expires<Date.now()) {await chrome.storage.session.remove('bankCapture');$('status').textContent='Захват устарел. Начните заново.';return;}
+  if(state.expires<Date.now()&&['waiting','starting'].includes(state.status)) {await progress('Popup',state.expires,'timeout');await chrome.storage.session.set({bankCapture:{...state,status:'error',error:'Время ожидания истекло. Запустите получение заново.'}});return;}
+  if(state.status==='starting'){$('status').textContent='Запускаю получение истории…';return;}
   if(state.status==='ready')showJson(state.payload);
   else if(state.status==='error') $('status').textContent=state.error;
   else {
     const tools=await chrome.runtime.sendMessage({type:'devtools-status',tabId:state.tabId}).catch(()=>null);
+    if(generation!==restoreGeneration)return;
     $('status').textContent='Ожидаю новый ответ истории. '+(tools?.connected?'Захват через Network подключён. ':'Для резервного захвата откройте DevTools (Network) в банковской вкладке. ')+(Date.now()-(state.startedAt||0)>15000?'Ответ ещё не получен: измените период и нажмите Search; проверьте, появился ли новый getHistTransactions в Network. ':'Закройте это окно, нажмите Search в банке, затем снова откройте расширение. ');
   }
 }
 async function startCapture(diagnoseRequest=false){
-  $('capture').disabled=true;payload=undefined;$('import').hidden=$('debug').hidden=true;
+  $('capture').disabled=$('diagnose-request').disabled=true;payload=undefined;$('import').hidden=$('debug').hidden=true;
+  $('status').textContent='Запуск принят. Проверяю банковскую вкладку…';
+  const startedAt=Date.now(),id=startedAt+600000;
+  await chrome.storage.session.set({bankCapture:{diagnoseRequest,status:'starting',startedAt,expires:id}});
+  await progress('Popup',id,'start');
+  $('capture-progress').open=true;
   try {
     const [tab]=await chrome.tabs.query({active:true,currentWindow:true});
     if(!tab?.url?.startsWith('https://ipay.vietinbank.vn/payment-history'))throw Error('Откройте историю счёта VietinBank.');
+    await progress('Popup',id,'tab');
     if(diagnoseRequest){
       const tools=await chrome.runtime.sendMessage({type:'devtools-status',tabId:tab.id}).catch(()=>null);
       if(!tools?.connected)throw Error('Для схемы запроса откройте DevTools → Network в банковской вкладке. После обновления расширения переоткройте DevTools.');
     }
+    if(diagnoseRequest)await progress('Popup',id,'network');
     await chrome.storage.local.set({historyPeriodMonths:Number($('history-period').value)});
-    await chrome.storage.session.set({bankCapture:{tabId:tab.id,diagnoseRequest,status:'waiting',startedAt:Date.now(),expires:Date.now()+600000}});
+    await chrome.storage.session.set({bankCapture:{tabId:tab.id,diagnoseRequest,status:'waiting',startedAt,expires:id}});
     if(diagnoseRequest){
       await chrome.scripting.executeScript({target:{tabId:tab.id},world:'MAIN',func:()=>window.__zenImportStopObserver?.()});
     }else{
       await chrome.scripting.executeScript({target:{tabId:tab.id},files:['bank-bridge.js']});
       await chrome.scripting.executeScript({target:{tabId:tab.id},world:'MAIN',files:['bank-observer.js']});
     }
+    await progress('Popup',id,diagnoseRequest?'waiting':'observer');
+    if(!diagnoseRequest)await progress('Popup',id,'waiting');
     await restoreCapture();
-  }catch(error){await chrome.storage.session.remove('bankCapture');$('status').textContent=error.message;}
-  finally{$('capture').disabled=false;}
+  }catch(error){await progress('Popup',id,'error');await chrome.storage.session.set({bankCapture:{diagnoseRequest,status:'error',startedAt,expires:id,error:error.message}});$('status').textContent=error.message;}
+  finally{$('capture').disabled=$('diagnose-request').disabled=false;}
 };
 $('capture').onclick=()=>startCapture();
 $('diagnose-request').onclick=()=>startCapture(true);
@@ -119,7 +138,29 @@ $('export-contract').onclick=async()=>{
   if(!contract||!state||contract.captureId!==state.expires||state.expires<Date.now())return;
   const url=URL.createObjectURL(new Blob([JSON.stringify(contract.report,null,2)],{type:'application/json'}));
   const link=document.createElement('a');link.href=url;link.download='vietinbank-request-schema.json';link.click();
+  $('status').textContent='Скачивание схемы запущено. Файл: vietinbank-request-schema.json';
+  await progress('Popup',state.expires,'download');
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
 chrome.storage.onChanged.addListener((changes,area)=>{if(area==='session'&&(changes.bankContract||changes.bankCapture))showContract();});
 showContract();
+
+async function renderProgress(){
+  const data=await chrome.storage.session.get(['bankCapture','bankProgressPopup','bankProgressNetwork','bankProgressWorker']);
+  const state=data.bankCapture;
+  const events=state?['Popup','Network','Worker'].flatMap(source=>data['bankProgress'+source]?.id===state.expires?data['bankProgress'+source].events:[]):[];
+  $('capture-progress').hidden=!events.length;
+  $('capture-steps').replaceChildren(...events.sort((a,b)=>a.at-b.at).map(e=>{
+    const li=document.createElement('li');li.textContent=`${new Date(e.at).toLocaleTimeString('ru-RU')} · ${e.label}`;return li;
+  }));
+  const waiting=state&&['starting','waiting'].includes(state.status);
+  $('capture-age').hidden=!waiting;
+  if(waiting)$('capture-age').textContent=`Ожидание: ${Math.floor((Date.now()-state.startedAt)/1000)} с. ${events.some(e=>e.stage==='response')?'Ответ замечен, обрабатываю данные.':'Получение ответа ещё не подтверждено.'}`;
+  $('status').dataset.phase=state?.status||'idle';
+}
+chrome.storage.onChanged.addListener((changes,area)=>{if(area==='session'){renderProgress();}});
+setInterval(async()=>{
+  const {bankCapture:state}=await chrome.storage.session.get('bankCapture');
+  if(state&&['starting','waiting'].includes(state.status)){await restoreCapture();await renderProgress();}
+},2000);
+renderProgress();

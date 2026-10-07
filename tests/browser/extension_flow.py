@@ -420,3 +420,19 @@ def test_live_review_shows_candidates_without_enabling_writes(browser):
     expect(page.locator('#review')).to_contain_text('Запись отключена')
     assert page.locator('#review button').count()==0
     page.close()
+
+
+def test_capture_failure_keeps_visible_diagnostic_steps(browser):
+    context,identifier=browser
+    other=context.new_page();other.goto(BASE+'/health')
+    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+    other.bring_to_front();popup.locator('#capture').click()
+    expect(popup.locator('#status')).to_contain_text('Откройте историю счёта')
+    expect(popup.locator('#capture-steps')).to_contain_text('Запуск принят')
+    expect(popup.locator('#capture-steps')).to_contain_text('Этап завершился ошибкой')
+    assert popup.evaluate('()=>chrome.storage.session.get("bankCapture")')['bankCapture']['status']=='error'
+    popup.reload();expect(popup.locator('#status')).to_contain_text('Откройте историю счёта')
+    expect(popup.locator('#capture-progress')).to_be_visible()
+    popup.locator('#diagnostics > summary').click();popup.locator('#clear-capture').click()
+    expect(popup.locator('#capture-progress')).to_be_hidden()
+    popup.close();other.close()

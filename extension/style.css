@@ -4,3 +4,5 @@
 
 /* Compact history popup: one primary path, diagnostics collapsed. */
 .popup{width:370px;padding:18px 20px}.popup h1{font-size:23px;margin:0 0 16px}.popup>label{font-size:13px;font-weight:650}.popup>select{display:block;width:100%;margin:6px 0}.popup p{margin:10px 0;line-height:1.45}.popup #status{padding:10px 12px;border-radius:8px;background:#e6eee8;min-height:0}.popup>details{border-top:1px solid #dce4dd;padding-top:12px;margin-top:14px;font-size:12px}.popup details label{display:block;margin:10px 0}.popup details input{font-size:12px;padding:8px}.popup details details{margin-top:12px}
+
+.popup #capture-progress{font-size:12px;margin:8px 0;padding:8px;border:1px solid #cbd8ce;border-radius:8px}.popup #capture-steps{padding-left:20px;max-height:180px;overflow:auto}.popup #capture-steps li{margin:5px 0}.popup #status[data-phase="error"]{background:#fff0e9;color:#953c1f}.popup #status[data-phase="waiting"]{border-left:3px solid #d29e46}.popup #status[data-phase="ready"]{border-left:3px solid #176553}

@@ -1,3 +1,4 @@
+import {progress} from './capture-progress.js';
 import {parseVietinBankJson} from './vietinbank-json.js';
 chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
 chrome.storage.session.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
@@ -18,9 +19,11 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
     try {
       if(message.error)throw Error('Ответ истории не получен. Начните захват заново.');
       if(JSON.stringify(message.data)?.length>1500000)throw Error('Ответ слишком большой.');
+      await progress('Worker',state.expires,'parsing');
       const payload=await parseVietinBankJson(message.data);
+      await progress('Worker',state.expires,'ready');
       await chrome.storage.session.set({bankCapture:{...state,status:'ready',payload}});
-    }catch(error){await chrome.storage.session.set({bankCapture:{...state,status:'error',error:error.message}});}
+    }catch(error){await progress('Worker',state.expires,'error');await chrome.storage.session.set({bankCapture:{...state,status:'error',error:error.message}});}
   })().then(()=>reply({ok:true}),()=>reply({ok:false})).finally(()=>{processing=false;});
   return true;
 });

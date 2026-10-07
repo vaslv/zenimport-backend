@@ -51,13 +51,13 @@ test('complete applies only to a single response covering the whole result',asyn
 });
 
 test('DevTools captures only newly armed history responses, strips secrets, supports base64',async()=>{
-  const src=readFileSync(new URL('../extension/devtools.js',import.meta.url),'utf8').replace("import {describeHistoryRequest} from './bank-contract.js';",'').replace("import {detailKeys} from './vietinbank-json.js';",'');
+  const src=readFileSync(new URL('../extension/devtools.js',import.meta.url),'utf8').replace("import {progress} from './capture-progress.js';",'').replace("import {describeHistoryRequest} from './bank-contract.js';",'').replace("import {detailKeys} from './vietinbank-json.js';",'');
   const {detailKeys}=await import('../extension/vietinbank-json.js');
   const {describeHistoryRequest}=await import('../extension/bank-contract.js');
   let listener;const sent=[];let saved;const now=Date.now();
   const state={status:'waiting',tabId:42,startedAt:now-1000,expires:now+10000};
   const chrome={devtools:{inspectedWindow:{tabId:42},network:{onRequestFinished:{addListener:fn=>listener=fn}}},runtime:{onMessage:{addListener:()=>{}},sendMessage:async m=>sent.push(m)},storage:{session:{get:async()=>({bankCapture:state}),set:async value=>{saved=value;}}}};
-  vm.runInNewContext(src,{chrome,detailKeys,describeHistoryRequest,URL,Date,JSON,Number,TextDecoder,Uint8Array,atob});
+  vm.runInNewContext(src,{chrome,progress:async()=>{},setTimeout:(fn,ms)=>setTimeout(fn,Math.min(ms,25)),clearTimeout,detailKeys,describeHistoryRequest,URL,Date,JSON,Number,TextDecoder,Uint8Array,atob});
   const request={request:{method:'POST',url:'https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions'},response:{status:200},startedDateTime:new Date(now).toISOString(),getContent:cb=>cb(btoa(JSON.stringify(response())),'base64')};
   await listener(request);assert.equal(sent.length,1);assert.ok(!JSON.stringify(sent).includes('NEVER-SAVE'));assert.equal(sent[0].tabId,42);
   await listener({...request,startedDateTime:new Date(now-5000).toISOString()});assert.equal(sent.length,1);
@@ -70,6 +70,8 @@ test('DevTools captures only newly armed history responses, strips secrets, supp
   await listener({...request,request:{...request.request,postData:{text:JSON.stringify({sessionId:'SECRET',accountNo:'SECRET',currentPage:0})}}});
   assert.equal(saved.bankContract.report.body.fields.currentPage.value,0);
   assert.ok(!JSON.stringify(saved).includes('SECRET'));
+  await listener({...request,getContent:()=>undefined});
+  assert.equal(sent.at(-1).error,'network-response-unavailable');
 });
 
 test('history date hints use Vietnam dates and clamp month ends',async()=>{
