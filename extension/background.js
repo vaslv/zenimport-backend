@@ -1,3 +1,4 @@
+import './auto-background.js';
 import {progress} from './capture-progress.js';
 import {parseVietinBankJson} from './vietinbank-json.js';
 chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});

@@ -56,7 +56,7 @@ test('DevTools captures only newly armed history responses, strips secrets, supp
   const {describeHistoryRequest}=await import('../extension/bank-contract.js');
   let listener;const sent=[];let saved;const now=Date.now();
   const state={status:'waiting',tabId:42,startedAt:now-1000,expires:now+10000};
-  const chrome={devtools:{inspectedWindow:{tabId:42},network:{onRequestFinished:{addListener:fn=>listener=fn}}},runtime:{onMessage:{addListener:()=>{}},sendMessage:async m=>sent.push(m)},storage:{session:{get:async()=>({bankCapture:state}),set:async value=>{saved=value;}}}};
+  const chrome={devtools:{inspectedWindow:{tabId:42},network:{onRequestFinished:{addListener:fn=>listener=fn}}},runtime:{onMessage:{addListener:()=>{}},sendMessage:async m=>sent.push(m)},storage:{local:{get:async()=>({})},session:{get:async()=>({bankCapture:state}),set:async value=>{saved=value;}}}};
   vm.runInNewContext(src,{chrome,progress:async()=>{},setTimeout:(fn,ms)=>setTimeout(fn,Math.min(ms,25)),clearTimeout,detailKeys,describeHistoryRequest,URL,Date,JSON,Number,TextDecoder,Uint8Array,atob});
   const request={request:{method:'POST',url:'https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions'},response:{status:200},startedDateTime:new Date(now).toISOString(),getContent:cb=>cb(btoa(JSON.stringify(response())),'base64')};
   await listener(request);assert.equal(sent.length,1);assert.ok(!JSON.stringify(sent).includes('NEVER-SAVE'));assert.equal(sent[0].tabId,42);
@@ -92,4 +92,16 @@ test('request diagnostics deny secrets and account values while exposing dates/p
   const form=describeHistoryRequest({url:report.endpoint,method:'POST',postData:{mimeType:'application/x-www-form-urlencoded',text:'token=SECRET&pageSize=100'}});
   assert.ok(!JSON.stringify(form).includes('SECRET'));assert.equal(form.body.fields.pageSize.value,'100');
   assert.throws(()=>describeHistoryRequest({url:'https://example.com/',method:'GET'}));
+});
+
+test('automatic history plan covers six months with contiguous bounded intervals',async()=>{
+  const {planHistory,publicJob}=await import('../extension/auto-plan.js');
+  const p=planHistory(6,new Date('2026-10-07T00:00:00Z'));
+  assert.equal(p.from,'2026-04-07');assert.equal(p.to,'2026-10-07');
+  for(let i=0;i<p.parts.length;i++){
+    const a=p.parts[i];assert.ok((Date.parse(a.to)-Date.parse(a.from))/86400000<=29);
+    if(i)assert.equal(Date.parse(a.from)-Date.parse(p.parts[i-1].to),86400000);
+  }
+  assert.equal(planHistory(1,new Date('2026-03-31T00:00:00Z')).from,'2026-02-28');
+  assert.deepEqual(publicJob({account:'private',url:'secret',tabId:1,events:[]}),{events:[]});
 });

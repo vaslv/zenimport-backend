@@ -1,0 +1,22 @@
+<!doctype html><meta charset="utf-8">
+<div class="vt-select__single-value"><div class="cus-option"></div></div>
+<button id="filter">Filter</button><div id="fields" hidden>
+<label><input type="radio" checked>All</label><input placeholder="Input keyword to search"><input placeholder="From"><input placeholder="To">
+<input placeholder="Choose time range" readonly><button id="search">Search</button></div>
+<div role="application" aria-label="Calendar" hidden style="width:800px"><img alt="button back"><img alt="button next"><div id="days"></div><button id="apply">Chọn</button></div>
+<div class="table-pagination"><span class="table-pagination-total-range"></span>/<span class="table-pagination-total-total"></span><div id="pages"></div></div>
+<script>
+const cachedFetch=window.fetch;
+const account=new URL(location.href).searchParams.get('accountNo');document.querySelector('.cus-option').textContent=account+' - TEST - Current account';
+const cal=document.querySelector('[role=application]'),input=document.querySelector('[placeholder="Choose time range"]');
+let month=new Date(),chosen=[],period=[],tablePage=1,total=0;month=new Date(Date.UTC(month.getFullYear(),month.getMonth(),1));
+const iso=d=>d.toISOString().slice(0,10),display=s=>s.split('-').reverse().join('/');
+function renderCalendar(){document.querySelector('#days').replaceChildren();for(let i=1;i<=new Date(Date.UTC(month.getUTCFullYear(),month.getUTCMonth()+1,0)).getUTCDate();i++){const date=new Date(Date.UTC(month.getUTCFullYear(),month.getUTCMonth(),i)),b=document.createElement('button');b.textContent=i;b.setAttribute('aria-label','Choose '+date.toLocaleDateString('en-US',{timeZone:'UTC',weekday:'long',month:'long',day:'numeric',year:'numeric'})+' as your date.');b.onclick=()=>chosen.push(iso(date));document.querySelector('#days').append(b);}}
+document.querySelector('#filter').onclick=()=>document.querySelector('#fields').hidden=false;
+input.onclick=()=>{chosen=[];cal.hidden=false;renderCalendar();};
+for(const [alt,delta] of [['back',-1],['next',1]])document.querySelector(`[alt="button ${alt}"]`).onclick=()=>{month.setUTCMonth(month.getUTCMonth()+delta);renderCalendar();};
+document.querySelector('#apply').onclick=()=>{period=chosen.slice(-2);input.value=period.map(display).join(' - ');cal.hidden=true;};
+async function fetchPage(page){const r=await cachedFetch('https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions',{method:'POST',body:JSON.stringify({from:period[0],to:period[1],page,account})});const d=await r.json();total=d.totalRecords;renderTable();}
+function renderTable(){document.querySelector('.table-pagination-total-range').textContent=`${(tablePage-1)*10+1}-${Math.min(tablePage*10,total)}`;document.querySelector('.table-pagination-total-total').textContent=total;const pages=document.querySelector('#pages');pages.replaceChildren();for(let i=1;i<=Math.ceil(total/10);i++){const b=document.createElement('a');b.setAttribute('role','button');b.setAttribute('aria-label',`Page ${i}`+(i===tablePage?' is your current page':''));b.textContent=i;b.onclick=async()=>{const old=tablePage;tablePage=i;if(Math.floor((i-1)/10)>Math.floor((old-1)/10))await fetchPage(Math.floor((i-1)/10));else renderTable();};pages.append(b);}}
+document.querySelector('#search').onclick=()=>{tablePage=1;fetchPage(0);};
+</script>

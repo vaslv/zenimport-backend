@@ -344,7 +344,7 @@ def test_vietinbank_json_response_capture(browser,transport):
     bank.goto('https://ipay.vietinbank.vn/payment-history')
     bank.evaluate('()=>{window.savedOpen=XMLHttpRequest.prototype.open;}')
     popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
-    bank.bring_to_front();popup.locator('#capture').click()
+    bank.bring_to_front();popup.locator('#diagnostics').evaluate('(el)=>el.open=true');popup.locator('#manual-capture').click()
     expect(popup.locator('#status')).to_contain_text('Ожидаю новый ответ')
     popup.close()
     if transport=='fetch':
@@ -362,7 +362,7 @@ def test_vietinbank_json_response_capture(browser,transport):
     assert stored['bankCapture']['payload']['transactions'][0]['raw']['details']['corresponsiveName']=='Example shop'
     popup.locator('#import').click();expect(popup.locator('#status')).to_contain_text('Добавлено: 1')
     popup.locator('#import').click();expect(popup.locator('#status')).to_contain_text('Уже были: 1')
-    popup.locator('#diagnostics > summary').click();popup.locator('#clear-capture').click();expect(popup.locator('#import')).to_be_hidden()
+    popup.locator('#diagnostics').evaluate('(el)=>el.open=true');popup.locator('#clear-capture').click();expect(popup.locator('#import')).to_be_hidden()
     # Disarmed / unsolicited messages cannot recreate a capture.
     bank.evaluate("()=>window.postMessage({source:'zenimport-history',data:{error:false}},location.origin)")
     assert popup.evaluate('()=>chrome.storage.session.get("bankCapture")')=={}
@@ -392,9 +392,9 @@ def test_compact_popup_period_choices_and_review_destination(browser):
     expect(popup.locator('#extract')).to_be_hidden()
     expect(popup.locator('#collect')).to_be_hidden()
     expect(popup.locator('#json-file')).to_be_hidden()
-    expect(popup.locator('#period-hint')).to_contain_text('автоматически не меняется')
+    expect(popup.locator('#period-hint')).to_contain_text('Расширение выберет даты')
     popup.locator('#history-period').select_option('6')
-    expect(popup.locator('#period-hint')).to_contain_text('загружайте его частями')
+    expect(popup.locator('#period-hint')).to_contain_text('частями до 30 дней')
     popup.reload();expect(popup.locator('#history-period')).to_have_value('6')
     Path('/results').mkdir(exist_ok=True)
     popup.set_viewport_size({'width':370,'height':650})
@@ -426,13 +426,108 @@ def test_capture_failure_keeps_visible_diagnostic_steps(browser):
     context,identifier=browser
     other=context.new_page();other.goto(BASE+'/health')
     popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
-    other.bring_to_front();popup.locator('#capture').click()
+    other.bring_to_front();popup.locator('#diagnostics').evaluate('(el)=>el.open=true');popup.locator('#manual-capture').click()
     expect(popup.locator('#status')).to_contain_text('Откройте историю счёта')
     expect(popup.locator('#capture-steps')).to_contain_text('Запуск принят')
     expect(popup.locator('#capture-steps')).to_contain_text('Этап завершился ошибкой')
     assert popup.evaluate('()=>chrome.storage.session.get("bankCapture")')['bankCapture']['status']=='error'
     popup.reload();expect(popup.locator('#status')).to_contain_text('Откройте историю счёта')
     expect(popup.locator('#capture-progress')).to_be_visible()
-    popup.locator('#diagnostics > summary').click();popup.locator('#clear-capture').click()
+    popup.locator('#diagnostics').evaluate('(el)=>el.open=true');popup.locator('#clear-capture').click()
     expect(popup.locator('#capture-progress')).to_be_hidden()
     popup.close();other.close()
+
+
+def test_automatic_history_background_pagination_and_dedup(browser):
+    context, identifier = browser
+    account = '888899990001'
+    requests = []
+    fixture = Path(__file__).with_name('auto-bank.html').read_text()
+    context.route('https://ipay.vietinbank.vn/payment-history?accountNo='+account,
+                  lambda route: route.fulfill(content_type='text/html', body=fixture))
+    def response(route):
+        body = json.loads(route.request.post_data)
+        requests.append(body)
+        # Deliberately invented fixture parameters: only the synthetic bank sends them.
+        start, page = body['from'], body['page']
+        date = '-'.join(reversed(start.split('-')))
+        rows = [{'currency':'VND','remark':'Synthetic auto payment','amount':'1000','balance':'9000',
+                 'trxId':f'auto-{start}-{n}','processDate':date+' 12:00:00','dorC':'D'}
+                for n in range(page*100, min(page*100+100,103))]
+        route.fulfill(content_type='application/json', headers={'Access-Control-Allow-Origin':'*'},
+                      body=json.dumps({'error':False,'accountNo':account,'currentPage':page,'nextPage':page+1,
+                                       'pageSize':100,'totalRecords':103,'transactions':rows,'sessionId':'DO-NOT-LOG'}))
+    context.route('https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions', response)
+    bank = context.new_page();bank.goto('https://ipay.vietinbank.vn/payment-history?accountNo='+account)
+    popup = context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+    popup.locator('#history-period').select_option('6');bank.bring_to_front();popup.locator('#capture').click()
+    expect(popup.locator('#auto-status')).to_contain_text('Интервалы:',timeout=10000)
+    popup.close()  # Work must continue without the popup.
+    worker = context.service_workers[0]
+    for _ in range(180):
+        job = worker.evaluate("async()=> (await chrome.storage.local.get('autoJob')).autoJob")
+        if job['status'] not in ['starting','navigating','running','saving']:break
+        bank.wait_for_timeout(500)
+    assert job['status']=='done', str(job.get('error'))+' '+json.dumps(job,ensure_ascii=False)[-2500:]
+    expected=len(job['parts'])*103
+    assert job['added']==expected and job['duplicates']==0
+    assert len(requests)==len(job['parts'])*2
+    assert all(x['rows']==103 for x in job['completed'])
+    assert 'DO-NOT-LOG' not in json.dumps(job)
+    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+    expect(popup.locator('#auto-status')).to_contain_text('Весь период сохранён')
+    bank.bring_to_front();popup.locator('#capture').click()
+    expect(popup.locator('#auto-status')).to_contain_text(f'уже были: {expected}',timeout=90000)
+    expect(popup.locator('#auto-status')).to_contain_text('Весь период сохранён',timeout=10000)
+    with popup.expect_download() as downloading:popup.locator('#auto-export').click()
+    report=json.loads(Path(downloading.value.path()).read_text())
+    assert report['current']['status']=='done'
+    assert account not in json.dumps(report) and TOKEN not in json.dumps(report)
+    popup.screenshot(path='/results/automatic-history.png',full_page=True)
+    popup.close();bank.close()
+    context.unroute('https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions',response)
+
+
+@pytest.mark.parametrize('failure',['wrong_account','wrong_period','changing_total','cancel','logout','empty'])
+def test_automatic_history_failures_are_persisted(browser,failure):
+    context, identifier=browser
+    account='88889999000'+str(2+['wrong_account','wrong_period','changing_total','cancel','logout','empty'].index(failure))
+    fixture=Path(__file__).with_name('auto-bank.html').read_text()
+    if failure=='logout':fixture=fixture.replace("tablePage=1;fetchPage(0);","location.href='/login';")
+    url='https://ipay.vietinbank.vn/payment-history?accountNo='+account
+    context.route(url,lambda route:route.fulfill(content_type='text/html',body=fixture))
+    context.route('https://ipay.vietinbank.vn/login',lambda route:route.fulfill(content_type='text/html',body='Login'))
+    def respond(route):
+        body=json.loads(route.request.post_data)
+        if failure=='cancel':route.fulfill(status=200,headers={'Access-Control-Allow-Origin':'*'},body=json.dumps({'transactions':[], 'currentPage':999}));return
+        total=0 if failure=='empty' else (104 if body['page'] else 103)
+        date='01-01-2000' if failure=='wrong_period' else '-'.join(reversed(body['from'].split('-')))
+        rows=[{'currency':'VND','remark':'Failure fixture','amount':'2000','balance':'8000',
+               'trxId':f"{account}-{body['from']}-{n}",'processDate':date+' 10:00:00','dorC':'D'}
+              for n in range(body['page']*100,min(body['page']*100+100,total))]
+        route.fulfill(content_type='application/json',headers={'Access-Control-Allow-Origin':'*'},body=json.dumps({
+            'error':False,'accountNo':'99999999' if failure=='wrong_account' else account,
+            'currentPage':body['page'],'pageSize':100,'totalRecords':total,'transactions':rows}))
+    endpoint='https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions'
+    context.route(endpoint,respond)
+    bank=context.new_page();bank.goto(url)
+    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+    previous=popup.evaluate("async()=>(await chrome.storage.local.get('autoJob')).autoJob?.id")
+    popup.locator('#history-period').select_option('1');bank.bring_to_front();popup.locator('#capture').click()
+    for _ in range(100):
+        started=popup.evaluate("async()=>(await chrome.storage.local.get('autoJob')).autoJob")
+        if started and started['id']!=previous:break
+        popup.wait_for_timeout(100)
+    assert started['id']!=previous
+    if failure=='cancel':
+        expect(popup.locator('#auto-cancel')).to_be_visible();popup.locator('#auto-cancel').click()
+    wanted='done' if failure=='empty' else ('cancelled' if failure=='cancel' else 'error')
+    for _ in range(100):
+        job=popup.evaluate("async()=>(await chrome.storage.local.get('autoJob')).autoJob")
+        if job['status']==wanted:break
+        popup.wait_for_timeout(300)
+    assert job['status']==wanted, str(job.get('error'))+' '+json.dumps(job,ensure_ascii=False)[-2000:]
+    assert job['added']==(100 if failure=='changing_total' else 0), str(job.get('error'))+' '+json.dumps(job,ensure_ascii=False)[-2000:]
+    if failure=='changing_total':assert not job['completed'] and job['current']['rows']==100
+    popup.reload();expect(popup.locator('#auto-status')).to_contain_text('Добавлено: '+str(job['added']))
+    popup.close();bank.close();context.unroute(endpoint,respond)

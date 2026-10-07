@@ -9,11 +9,14 @@ chrome.devtools.network.onRequestFinished.addListener(async request=>{
   if(['OPTIONS','HEAD'].includes(request.request.method))return;
   let url;try{url=new URL(request.request.url);}catch{return;}
   if(url.origin+url.pathname!=='https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions')return;
-  const {bankCapture:state}=await chrome.storage.session.get('bankCapture');
+  const {autoJob:job}=await chrome.storage.local.get('autoJob');
+  const automatic=job&&['running','saving'].includes(job.status)&&job.tabId===tabId;
+  const {bankCapture:capture}=await chrome.storage.session.get('bankCapture');
+  const state=automatic?{status:'waiting',tabId,startedAt:job.startedAt,expires:job.startedAt+1200000}:capture;
   if(!state||state.status!=='waiting'||state.tabId!==tabId||state.expires<Date.now())return;
   // Ignore requests initiated before the operator armed this capture.
   if(!Number.isFinite(Date.parse(request.startedDateTime))||Date.parse(request.startedDateTime)<state.startedAt)return;
-  const send=message=>chrome.runtime.sendMessage({type:'bank-response',tabId,captureId:state.expires,...message});
+  const send=message=>chrome.runtime.sendMessage(automatic?{type:'auto-bank-response',tabId,startedAt:Date.parse(request.startedDateTime),...message}:{type:'bank-response',tabId,captureId:state.expires,...message});
   try {
     await progress('Network',state.expires,'response');
     if(state.diagnoseRequest) {

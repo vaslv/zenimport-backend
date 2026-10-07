@@ -67,7 +67,7 @@ async function restoreCapture() {
   }
 }
 async function startCapture(diagnoseRequest=false){
-  $('capture').disabled=$('diagnose-request').disabled=true;payload=undefined;$('import').hidden=$('debug').hidden=true;
+  $('manual-capture').disabled=$('diagnose-request').disabled=true;payload=undefined;$('import').hidden=$('debug').hidden=true;
   $('status').textContent='Запуск принят. Проверяю банковскую вкладку…';
   const startedAt=Date.now(),id=startedAt+600000;
   await chrome.storage.session.set({bankCapture:{diagnoseRequest,status:'starting',startedAt,expires:id}});
@@ -83,20 +83,21 @@ async function startCapture(diagnoseRequest=false){
     }
     if(diagnoseRequest)await progress('Popup',id,'network');
     await chrome.storage.local.set({historyPeriodMonths:Number($('history-period').value)});
-    await chrome.storage.session.set({bankCapture:{tabId:tab.id,diagnoseRequest,status:'waiting',startedAt,expires:id}});
+    await chrome.storage.session.set({bankCapture:{tabId:tab.id,diagnoseRequest,status:'starting',startedAt,expires:id}});
     if(diagnoseRequest){
       await chrome.scripting.executeScript({target:{tabId:tab.id},world:'MAIN',func:()=>window.__zenImportStopObserver?.()});
     }else{
       await chrome.scripting.executeScript({target:{tabId:tab.id},files:['bank-bridge.js']});
       await chrome.scripting.executeScript({target:{tabId:tab.id},world:'MAIN',files:['bank-observer.js']});
     }
+    await chrome.storage.session.set({bankCapture:{tabId:tab.id,diagnoseRequest,status:'waiting',startedAt,expires:id}});
     await progress('Popup',id,diagnoseRequest?'waiting':'observer');
     if(!diagnoseRequest)await progress('Popup',id,'waiting');
     await restoreCapture();
   }catch(error){await progress('Popup',id,'error');await chrome.storage.session.set({bankCapture:{diagnoseRequest,status:'error',startedAt,expires:id,error:error.message}});$('status').textContent=error.message;}
-  finally{$('capture').disabled=$('diagnose-request').disabled=false;}
+  finally{$('manual-capture').disabled=$('diagnose-request').disabled=false;}
 };
-$('capture').onclick=()=>startCapture();
+$('manual-capture').onclick=()=>startCapture();
 $('diagnose-request').onclick=()=>startCapture(true);
 $('clear-capture').onclick=async()=>{
   const {bankCapture:state}=await chrome.storage.session.get('bankCapture');
@@ -121,7 +122,7 @@ restoreCapture();
 
 function updatePeriodHint(){
   const months=Number($('history-period').value);
-  $('period-hint').textContent=`Выберите в банке ${historyPeriod(months)}. Здесь показана подсказка дат: фильтр банка автоматически не меняется.${months===6?' Если банк ограничивает период, загружайте его частями.':''}`;
+  $('period-hint').textContent=`Период: ${historyPeriod(months)}. Расширение выберет даты частями до 30 дней, соберёт страницы и сохранит операции локально. Меню можно закрыть; банковскую вкладку оставьте открытой.`;
 }
 $('history-period').onchange=()=>{updatePeriodHint();chrome.storage.local.set({historyPeriodMonths:Number($('history-period').value)});};
 chrome.storage.local.get('historyPeriodMonths').then(settings=>{
@@ -164,3 +165,43 @@ setInterval(async()=>{
   if(state&&['starting','waiting'].includes(state.status)){await restoreCapture();await renderProgress();}
 },2000);
 renderProgress();
+
+// Persisted automatic job survives popup closure; only metadata goes into its journal.
+import {activeJob,publicJob} from './auto-plan.js';
+async function renderAuto(){
+  const reply=await chrome.runtime.sendMessage({type:'auto-status'}).catch(()=>null);
+  const j=reply?.job;
+  $('auto-progress').hidden=!j;if(!j)return;
+  const running=activeJob(j);
+  $('capture').disabled=running;$('history-period').disabled=running;
+  $('manual-capture').disabled=$('diagnose-request').disabled=running;
+  $('auto-cancel').hidden=!running;
+  $('auto-meter').max=j.parts.length;$('auto-meter').value=j.completed.length;
+  const names={starting:'Запуск',navigating:'Открываю историю',running:'Собираю историю',saving:'Сохраняю страницу',done:'Весь период сохранён',error:'Остановлено: период загружен не полностью',cancelled:'Отменено',needs_login:'Требуется вход в банк'};
+  $('auto-status').textContent=`${names[j.status]||j.status}. Интервалы: ${j.completed.length}/${j.parts.length}. Добавлено: ${j.added}, уже были: ${j.duplicates}. ${j.current?`Текущий интервал: ${j.current.rows}/${j.current.total??'?'} операций. `:''}${j.error||''}`;
+  $('auto-events').replaceChildren(...j.events.slice(-80).map(e=>{const li=document.createElement('li');const {at,label,stage,...details}=e;li.textContent=`${new Date(at).toLocaleTimeString('ru-RU')} · ${label} ${Object.entries(details).map(([k,v])=>k+'='+v).join(' ')}`;return li;}));
+}
+$('capture').onclick=async()=>{
+  $('capture').disabled=true;$('status').textContent='Запуск принят. Проверяю доступ к банковской вкладке…';
+  try{
+    // Request in the click handler, before asynchronous work loses the user gesture.
+    const granted=await chrome.permissions.request({origins:['https://ipay.vietinbank.vn/*']});
+    if(!granted)throw Error('Для автоматического перехода нужен доступ к вкладке VietinBank.');
+    ++restoreGeneration;await chrome.storage.session.remove(['bankCapture','bankContract']);payload=undefined;$('import').hidden=$('debug').hidden=true;await renderProgress();
+    const r=await chrome.runtime.sendMessage({type:'auto-start',months:Number($('history-period').value)});
+    if(!r?.ok)throw Error(r?.error||'Загрузчик не ответил.');
+    $('status').textContent='Задача запущена. Ход выполнения и результат показаны ниже. Меню можно закрыть.';
+  }catch(e){$('status').textContent=e.message;}
+  finally{$('capture').disabled=false;await renderAuto();}
+};
+$('auto-cancel').onclick=async()=>{await chrome.runtime.sendMessage({type:'auto-cancel'});await renderAuto();};
+$('auto-export').onclick=async()=>{
+  const {autoJob,previousAutoJob}=await chrome.storage.local.get(['autoJob','previousAutoJob']);
+  const report={version:chrome.runtime.getManifest().version,current:publicJob(autoJob),previous:publicJob(previousAutoJob)};
+  const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));
+  const a=document.createElement('a');a.href=url;a.download='zenimport-actions.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&changes.autoJob)renderAuto();});
+renderAuto();
+
+setInterval(renderAuto,5000);
