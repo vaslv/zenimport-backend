@@ -79,6 +79,7 @@ def test_installed_extension_end_to_end(browser):
     page.get_by_role('button',name='Сопоставить',exact=True).click()
     expect(page.locator('#status')).to_have_text('Данные обновлены.')
     page.locator('nav a[href="#review"]').click()
+    page.locator('#review .ledger-summary').first.click()
     page.locator('#review select').first.select_option(label='Еда')
     page.get_by_role('button',name='Подтвердить создание',exact=True).first.click()
     expect(page.locator('#outbox')).to_contain_text('Подтверждена')
@@ -556,3 +557,52 @@ def test_automatic_history_failures_are_persisted(browser,failure):
         assert account not in json.dumps(report)
     popup.reload();expect(popup.locator('#auto-status')).to_contain_text('Добавлено: '+str(job['added']))
     popup.close();bank.close();context.unroute(endpoint,respond)
+
+
+def test_unified_ledger_filters_local_links_and_category_evidence(browser):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True},outbox=[],bank_imports=[])
+    state['bank_accounts']=[{'id':'ba','bank':'vietinbank','account':'11112222','currency':'VND','zenmoney_account':'za'},
+                            {'id':'bb','bank':'other','account':'33334444','currency':'VND','zenmoney_account':'zb'}]
+    state['zenmoney_accounts']=[{'id':'za','title':'Andrei VND · VietinBank','instrument':1}, {'id':'zb','title':'Другой счёт','instrument':1}]
+    state['categories']=[{'id':'food','title':'Рестораны и доставка'}]
+    candidate={'id':'z1','date':'2026-10-05','payee':'Coffee shop','categories':['Рестораны и доставка'],'reason':'Сумма и счёт совпадают; дата ±2 дня'}
+    common={'state':'pending','mapped':True,'bank_account':'ba','currency':'VND','amount_minor':-65000,'raw':{},'candidates':[],'linked':None,'category_suggestion':None}
+    state['review']=[{**common,'id':'b1','date':'2026-10-05','description':'Coffee payment','reconciliation_status':'possible','candidates':[candidate]},
+                     {**common,'id':'b2','date':'2026-10-04','description':'Dinner payment <img src=x onerror=alert(1)>','reconciliation_status':'new',
+                      'category_suggestion':{'title':'Рестораны и доставка','category':'food','count':3,'conflict':False,'reason':'Тот же получатель',
+                       'distribution':[{'id':'food','title':'Рестораны и доставка','count':3}], 'examples':[{'id':'e1','date':'2026-09-01','payee':'Dinner','title':'Рестораны и доставка'}]}},
+                     {**common,'id':'b3','date':'2026-10-03','bank_account':'bb','description':'Refund','amount_minor':1000,'reconciliation_status':'new'}]
+    page=context.new_page();page.route('**/api/state',lambda route:route.fulfill(content_type='application/json',body=json.dumps(state)))
+    def link(route):
+        tx=state['review'][0]
+        if route.request.method=='POST':
+            body=json.loads(route.request.post_data);assert body['match_id']=='z1' and body['action']=='link'
+            tx.update(state='linked',linked_id='z1',linked=candidate,reconciliation_status='synced')
+        else:tx.update(state='pending',linked_id=None,linked=None,reconciliation_status='possible')
+        route.fulfill(content_type='application/json',body=json.dumps({'state':tx['state']}))
+    page.route('**/api/review/b1/link',link)
+    page.goto(f'chrome-extension://{identifier}/app.html#review')
+    expect(page.locator('#review .ledger-entry')).to_have_count(3)
+    assert page.locator('#review img').count()==0
+    assert page.locator('#review .ledger-day').evaluate_all('(els)=>els.map(e=>e.dataset.date)')==['2026-10-05','2026-10-04','2026-10-03']
+    expect(page.locator('[data-review-status="synced"]')).to_contain_text('0')
+    page.locator('#review-account').select_option('ba');expect(page.locator('#review .ledger-entry')).to_have_count(2)
+    page.locator('[data-review-status="new"]').click();expect(page.locator('#review .ledger-entry')).to_have_count(1)
+    page.locator('#review .ledger-summary').click();expect(page.locator('.category-evidence')).to_contain_text('2026-09-01')
+    page.locator('[data-review-status="all"]').click();page.locator('[data-transaction="b1"] .ledger-summary').click()
+    page.get_by_role('button',name='Это та же операция',exact=True).click()
+    expect(page.locator('[data-transaction="b1"]')).to_have_attribute('data-state','synced')
+    page.locator('[data-review-status="synced"]').click();expect(page.locator('#review .ledger-entry')).to_have_count(1)
+    page.locator('[data-transaction="b1"] .ledger-summary').click();page.get_by_role('button',name='Отменить связь').click()
+    expect(page.locator('#review .ledger-entry')).to_have_count(0)
+    page.locator('[data-review-status="all"]').click()
+    page.locator('#review-search').fill('Dinner');expect(page.locator('#review .ledger-entry')).to_have_count(1)
+    page.locator('#review-search').fill('');page.locator('#review-start').fill('2026-10-05');expect(page.locator('#review .ledger-entry')).to_have_count(1)
+    page.locator('#review-start').fill('')
+    page.screenshot(path='/results/ledger-desktop.png',full_page=True)
+    page.set_viewport_size({'width':390,'height':844});page.screenshot(path='/results/ledger-mobile.png',full_page=True)
+    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+    assert not page.locator('#review button').filter(has_text='Подтвердить создание').count()
+    page.close()

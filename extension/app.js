@@ -1,8 +1,9 @@
+import {renderReview} from './review-view.js';
 import {renderAccountCards,renderHistory} from './zenmoney-view.js';
 import {api, settings, normalizeBaseUrl} from './api.js';
 const $ = id => document.getElementById(id);
 const names = {pending:'Ожидает проверки',queued:'Подтверждена',sent:'Отправлена',linked:'Связана',ignored:'Пропущена',uncertain:'Результат неизвестен',conflict:'Конфликт'};
-const titles = {overview:'Обзор',zenmoney:'Данные ZenMoney',banks:'Банковские данные',review:'Проверка и очередь',settings:'Подключение'};
+const titles = {overview:'Обзор',zenmoney:'Данные ZenMoney',banks:'Банковские данные',review:'Операции',settings:'Подключение'};
 let state = null, busy = false, connected = false, historyOffset = 0, historyPage = null, historyAccount = '', zenTab = 'accounts';
 function el(tag, text, className) { const n=document.createElement(tag); if(text!==undefined)n.textContent=text; if(className)n.className=className; return n; }
 function empty(node, text) { if(!node.childNodes.length)node.append(el('p',text,'empty')); }
@@ -23,7 +24,7 @@ function controls() {
   $('refresh').disabled=busy; // Reconnect is possible after a network error.
 }
 function navigate() {
-  let name=(location.hash.slice(1)||'overview').split('/')[0]; if(!titles[name])name='overview';
+  let name=(location.hash.slice(1)||'review').split('/')[0]; if(!titles[name])name='overview';
   document.querySelectorAll('[data-view]').forEach(n=>n.hidden=n.dataset.view!==name);
   document.querySelectorAll('nav a').forEach(n=>{if(n.hash===`#${name}`)n.setAttribute('aria-current','page');else n.removeAttribute('aria-current');});
   $('title').textContent=titles[name];
@@ -63,29 +64,35 @@ function render() {
   state.review.forEach(tx=>{
     const card=el('article'); card.append(el('span',names[tx.state]||tx.state,'badge'),el('h3',`${tx.date} · ${amount(tx)}`),el('p',tx.description));
     const raw=el('details'); raw.append(el('summary','Исходные поля'),el('pre',JSON.stringify(tx.raw,null,2))); card.append(raw); $('bank-rows').append(card);
-    if(tx.state!=='pending')return;
-    const review=el('article'); review.dataset.transaction=tx.id; review.append(el('h3',`${tx.date} · ${amount(tx)}`),el('p',tx.description));
-    if(!state.capabilities?.write)tx.candidates.forEach(c=>review.append(el('p',`${c.reason}: ${c.date} · ${c.payee||c.comment||c.id}`)));
-    if(!tx.mapped)review.append(el('p','Сначала сопоставьте счёт в разделе «Банковские данные».'));
-    else if(!state.capabilities?.write)review.append(el('p','Запись отключена до завершения этапов интеграции.'));
-    else {
-      const category=select(state.categories,'Категория'); review.append(category);
-      const decide=(action,match_id=null)=>api(`/api/review/${tx.id}/confirm`,{action,match_id,category:category.value||null,reviewed_candidates:tx.candidates.map(c=>c.id)});
-      tx.candidates.forEach(c=>review.append(el('p',`${c.reason}: ${c.date} · ${c.payee||c.comment||c.id}`),action('Это та же операция',()=>decide('link',c.id))));
-      review.append(action('Подтвердить создание',()=>{if(tx.candidates.length&&!confirm('Есть похожие операции. Создать отдельную операцию?'))return;return decide('create');}),action('Пропустить',()=>decide('ignore')));
-    }
-    $('review').append(review);
   });
-  empty($('bank-rows'),'Банковских операций пока нет.'); empty($('review'),'Нет операций, ожидающих проверки.');
+  empty($('bank-rows'),'Банковских операций пока нет.'); renderLedger();
+  $('queue-panel').hidden=!state.capabilities?.write&&!state.outbox.length;
   state.outbox.forEach(item=>{const row=el('article');row.append(el('strong',names[item.state]||item.state),el('p',item.zen_id,'muted'));if(item.error)row.append(el('p',item.error));if(item.state==='queued')row.append(action('Вернуть на проверку',()=>api(`/api/outbox/${item.bank_transaction}/reopen`,{})));$('outbox').append(row);});
   empty($('outbox'),'Очередь пуста. Подтверждение добавляет операцию в очередь, отправка выполняется отдельно.');
   const coverage=state.zenmoney_summary?.transactions;
   $('history-coverage').textContent=coverage?.first_date?`В базе: ${coverage.first_date} — ${coverage.last_date}. Полнота периода ещё не подтверждена.`:'История ещё не загружена.';
   $('history-page').textContent=historyPage?`Найдено: ${historyPage.total}. Показано: ${historyPage.items.length?historyOffset+1:0}–${historyOffset+historyPage.items.length}.`:'';
   renderHistory($('zen'),state.zenmoney_transactions,state,historyAccount);
-  $('write-note').textContent=state.mode==='demo'?'DEMO: подтверждение и отправка работают только с учебными данными.':'LIVE: запись отключена до завершения интеграции. Доступно чтение истории.';
+  $('write-note').textContent=state.mode==='demo'?'DEMO: подтверждение и отправка работают только с учебными данными.':'Связь с существующей операцией подтверждается локально. Новые операции в ZenMoney пока не отправляются.';
   controls();
 }
+let reviewAccount='',reviewFilter='all',reviewLimit=100;
+function renderLedger(){
+  if(!state)return;
+  const filter=$('review-account');filter.replaceChildren(new Option('Все счета',''));
+  for(const a of state.bank_accounts){const z=state.zenmoney_accounts.find(z=>z.id===a.zenmoney_account);filter.append(new Option(z?.title||`${a.bank} · ${a.account.slice(-4)}`,a.id));}
+  filter.value=reviewAccount;
+  if($('review-start').value&&$('review-end').value&&$('review-start').value>$('review-end').value){$('review').replaceChildren(el('p','Начало периода позже конца.','empty'));return;}
+  const result=renderReview($('review'),state,{account:reviewAccount,status:reviewFilter,query:$('review-search').value,start:$('review-start').value,end:$('review-end').value,limit:reviewLimit,
+    onMore:()=>{reviewLimit+=100;renderLedger();controls();},
+    onAction:fn=>run(async()=>{const request=fn();if(request)await api(request.path,request.body,request.method);})});
+  $('review-count').textContent=`Показано ${result.shown} из ${result.total} · Банковская история, новые сначала`;
+  const labels={all:'Все',synced:'Уже в ZenMoney',new:'Новые',attention:'Проверить'};
+  document.querySelectorAll('[data-review-status]').forEach(b=>{const k=b.dataset.reviewStatus;b.textContent=`${labels[k]} · ${result.counts[k]}`;b.setAttribute('aria-pressed',String(reviewFilter===k));});
+}
+$('review-account').onchange=()=>{reviewAccount=$('review-account').value;reviewLimit=100;renderLedger();controls();};
+for(const id of ['review-search','review-start','review-end'])$(id).oninput=()=>{reviewLimit=100;renderLedger();controls();};
+document.querySelectorAll('[data-review-status]').forEach(b=>b.onclick=()=>{reviewFilter=b.dataset.reviewStatus;reviewLimit=100;renderLedger();controls();});
 async function refresh() {
   const result=await api('/api/state');
   if(!['demo','live'].includes(result.mode)||!['bank_accounts','zenmoney_accounts','categories','review','outbox','zenmoney_transactions'].every(k=>Array.isArray(result[k])))throw new Error('Сервер вернул несовместимый формат данных.');

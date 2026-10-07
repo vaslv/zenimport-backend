@@ -9,3 +9,6 @@
 
 #auto-events {max-height:220px;overflow:auto;font-size:12px;padding-left:22px;overflow-wrap:anywhere}
 #auto-meter {width:100%}
+
+/* Keep the capture menu visually consistent with the transaction workspace. */
+.popup{background:#fff;color:#302a38}.popup button{background:#e96b60;border-color:#e96b60}.popup button:hover{background:#d95b51}.popup button.secondary{background:#fff;color:#776b82;border-color:#e7e1ed}.popup .muted,.popup summary{color:#958b9f}.popup #status{background:#f7f5fb;color:#74677e}.popup input,.popup select{border-color:#e7e1ed;color:#514659}.popup progress{accent-color:#e96b60}
