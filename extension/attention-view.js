@@ -67,7 +67,6 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
         for(const b of g.banks)if(['pending','ignored'].includes(b.state)){const actions=el('div',`Банк · ${b.description} `);actions.append(exclusionButton('bank',b.id,b.state==='ignored',onAction));row.append(actions);}
         for(const z of g.zen)if(!z.linked_bank_id){const actions=el('div',`ZenMoney · ${z.payee||z.comment||'Без описания'} `);actions.append(exclusionButton('zenmoney',z.id,!!z.excluded,onAction));row.append(actions);}
       }
-      if(state.capabilities?.local_review)for(const b of g.banks)if(b.state==='pending')row.append(categoryPicker(b,state,onAction));
       if(g.confirmed&&g.zen.some(z=>!z.transfer&&!z.categories.length))row.append(el('p','Нужно определить категорию.'));
       for(const b of g.banks){
         if(!g.settlement&&b.group?.kind==='settlement'&&b.state==='linked'&&state.capabilities?.local_review){const undo=el('button','Отменить весь взаиморасчёт');undo.dataset.apiAction='';undo.onclick=()=>onAction(()=>({path:`/api/review/${b.id}/link`,body:{},method:'DELETE'}));row.append(el('p','Состав группы изменился или больше не совпадает по сумме. Отмена освободит всех участников.'),undo);}
@@ -95,7 +94,13 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
         const button=el('button','Подтвердить выбранную пару');button.dataset.apiAction='';button.onclick=()=>{if(!select.value){select.focus();return;}onAction(()=>({path:`/api/review/${b.id}/link`,body:{action:'link',match_id:select.value,reviewed_candidates:b.candidates.map(c=>c.id)}}));};row.append(button);
       }
       if(g.settlement&&state.capabilities?.local_review){const undo=el('button','Отменить весь взаиморасчёт');undo.dataset.apiAction='';undo.onclick=()=>onAction(()=>({path:`/api/review/${g.banks[0].id}/link`,body:{},method:'DELETE'}));row.append(undo);}
-      section.append(row);
+      const item=el('div',undefined,'attention-item');item.append(row);
+      if(state.capabilities?.local_review)for(const b of g.banks)if(b.state==='pending'){
+        const picker=categoryPicker(b,state,onAction);picker.classList.add('inline-category-picker');
+        if(g.banks.length>1)picker.querySelector('h3').textContent=`Категория · ${b.description}`;
+        item.append(picker);
+      }
+      section.append(item);
     }
     const freeBanks=allBanks.filter(b=>b.state==='pending'),freeZen=allZen.filter(z=>!z.linked_bank_id&&!z.excluded);
     if(state.capabilities?.local_review&&freeBanks.length&&freeZen.length){

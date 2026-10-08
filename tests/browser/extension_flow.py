@@ -1128,8 +1128,10 @@ def test_category_picker_prioritizes_history_and_saves_local_choice(browser,view
         route.fulfill(json=body)
     page.route('**/api/review/b/category',save)
     page.goto(f'chrome-extension://{identifier}/app.html#{view}')
-    def open_row():page.locator('.attention-operation > summary' if view=='attention' else '.ledger-summary').first.click()
-    open_row();picker=page.locator('.category-picker');picker.locator('.category-menu > summary').click()
+    def open_row():
+        if view=='review':page.locator('.ledger-summary').first.click()
+        else:expect(page.locator('.attention-operation').first).not_to_have_attribute('open','')
+    open_row();picker=page.locator('.category-picker');expect(picker).to_be_visible();picker.locator('.category-menu > summary').click()
     assert picker.locator('.category-option').evaluate_all('(xs)=>xs.map(x=>x.dataset.categoryId)')==['food','taxi','auto','sport','']
     expect(picker.locator('.category-option strong')).to_have_count(2)
     expect(picker.locator('[data-category-id="food"]')).to_contain_text('В истории: 5')
@@ -1144,3 +1146,40 @@ def test_category_picker_prioritizes_history_and_saves_local_choice(browser,view
     with page.expect_response(lambda r:r.url.endswith('/api/review/b/category') and r.request.method=='PUT'):
         picker.get_by_role('button',name='Сохранить категорию',exact=True).click()
     assert calls==[{'category_id':'sport'},{'category_id':None}];page.close()
+
+
+def test_attention_inline_category_and_pair_confirmation_share_one_day(browser):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True},recipient_profiles=[],outbox=[])
+    state['bank_accounts']=[{'id':'ba','bank':'bank','account':'1234','currency':'VND','zenmoney_account':'za'}]
+    state['zenmoney_accounts']=[{'id':'za','title':'Bank','instrument':1}];state['categories']=[{'id':'food','title':'Еда'}]
+    common={'bank_account':'ba','date':'2026-10-01','currency':'VND','raw':{},'state':'pending','mapped':True,'linked':None,'category_suggestion':None,'category_draft':None}
+    z={'id':'z','date':common['date'],'amount_minor':'-100','currency':'VND','payee':'Known shop','categories':['Еда'],'transfer':False,'linked_bank_id':None}
+    pair={**common,'id':'paired','description':'Known shop','amount_minor':-100,'candidates':[z],'reconciliation_status':'possible'}
+    new={**common,'id':'new','description':'New payment','amount_minor':-200,'candidates':[],'reconciliation_status':'new'}
+    state['review']=[pair,new]
+    day={'bank_account':'ba','date':common['date'],'bank_count':2,'zen_count':1,'equal':False,'resolved':False,'pairs':[],
+         'preview_pairs':[{'bank_id':'paired','zen_id':'z'}],'snapshot':'a'*64,'bank_ids':['paired','new'],'zen_rows':[z]};state['day_review']=[day]
+    page=context.new_page();calls=[]
+    page.route('**/api/state',lambda route:route.fulfill(json=state))
+    def save_category(route):
+        assert json.loads(route.request.post_data)=={'category_id':'food'};calls.append('category')
+        new['category_draft']={'id':'food','title':'Еда','valid':True};route.fulfill(json={'category_id':'food'})
+    def save_pair(route):
+        calls.append('pair');pair.update(state='linked',linked_id='z',linked=z,reconciliation_status='synced');z['linked_bank_id']='paired';day['preview_pairs']=[]
+        route.fulfill(json={'days':1,'linked':1})
+    page.route('**/api/review/new/category',save_category);page.route('**/api/review-pairs/confirm',save_pair)
+    page.goto(f'chrome-extension://{identifier}/app.html#attention')
+    picker=page.locator('.inline-category-picker[data-bank-id="new"]')
+    expect(picker).to_be_visible();expect(page.locator('.attention-operation[open]')).to_have_count(0)
+    picker.locator('.category-menu summary').click();picker.locator('[data-category-id="food"]').click()
+    with page.expect_response(lambda r:r.url.endswith('/api/review/new/category')):picker.get_by_role('button',name='Сохранить категорию').click()
+    expect(picker).to_contain_text('Категория сохранена локально')
+    page.get_by_role('button',name='Сохранить пары дня · 1',exact=True).click()
+    expect(page.locator('.inline-category-picker')).to_have_count(1)
+    expect(picker.locator('.category-menu summary')).to_have_text('Категория: Еда')
+    assert page.url.endswith('#attention') and calls==['category','pair']
+    page.set_viewport_size({'width':480,'height':700})
+    expect(picker.get_by_role('button',name='Сохранить категорию')).to_be_visible()
+    assert picker.evaluate('(e)=>e.scrollWidth<=e.clientWidth');page.close()
