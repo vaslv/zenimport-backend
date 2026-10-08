@@ -29,6 +29,7 @@ function navigate() {
   document.querySelectorAll('nav a').forEach(n=>{if(n.hash===`#${name}`)n.setAttribute('aria-current','page');else n.removeAttribute('aria-current');});
   $('title').textContent=titles[name];
   const attention=name==='attention';
+  $('hide-reconciled-label').hidden=!attention;
   $('review-search').closest('label').hidden=attention;
   document.querySelector('.status-filters').hidden=attention;
   $('queue-panel').hidden=attention||(!state?.capabilities?.write&&!state?.outbox?.length);
@@ -88,13 +89,14 @@ function renderLedger(){
   for(const a of state.bank_accounts){const z=state.zenmoney_accounts.find(z=>z.id===a.zenmoney_account);filter.append(new Option(z?.title||`${a.bank} · ${a.account.slice(-4)}`,a.id));}
   filter.value=reviewAccount;
   if($('review-start').value&&$('review-end').value&&$('review-start').value>$('review-end').value){$('review').replaceChildren(el('p','Начало периода позже конца.','empty'));return;}
-  const result=renderReview($('review'),state,{account:reviewAccount,status:reviewFilter,query:$('review-search').value,start:$('review-start').value,end:$('review-end').value,limit:reviewLimit,workDays:location.hash==='#attention',
+  const result=renderReview($('review'),state,{account:reviewAccount,status:reviewFilter,query:$('review-search').value,start:$('review-start').value,end:$('review-end').value,limit:reviewLimit,workDays:location.hash==='#attention',hideReconciled:$('hide-reconciled').checked,
     onMore:()=>{reviewLimit+=100;renderLedger();controls();},
     onAction:fn=>run(async()=>{const request=fn();if(request)await api(request.path,request.body,request.method);})});
   $('review-count').textContent=location.hash==='#attention'?`Дней, требующих внимания: ${result.days||0}`:`Показано ${result.shown} из ${result.total} · Банковская история, новые сначала`;
   const labels={all:'Все',synced:'Уже в ZenMoney',new:'Новые',attention:'Проверить'};
   document.querySelectorAll('[data-review-status]').forEach(b=>{const k=b.dataset.reviewStatus;b.textContent=`${labels[k]} · ${result.counts[k]}`;b.setAttribute('aria-pressed',String(reviewFilter===k));});
 }
+$('hide-reconciled').onchange=()=>{renderLedger();controls();};
 $('review-account').onchange=()=>{reviewAccount=$('review-account').value;reviewLimit=100;renderLedger();controls();};
 for(const id of ['review-search','review-start','review-end'])$(id).oninput=()=>{reviewLimit=100;renderLedger();controls();};
 document.querySelectorAll('[data-review-status]').forEach(b=>b.onclick=()=>{reviewFilter=b.dataset.reviewStatus;reviewLimit=100;renderLedger();controls();});

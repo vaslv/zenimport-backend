@@ -1,6 +1,6 @@
 import {formatMoney} from './zenmoney-view.js';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
-export function attentionDays(container,state,days,onAction){
+export function attentionDays(container,state,days,onAction,{hideReconciled=false}={}){
   const saveButton=(label,selected)=>{
     const button=el('button',label);button.dataset.apiAction='';
     button.onclick=()=>onAction(()=>({path:'/api/review-pairs/confirm',body:{days:selected.map(d=>({bank_account:d.bank_account,date:d.date,snapshot:d.snapshot}))}}));return button;
@@ -12,6 +12,7 @@ export function attentionDays(container,state,days,onAction){
     bar.append(saveButton(`Сохранить пары всех показанных дней · ${ready.reduce((n,d)=>n+d.preview_pairs.length,0)}`,ready));container.append(bar);
   }
   const bankMap=new Map(state.review.map(r=>[r.id,r]));
+  const settled=b=>b&&['linked','sent'].includes(b.state)&&b.linked&&!b.linked.missing_category&&(b.linked.transfer||b.linked.categories?.length);
   for(const d of [...days].sort((a,b)=>b.date.localeCompare(a.date)||a.bank_account.localeCompare(b.bank_account))){
     const account=state.bank_accounts.find(a=>a.id===d.bank_account),title=state.zenmoney_accounts.find(a=>a.id===account?.zenmoney_account)?.title||account?.bank||'Счёт';
     const section=el('section',undefined,'attention-day');section.dataset.date=d.date;
@@ -20,7 +21,13 @@ export function attentionDays(container,state,days,onAction){
     section.append(heading);
     if(d.bank_total!==undefined){const total=v=>formatMoney(String(Number(v)/(account.currency==='VND'?1:100)),account.currency);section.append(el('p',`Итог банка: ${total(d.bank_total)} · Итог ZenMoney: ${total(d.zen_total)}`));}
     if(d.split_search_limited)section.append(el('p','Поиск комбинаций ограничен из-за количества вариантов. Показанный список может быть неполным.'));
-    const banks=(d.bank_ids||[]).map(id=>bankMap.get(id)).filter(Boolean),zs=d.zen_rows||[],usedB=new Set(),usedZ=new Set(),groups=[];
+    const allBanks=(d.bank_ids||[]).map(id=>bankMap.get(id)).filter(Boolean),allZen=d.zen_rows||[];
+    const banks=allBanks.filter(b=>!hideReconciled||!settled(b));
+    const zs=allZen.filter(z=>{const b=bankMap.get(z.linked_bank_id);return !hideReconciled||!settled(b)||!(b.split_ids?.length?b.split_ids:[b.linked_id]).includes(z.id);});
+    const hidden=allBanks.length+allZen.length-banks.length-zs.length;
+    if(hidden)section.append(el('p',`Скрыто сведённых записей: ${hidden}. Итоги выше относятся к полному дню.`,'muted'));
+    if(!banks.length&&!zs.length)section.append(el('p','Все записи дня сведены и имеют категории; проверьте расхождения дня в полном виде.'));
+    const usedB=new Set(),usedZ=new Set(),groups=[];
     for(const b of banks){const parts=zs.filter(z=>(b.split_ids?.length?b.split_ids:[b.linked_id]).includes(z.id)&&z.linked_bank_id===b.id);if(parts.length&&b.linked){groups.push({banks:[b],zen:parts,confirmed:true});usedB.add(b.id);parts.forEach(z=>usedZ.add(z.id));}}
     const amounts=new Map();
     for(const [kind,items,used] of [['banks',banks,usedB],['zen',zs,usedZ]])for(const r of items){if(used.has(r.id))continue;const key=String(Number(r.amount_minor));if(!amounts.has(key))amounts.set(key,{banks:[],zen:[],confirmed:false});amounts.get(key)[kind].push(r);}

@@ -855,3 +855,37 @@ def test_split_proposal_shows_categories_saves_and_unlinks(browser):
     expect(page.locator('.split-option')).to_have_count(1)
     assert calls==['save','undo']
     page.close()
+
+
+def test_hide_reconciled_preserves_unresolved_and_missing_categories(browser):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True},recipient_profiles=[],outbox=[])
+    state['bank_accounts']=[{'id':'ba','bank':'bank','account':'1234','currency':'VND','zenmoney_account':'za'}]
+    state['zenmoney_accounts']=[{'id':'za','title':'Bank','instrument':1}]
+    state['review']=[];zs=[]
+    for i,(pending,categories,transfer) in enumerate([(False,['Food'],False),(True,['Food'],False),(False,[],False),(False,[],True)]):
+        z={'id':f'z{i}','date':'2026-10-01','amount_minor':str(-100-i),'currency':'VND','payee':'Shop','categories':categories,
+           'transfer':transfer,'linked_bank_id':None if pending else f'b{i}','same_day_bank_ids':[f'b{i}']}
+        zs.append(z)
+        state['review'].append({'id':f'b{i}','bank_account':'ba','date':'2026-10-01','amount_minor':-100-i,'currency':'VND',
+             'description':f'Payment {i}','raw':{},'state':'pending' if pending else 'linked','mapped':True,'candidates':[z],
+             'category_suggestion':None,'linked':None if pending else z,'linked_id':None if pending else z['id'],
+             'reconciliation_status':'possible' if pending else 'synced'})
+    state['day_review']=[{'bank_account':'ba','date':'2026-10-01','bank_count':4,'zen_count':4,'equal':True,'pairs':[],
+             'preview_pairs':[],'ambiguous':0,'bulk_eligible':False,'snapshot':'a'*64,'bank_ids':['b0','b1','b2','b3'],'zen_rows':zs}]
+    page=context.new_page();page.route('**/api/state',lambda route:route.fulfill(content_type='application/json',body=json.dumps(state)))
+    page.goto(f'chrome-extension://{identifier}/app.html#attention')
+    expect(page.locator('.attention-operation')).to_have_count(4)
+    page.locator('#hide-reconciled').check()
+    expect(page.locator('.attention-day')).to_have_count(1)
+    expect(page.locator('.attention-operation')).to_have_count(2)
+    expect(page.locator('#review')).to_contain_text('Payment 1')
+    expect(page.locator('#review')).to_contain_text('Payment 2')
+    page.get_by_role('button',name='Обновить данные',exact=True).click()
+    expect(page.locator('.attention-operation')).to_have_count(2)
+    page.locator('#hide-reconciled').uncheck()
+    expect(page.locator('.attention-operation')).to_have_count(4)
+    page.locator('nav a[href="#review"]').click()
+    expect(page.locator('#hide-reconciled')).to_be_hidden()
+    page.close()

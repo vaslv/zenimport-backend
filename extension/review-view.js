@@ -11,7 +11,7 @@ function icon(title,transfer){
   p.setAttribute('d',transfer?'M4 8h15m-4-4 4 4-4 4M20 16H5m4-4-4 4 4 4':/ресторан|еда|продукт|кофе/i.test(title)?'M4 9h16l-2 11H6L4 9Zm4 0 2-6m6 6-2-6M9 12v5m6-5v5':/транспорт|автомоб|такси/i.test(title)?'m5 9 2-5h10l2 5M4 9h16v9H4V9Zm3 9v2m10-2v2M7 13h1m8 0h1':'M5 5h14v14H5V5Zm4 4h6m-6 4h6');
   svg.append(p);return svg;
 }
-export function renderReview(container,state,{account='',status='all',query='',start='',end='',limit=100,workDays=false,onMore,onAction}){
+export function renderReview(container,state,{account='',status='all',query='',start='',end='',limit=100,workDays=false,hideReconciled=false,onMore,onAction}){
   container.replaceChildren();
   const accounts=new Map(state.bank_accounts.map(a=>[a.id,a])),zen=new Map(state.zenmoney_accounts.map(a=>[a.id,a]));
   const key=(account,date)=>JSON.stringify([account,date]);
@@ -32,7 +32,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
     const days=(state.day_review||[]).filter(d=>showDay(d.bank_account,d.date)&&(!account||d.bank_account===account)&&(!start||d.date>=start)&&(!end||d.date<=end));
     // Accounts without mapping have no day_review; keep their rows visible too.
     for(const t of filtered)if(!days.some(d=>d.bank_account===t.bank_account&&d.date===t.date))days.push({bank_account:t.bank_account,date:t.date,bank_ids:filtered.filter(r=>r.bank_account===t.bank_account&&r.date===t.date).map(r=>r.id),zen_rows:[]});
-    attentionDays(container,state,days,onAction);
+    attentionDays(container,state,days,onAction,{hideReconciled});
     return {counts,total:rows.length,shown:rows.length,days:days.length};
   }
   let day,group;
