@@ -1,3 +1,4 @@
+import {attentionDays} from './attention-view.js';
 import {dayComparison} from './day-comparison.js';
 import {formatMoney} from './zenmoney-view.js';
 const node=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
@@ -27,6 +28,13 @@ export function renderReview(container,state,{account='',status='all',query='',s
   const counts={all:filtered.length,synced:0,new:0,attention:0};
   for(const t of filtered){const s=reviewStatus(t);if(s==='synced')counts.synced++;else if(s==='new')counts.new++;else counts.attention++;}
   const rows=filtered.filter(t=>status==='all'||(status==='attention'?!['synced','new'].includes(reviewStatus(t)):reviewStatus(t)===status)).sort((a,b)=>b.date.localeCompare(a.date)||(b.raw?.date||'').localeCompare(a.raw?.date||'')||a.id.localeCompare(b.id));
+  if(workDays){
+    const days=(state.day_review||[]).filter(d=>showDay(d.bank_account,d.date)&&(!account||d.bank_account===account)&&(!start||d.date>=start)&&(!end||d.date<=end));
+    // Accounts without mapping have no day_review; keep their rows visible too.
+    for(const t of filtered)if(!days.some(d=>d.bank_account===t.bank_account&&d.date===t.date))days.push({bank_account:t.bank_account,date:t.date,bank_ids:filtered.filter(r=>r.bank_account===t.bank_account&&r.date===t.date).map(r=>r.id),zen_rows:[]});
+    attentionDays(container,state,days,onAction);
+    return {counts,total:rows.length,shown:rows.length,days:days.length};
+  }
   let day,group;
   const profiles=(state.recipient_profiles||[]).filter(p=>!account||p.bank_account===account);
   if(profiles.length){const box=node('details',undefined,'category-evidence');box.append(node('summary',`Получатели с подтверждённой историей · ${profiles.length}`));for(const p of profiles){box.append(node('strong',p.name));for(const c of p.categories)box.append(node('p',`${c.title} · ${c.count} ${c.repeated?'— повторяется':'— один пример'}`));}container.append(box);}

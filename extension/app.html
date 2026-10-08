@@ -4,7 +4,7 @@
 <body class="workspace"><div class="shell"><aside class="sidebar"><a class="brand" href="#review">ZI <span>ZenImport</span></a>
 <p class="sidebar-note">Банки и ZenMoney<br>в одном рабочем месте</p>
 <nav aria-label="Разделы">
-<a href="#review">Операции</a><a href="#zenmoney">ZenMoney</a><a href="#banks">Счета банка</a><a href="#overview">Обзор</a><a href="#settings">Подключение</a>
+<a href="#attention">Требуют внимания</a><a href="#review">Операции</a><a href="#zenmoney">ZenMoney</a><a href="#banks">Счета банка</a><a href="#overview">Обзор</a><a href="#settings">Подключение</a>
 </nav><div class="sidebar-foot">Личный финансовый импорт<br><span id="connection" role="status">Не подключено</span></div></aside>
 <main><header><div><span class="eyebrow">ZENIMPORT</span><h1 id="title">Обзор</h1></div><span id="mode" class="badge">Нет подключения</span></header>
 <div class="toolbar"><button id="refresh" data-api-action>Обновить данные</button><button id="sync" data-api-action>Синхронизировать ZenMoney</button><span id="last-sync"></span></div>
@@ -31,7 +31,6 @@
 </section>
 <section id="view-banks" data-view="banks" hidden><h2>Банковские счета</h2><div id="accounts"></div><h2>Исходные операции</h2><div id="bank-rows"></div></section>
 <section id="view-review" data-view="review" hidden><p id="write-note" class="notice">Подтверждение и отправка пока доступны для демонстрационной проверки.</p><div class="review-filters"><label>Счёт<select id="review-account"><option value="">Все счета</option></select></label><label>Поиск<input id="review-search" type="search" placeholder="Получатель или описание"></label><label>С<input id="review-start" type="date"></label><label>По<input id="review-end" type="date"></label></div>
-<label class="work-days-filter"><input id="review-work-days" type="checkbox"> Только дни, требующие внимания</label><p class="muted">Показывать все операции этих дней: расхождения, несопоставленные записи или отсутствующие категории. Переводы без категории не требуют проверки.</p>
 <div class="status-filters" role="group" aria-label="Статус операции"><button data-review-status="all" aria-pressed="true">Все</button><button data-review-status="synced" aria-pressed="false">Уже в ZenMoney</button><button data-review-status="new" aria-pressed="false">Новые</button><button data-review-status="attention" aria-pressed="false">Проверить</button></div><p id="review-count" class="muted"></p><div id="review"></div><div id="queue-panel"><div class="section-heading"><h2>Очередь</h2><button id="send" data-api-action>Отправить подтверждённые</button></div><div id="outbox"></div></div></section>
 <section id="view-settings" data-view="settings" hidden><article><h2>Подключение к backend</h2><form id="settings"><label for="url">Адрес сервера</label><input id="url" type="url" required placeholder="http://127.0.0.1:18791"><label for="token">API-токен backend</label><input id="token" type="password" required autocomplete="off"><p class="muted">Возьмите API_TOKEN из локального файла .env. Токен ZenMoney здесь не нужен.</p><button id="save">Сохранить и подключиться</button></form></article></section>
 </main></div><script type="module" src="app.js"></script></body></html>
