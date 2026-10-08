@@ -37,3 +37,10 @@
 .workspace .attention-operation{padding:14px;margin:10px 0;border:1px solid #e2dfea;border-radius:12px}.workspace .attention-operation summary{cursor:pointer;overflow-wrap:anywhere}.workspace .attention-operation summary>span,.workspace .attention-operation summary>small{margin-left:12px}.workspace .attention-operation p{margin:8px 0}.workspace .attention-day{margin-bottom:28px}
 
 .workspace .settlement-form{padding:14px;border:1px solid #dedbe5;border-radius:12px}.workspace .settlement-form label{display:flex;align-items:center;gap:8px;margin:8px 0}.workspace .settlement-form input{width:auto}
+
+.pairs-review-dialog{width:min(900px,calc(100vw - 32px));max-height:90vh;padding:0;border:1px solid #e7e3ed;border-radius:16px;color:#423c4c;box-shadow:0 20px 80px #27273133;overflow:hidden}
+.pairs-review-dialog[open]{display:flex;flex-direction:column}.pairs-review-dialog::backdrop{background:#27273180}
+.pairs-review-header,.pairs-review-footer{flex:none;padding:18px 24px;background:#fff}.pairs-review-header h2{margin:0;font-size:22px}.pairs-review-header p{margin:6px 0;font-size:13px}
+.pairs-review-list{overflow:auto;min-height:0;padding:0 24px;overscroll-behavior:contain}.pairs-review-day h3{font-size:16px;margin:20px 0 10px}.pairs-review-pair{padding:14px;margin:10px 0;border:1px solid #e7e3ed;border-radius:10px;overflow-wrap:anywhere}.pairs-review-reason{font-size:12px;color:#817889;margin:0 0 10px}.pairs-review-sides{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}.pairs-review-sides p{margin:5px 0}.pairs-review-sides small{color:#8b8595}
+.pairs-review-footer{display:flex;justify-content:flex-end;gap:12px;border-top:1px solid #e7e3ed}
+@media(max-width:600px){.pairs-review-sides{grid-template-columns:1fr;gap:12px}.pairs-review-header,.pairs-review-footer{padding:14px}.pairs-review-list{padding:0 14px}.pairs-review-footer{flex-wrap:wrap}}

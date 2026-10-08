@@ -672,6 +672,10 @@ def test_bulk_day_button_confirms_only_eligible_days_in_selected_scope(browser):
     expect(page.locator('.bulk-day-review')).to_contain_text('Полностью однозначных дней: 2.')
     assert not calls
     page.get_by_role('button',name='Сопоставить все однозначные дни · 2 операций',exact=True).click()
+    expect(page.get_by_role('dialog')).to_be_visible()
+    expect(page.locator('.pairs-review-pair')).to_have_count(2)
+    assert not calls
+    page.get_by_role('button',name='Подтвердить и сохранить · 2',exact=True).click()
     expect(page.locator('.bulk-day-review')).to_contain_text('Нет полностью однозначных дней')
     assert len(calls)==1
     page.locator('#review-search').fill('')
@@ -806,7 +810,21 @@ def test_attention_preview_pairs_save_explicitly(browser,scope):
     expect(page.locator('.attention-operation').first).to_contain_text('Предварительная пара · не сохранена')
     assert not calls
     if scope=='day':page.locator('.attention-day[data-date="2026-10-01"]').get_by_role('button',name='Сохранить пары дня · 1',exact=True).click()
-    else:page.get_by_role('button',name='Сохранить пары всех показанных дней · 2',exact=True).click()
+    else:
+        launch=page.get_by_role('button',name='Сохранить пары всех показанных дней · 2',exact=True)
+        launch.click()
+        expect(page.get_by_role('dialog',name='Проверка пар перед сохранением')).to_be_visible()
+        expect(page.locator('.pairs-review-pair')).to_have_count(2)
+        expect(page.locator('.pairs-review-list')).to_contain_text('Bank purchase')
+        expect(page.locator('.pairs-review-list')).to_contain_text('Food')
+        assert not calls
+        page.get_by_role('button',name='Отмена',exact=True).click()
+        expect(page.get_by_role('dialog')).to_have_count(0)
+        launch.click();page.keyboard.press('Escape')
+        expect(page.get_by_role('dialog')).to_have_count(0)
+        assert not calls
+        launch.click()
+        page.get_by_role('button',name='Подтвердить и сохранить · 2',exact=True).click()
     expect(page.locator('.attention-day')).to_have_count(1 if scope=='day' else 0)
     assert len(calls)==1
     page.close()
@@ -1038,7 +1056,50 @@ def test_repeated_amount_pairs_are_separate_and_saved_together(browser,scope):
     first=page.locator('.attention-operation').first;first.locator('summary').click()
     expect(first).to_contain_text('Запись ZenMoney создана:');expect(first).to_contain_text('стабильный порядок идентификаторов')
     assert not calls
-    if scope=='all':page.get_by_role('button',name='Сохранить пары всех показанных дней · 4',exact=True).click()
+    if scope=='all':
+        page.get_by_role('button',name='Сохранить пары всех показанных дней · 4',exact=True).click()
+        expect(page.locator('.pairs-review-pair')).to_have_count(4)
+        expect(page.locator('.pairs-review-list')).to_contain_text('Одинаковые отметки времени')
+        assert not calls
+        page.get_by_role('button',name='Подтвердить и сохранить · 4',exact=True).click()
     else:page.locator('[data-date="2026-10-01"].attention-day').get_by_role('button',name='Сохранить пары дня · 2',exact=True).click()
     expect(page.locator('.attention-operation')).to_have_count(0 if scope=='all' else 2)
     assert len(calls)==1;page.close()
+
+
+def test_mass_preview_scrolls_all_pairs_and_stale_save_is_not_retried(browser):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True},review=[],day_review=[],recipient_profiles=[],outbox=[])
+    state['bank_accounts']=[{'id':'ba','bank':'bank','account':'1234','currency':'VND','zenmoney_account':'za'}]
+    state['zenmoney_accounts']=[{'id':'za','title':'Bank','instrument':1}]
+    for i in range(25):
+        day=f'2026-10-{i+1:02}'
+        z={'id':f'z{i}','date':day,'amount_minor':'-100','currency':'VND','payee':f'Shop {i}','categories':['Food'],
+           'transfer':False,'linked_bank_id':None,'same_day_bank_ids':[]}
+        b={'id':f'b{i}','bank_account':'ba','date':day,'amount_minor':-100,'currency':'VND','description':f'Payment {i}',
+           'raw':{},'state':'pending','mapped':True,'candidates':[z],'category_suggestion':None,'linked':None,'reconciliation_status':'possible'}
+        state['review'].append(b);state['day_review'].append({'bank_account':'ba','date':day,'bank_count':1,'zen_count':1,'equal':True,'resolved':False,
+            'pairs':[],'preview_pairs':[{'bank_id':b['id'],'zen_id':z['id']}],'snapshot':'a'*64,'bank_ids':[b['id']],'zen_rows':[z]})
+    page=context.new_page();page.set_viewport_size({'width':480,'height':700});calls=[]
+    page.route('**/api/state',lambda route:route.fulfill(json=state))
+    def stale(route):
+        data=json.loads(route.request.post_data);calls.append(data)
+        assert len(data['days'])==25 and all(d['snapshot']=='a'*64 for d in data['days'])
+        route.fulfill(status=409,json={'detail':'Данные дня изменились; обновите список'})
+    page.route('**/api/review-pairs/confirm',stale)
+    page.goto(f'chrome-extension://{identifier}/app.html#attention')
+    page.get_by_role('button',name='Сохранить пары всех показанных дней · 25',exact=True).click()
+    expect(page.locator('.pairs-review-pair')).to_have_count(25)
+    scroller=page.locator('.pairs-review-list')
+    assert scroller.evaluate('(e)=>e.scrollHeight>e.clientHeight')
+    page.locator('.pairs-review-pair').last.scroll_into_view_if_needed()
+    expect(page.locator('.pairs-review-pair').last).to_be_visible()
+    assert page.locator('.pairs-review-dialog').evaluate('(e)=>e.scrollWidth<=e.clientWidth')
+    assert not calls
+    for d in state['day_review']:d['snapshot']='b'*64
+    page.get_by_role('button',name='Подтвердить и сохранить · 25',exact=True).click()
+    expect(page.locator('#feedback')).to_contain_text('Данные дня изменились')
+    expect(page.get_by_role('dialog')).to_have_count(0)
+    assert len(calls)==1 and all(b['state']=='pending' for b in state['review'])
+    page.close()

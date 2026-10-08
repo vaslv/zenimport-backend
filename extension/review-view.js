@@ -1,3 +1,4 @@
+import {reviewPairs} from './pairs-review-dialog.js';
 import {exclusionButton,excludedRecords} from './exclusions-view.js';
 import {attentionDays} from './attention-view.js';
 import {dayComparison} from './day-comparison.js';
@@ -66,7 +67,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
     if(readyDays.length){
       const preview=node('details');preview.append(node('summary','Посмотреть список дней'));
       for(const d of readyDays){const a=accounts.get(d.bank_account);preview.append(node('p',`${d.date} · ${zen.get(a?.zenmoney_account)?.title||a?.bank||'Счёт'} · ${d.pairs.length} операций`));}box.append(preview);
-      box.append(button(`Сопоставить все однозначные дни · ${pairs} операций`,()=>({path:'/api/review-days/confirm',body:{days:readyDays.map(d=>({bank_account:d.bank_account,date:d.date,snapshot:d.snapshot}))}})));
+      const bulk=node('button',`Сопоставить все однозначные дни · ${pairs} операций`,'secondary');bulk.dataset.apiAction='';bulk.onclick=()=>reviewPairs(state,readyDays,onAction,{field:'pairs',path:'/api/review-days/confirm'});box.append(bulk);
     }else box.append(node('p','Нет полностью однозначных дней для массового сопоставления.'));
     container.prepend(box);
   }

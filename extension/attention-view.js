@@ -1,17 +1,18 @@
+import {reviewPairs} from './pairs-review-dialog.js';
 import {exclusionButton} from './exclusions-view.js';
 import {formatMoney} from './zenmoney-view.js';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 export function attentionDays(container,state,days,onAction,{hideReconciled=false}={}){
-  const saveButton=(label,selected)=>{
+  const saveButton=(label,selected,mass=false)=>{
     const button=el('button',label);button.dataset.apiAction='';
-    button.onclick=()=>onAction(()=>({path:'/api/review-pairs/confirm',body:{days:selected.map(d=>({bank_account:d.bank_account,date:d.date,snapshot:d.snapshot}))}}));return button;
+    button.onclick=()=>mass?reviewPairs(state,selected,onAction):onAction(()=>({path:'/api/review-pairs/confirm',body:{days:selected.map(d=>({bank_account:d.bank_account,date:d.date,snapshot:d.snapshot}))}}));return button;
   };
   const ready=days.filter(d=>d.preview_pairs?.length);
   if(state.capabilities?.local_review&&ready.length){
     const bar=el('section',undefined,'preview-pairs-actions');
     bar.append(el('p',`Предварительно спарено: ${ready.reduce((n,d)=>n+d.preview_pairs.length,0)}. Связи ещё не сохранены. Действие включает все показанные дни выбранного счёта и периода.`));
     if(ready.some(d=>d.preview_pairs.some(p=>p.order==='chronological')))bar.append(el('p','Повторяющиеся суммы спарены по времени банка и времени создания записей ZenMoney, от ранних к поздним. Время создания может отличаться от времени покупки.'));
-    bar.append(saveButton(`Сохранить пары всех показанных дней · ${ready.reduce((n,d)=>n+d.preview_pairs.length,0)}`,ready));container.append(bar);
+    bar.append(saveButton(`Сохранить пары всех показанных дней · ${ready.reduce((n,d)=>n+d.preview_pairs.length,0)}`,ready,true));container.append(bar);
   }
   const bankMap=new Map(state.review.map(r=>[r.id,r]));
   const settled=b=>b&&['linked','sent'].includes(b.state)&&b.linked&&!b.linked.missing_category&&(b.linked.transfer||b.linked.categories?.length);
