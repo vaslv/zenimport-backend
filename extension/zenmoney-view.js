@@ -1,3 +1,4 @@
+import {exclusionButton} from './exclusions-view.js';
 // Decimal strings stay decimal strings: formatting never rounds them through Number.
 export function formatMoney(value, currency='') {
   if(value===null||value===undefined)return 'Сумма не указана';
@@ -44,7 +45,7 @@ function dateLabel(value){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(value||''))return 'Дата не указана';
   return new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(value+'T00:00:00Z'));
 }
-export function renderHistory(container,items,state,selectedAccount){
+export function renderHistory(container,items,state,selectedAccount,onAction){
   container.replaceChildren();const lookup=lookups(state);let lastDay=null,list;
   for(const tx of items){
     if(!list||tx.date!==lastDay){
@@ -78,6 +79,7 @@ export function renderHistory(container,items,state,selectedAccount){
     const fields=[['ID операции',tx.id],['Исходный получатель',tx.originalPayee]];
     if(transfer)fields.push(['Списано',formatMoney(outcome,currency(tx.outcomeInstrument??lookup.accounts.get(String(tx.outcomeAccount))?.instrument,lookup))],['Зачислено',formatMoney(income,currency(tx.incomeInstrument??lookup.accounts.get(String(tx.incomeAccount))?.instrument,lookup))]);
     for(const [label,value] of fields)if(value){dl.append(node('dt',label),node('dd',String(value)));}
+    if(onAction&&state.capabilities?.local_review){const excluded=(state.excluded_zen_ids||[]).includes(tx.id);if(excluded)badges.append(node('span','Не требует сведения','badge'));const linked=state.review.some(r=>(r.group?.zen_ids||r.split_ids||[]).includes(tx.id)||r.linked_id===tx.id)||state.outbox.some(o=>o.zen_id===tx.id);if(!linked)details.append(exclusionButton('zenmoney',tx.id,excluded,onAction));}
     details.append(dl);content.append(details);row.append(content,sums);list.append(row);
   }
   if(!items.length)container.append(node('p','Операций по выбранным условиям нет.','empty'));

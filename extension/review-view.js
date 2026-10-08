@@ -1,8 +1,9 @@
+import {exclusionButton,excludedRecords} from './exclusions-view.js';
 import {attentionDays} from './attention-view.js';
 import {dayComparison} from './day-comparison.js';
 import {formatMoney} from './zenmoney-view.js';
 const node=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
-const labels={synced:'Уже в ZenMoney',possible:'Проверить совпадение',new:'Новая',unmapped:'Выберите счёт',conflict:'Связь изменилась',queued:'В очереди',sent:'Отправлена',ignored:'Пропущена'};
+const labels={synced:'Уже в ZenMoney',possible:'Проверить совпадение',new:'Новая',unmapped:'Выберите счёт',conflict:'Связь изменилась',queued:'В очереди',sent:'Отправлена',ignored:'Не требует сведения'};
 export const reviewStatus=t=>t.reconciliation_status||(['linked','sent'].includes(t.state)?'synced':t.state!=='pending'?t.state:!t.mapped?'unmapped':t.candidates.length?'possible':'new');
 function money(t){const result=formatMoney(String(t.currency==='VND'?t.amount_minor:t.amount_minor/100),t.currency);return t.amount_minor>0?'+'+result:result;}
 function icon(title,transfer){
@@ -17,24 +18,27 @@ export function renderReview(container,state,{account='',status='all',query='',s
   const key=(account,date)=>JSON.stringify([account,date]);
   const needsWork=new Set();
   for(const t of state.review){
+    if(t.state==='ignored')continue;
     if(reviewStatus(t)!=='synced'||(t.linked&&!t.linked.transfer&&(!t.linked.categories?.length||t.linked.missing_category)))needsWork.add(key(t.bank_account,t.date));
   }
   for(const d of state.day_review||[]){
-    if((!d.equal&&!d.resolved)||(d.zen_rows||[]).some(z=>!z.linked_bank_id||(!z.transfer&&!z.categories?.length)))needsWork.add(key(d.bank_account,d.date));
+    if((!d.equal&&!d.resolved)||(d.zen_rows||[]).some(z=>!z.excluded&&(!z.linked_bank_id||(!z.transfer&&!z.categories?.length))))needsWork.add(key(d.bank_account,d.date));
   }
   const showDay=(account,date)=>!workDays||needsWork.has(key(account,date));
   if(workDays){status='all';query='';limit=Infinity;}
   const filtered=state.review.filter(t=>showDay(t.bank_account,t.date)&&(!account||t.bank_account===account)&&(!start||t.date>=start)&&(!end||t.date<=end)&&(!query||[t.description,t.raw?.details?.corresponsiveName,t.linked?.payee].join(' ').toLocaleLowerCase('ru').includes(query.toLocaleLowerCase('ru'))));
   const counts={all:filtered.length,synced:0,new:0,attention:0};
-  for(const t of filtered){const s=reviewStatus(t);if(s==='synced')counts.synced++;else if(s==='new')counts.new++;else counts.attention++;}
-  const rows=filtered.filter(t=>status==='all'||(status==='attention'?!['synced','new'].includes(reviewStatus(t)):reviewStatus(t)===status)).sort((a,b)=>b.date.localeCompare(a.date)||(b.raw?.date||'').localeCompare(a.raw?.date||'')||a.id.localeCompare(b.id));
+  for(const t of filtered){const s=reviewStatus(t);if(s==='synced')counts.synced++;else if(s==='new')counts.new++;else if(s!=='ignored')counts.attention++;}
+  const rows=filtered.filter(t=>status==='all'||(status==='attention'?!['synced','new','ignored'].includes(reviewStatus(t)):reviewStatus(t)===status)).sort((a,b)=>b.date.localeCompare(a.date)||(b.raw?.date||'').localeCompare(a.raw?.date||'')||a.id.localeCompare(b.id));
   if(workDays){
     const days=(state.day_review||[]).filter(d=>showDay(d.bank_account,d.date)&&(!account||d.bank_account===account)&&(!start||d.date>=start)&&(!end||d.date<=end));
     // Accounts without mapping have no day_review; keep their rows visible too.
     for(const t of filtered)if(!days.some(d=>d.bank_account===t.bank_account&&d.date===t.date))days.push({bank_account:t.bank_account,date:t.date,bank_ids:filtered.filter(r=>r.bank_account===t.bank_account&&r.date===t.date).map(r=>r.id),zen_rows:[]});
     attentionDays(container,state,days,onAction,{hideReconciled});
+    excludedRecords(container,state,{account,start,end,onAction});
     return {counts,total:rows.length,shown:rows.length,days:days.length};
   }
+  excludedRecords(container,state,{account,start,end,onAction});
   let day,group;
   const profiles=(state.recipient_profiles||[]).filter(p=>!account||p.bank_account===account);
   if(profiles.length){const box=node('details',undefined,'category-evidence');box.append(node('summary',`Получатели с подтверждённой историей · ${profiles.length}`));for(const p of profiles){box.append(node('strong',p.name));for(const c of p.categories)box.append(node('p',`${c.title} · ${c.count} ${c.repeated?'— повторяется':'— один пример'}`));}container.append(box);}
@@ -97,6 +101,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
     if(s==='conflict')detail.append(node('p','Связанная запись отсутствует или больше не совпадает по счёту, сумме и дате. Проверьте историю и отмените связь при необходимости.','notice'));
     if(linked)detail.append(node('p',`ZenMoney: ${linked.date} · ${linked.payee||linked.comment||'Без описания'} · ${linked.categories?.join(', ')||'Без категории'}`));
     if(t.state==='linked'&&state.capabilities?.local_review)detail.append(button(t.group?.kind==='settlement'?'Отменить весь взаиморасчёт':'Отменить связь',()=>({path:`/api/review/${t.id}/link`,body:{},method:'DELETE'})));
+    if(state.capabilities?.local_review&&['pending','ignored'].includes(t.state))detail.append(exclusionButton('bank',t.id,t.state==='ignored',onAction));
     if(t.state==='pending'){
       if(t.candidates.length)detail.append(node('h3',`Совпадения в ZenMoney · ${t.candidates.length}`));
       for(const c of t.candidates){
@@ -112,7 +117,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
       if(!state.capabilities?.write)detail.append(node('p','Запись отключена: новые операции пока не отправляются в ZenMoney.','muted'));
       else if(t.mapped){
         const select=node('select');select.setAttribute('aria-label','Категория');select.append(new Option('Категория',''));state.categories.forEach(c=>select.append(new Option(c.title,c.id)));if(suggestion?.category)select.value=suggestion.category;detail.append(select);
-        detail.append(button('Подтвердить создание',()=>{if(t.candidates.length&&!confirm('Есть похожие операции. Создать отдельную?'))return null;return {path:`/api/review/${t.id}/confirm`,body:{action:'create',category:select.value||null,reviewed_candidates:t.candidates.map(c=>c.id)}};}),button('Пропустить',()=>({path:`/api/review/${t.id}/confirm`,body:{action:'ignore',reviewed_candidates:t.candidates.map(c=>c.id)}})));
+        detail.append(button('Подтвердить создание',()=>{if(t.candidates.length&&!confirm('Есть похожие операции. Создать отдельную?'))return null;return {path:`/api/review/${t.id}/confirm`,body:{action:'create',category:select.value||null,reviewed_candidates:t.candidates.map(c=>c.id)}};}));
       }
     }
     const raw=node('details',undefined,'raw-details');raw.append(node('summary','Исходные данные банка'),node('pre',JSON.stringify(t.raw,null,2)));detail.append(raw);item.append(detail);group.append(item);

@@ -937,3 +937,62 @@ def test_settlement_manual_selection_group_display_and_undo(browser):
     paired.get_by_role('button',name='Отменить весь взаиморасчёт').click()
     expect(page.locator('.attention-operation')).to_have_count(4)
     assert calls==['save','undo'];page.close()
+
+
+@pytest.mark.parametrize('source',['bank','zenmoney'])
+def test_exclude_last_unmatched_record_and_restore_from_registry(browser,source):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True},recipient_profiles=[],outbox=[],excluded_zen_ids=[])
+    state['bank_accounts']=[{'id':'ba','bank':'bank','account':'1234','currency':'VND','zenmoney_account':'za'}]
+    state['zenmoney_accounts']=[{'id':'za','title':'Bank','instrument':1}]
+    bank={'id':'b','bank_account':'ba','date':'2026-10-01','amount_minor':-100,'currency':'VND','description':'Correction',
+          'raw':{},'state':'pending','mapped':True,'candidates':[],'category_suggestion':None,'linked':None,'reconciliation_status':'new'}
+    z={'id':'z','date':'2026-10-01','amount_minor':'-100','currency':'VND','payee':'Debt','categories':[],
+       'transfer':False,'linked_bank_id':None,'same_day_bank_ids':[]}
+    state['review']=[bank] if source=='bank' else []
+    day={'bank_account':'ba','date':'2026-10-01','bank_count':1 if source=='bank' else 0,'zen_count':1 if source=='zenmoney' else 0,
+         'equal':False,'resolved':False,'pairs':[],'preview_pairs':[],'bulk_eligible':False,'snapshot':'a'*64,
+         'bank_ids':['b'] if source=='bank' else [],'zen_rows':[z] if source=='zenmoney' else []}
+    state['day_review']=[day];calls=[]
+    page=context.new_page();page.route('**/api/state',lambda route:route.fulfill(content_type='application/json',body=json.dumps(state)))
+    def change(route):
+        excluded=route.request.method=='PUT';calls.append(excluded)
+        if source=='bank':bank.update(state='ignored' if excluded else 'pending',reconciliation_status='ignored' if excluded else 'new')
+        else:z['excluded']=excluded;state['excluded_zen_ids']=['z'] if excluded else []
+        day.update(resolved=excluded,equal=excluded)
+        route.fulfill(content_type='application/json',body=json.dumps({'excluded':excluded}))
+    page.route('**/api/exclusions/**',change)
+    page.goto(f'chrome-extension://{identifier}/app.html#attention')
+    expect(page.locator('.attention-day')).to_have_count(1)
+    page.locator('.attention-operation summary').click()
+    page.get_by_role('button',name='Не требует сведения',exact=True).click()
+    expect(page.locator('.attention-day')).to_have_count(0)
+    expect(page.locator('.excluded-records')).to_contain_text('Исключены из сведения · 1')
+    page.reload();expect(page.locator('.attention-day')).to_have_count(0)
+    page.locator('.excluded-records summary').click()
+    page.locator('.excluded-records').get_by_role('button',name='Вернуть в сведение').click()
+    expect(page.locator('.attention-day')).to_have_count(1)
+    expect(page.locator('.excluded-records')).to_have_count(0)
+    assert calls==[True,False];page.close()
+
+
+def test_exclude_from_zenmoney_history_without_bank_mapping(browser):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True},review=[],day_review=[],bank_accounts=[],outbox=[],excluded_zen_ids=[])
+    tx={'id':'adjustment','date':'2026-10-01','income':10,'outcome':0,'comment':'Adjustment','tag':[]}
+    page=context.new_page();calls=[]
+    page.route('**/api/state',lambda route:route.fulfill(json=state))
+    page.route('**/api/zenmoney/history?*',lambda route:route.fulfill(json={'items':[tx],'total':1,'offset':0,'limit':100,'has_more':False}))
+    def change(route):
+        excluded=route.request.method=='PUT';calls.append(excluded);state['excluded_zen_ids']=['adjustment'] if excluded else []
+        route.fulfill(json={'excluded':excluded})
+    page.route('**/api/exclusions/zenmoney/adjustment',change)
+    page.goto(f'chrome-extension://{identifier}/app.html#zenmoney/transactions')
+    row=page.locator('[data-transaction-id="adjustment"]')
+    row.locator('summary').click();row.get_by_role('button',name='Не требует сведения',exact=True).click()
+    expect(row.locator('.transaction-labels')).to_contain_text('Не требует сведения')
+    row.locator('summary').click();row.get_by_role('button',name='Вернуть в сведение').click()
+    expect(row.locator('.transaction-labels')).not_to_contain_text('Не требует сведения')
+    assert calls==[True,False];page.close()

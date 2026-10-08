@@ -78,7 +78,7 @@ function render() {
   const coverage=state.zenmoney_summary?.transactions;
   $('history-coverage').textContent=coverage?.first_date?`В базе: ${coverage.first_date} — ${coverage.last_date}. Полнота периода ещё не подтверждена.`:'История ещё не загружена.';
   $('history-page').textContent=historyPage?`Найдено: ${historyPage.total}. Показано: ${historyPage.items.length?historyOffset+1:0}–${historyOffset+historyPage.items.length}.`:'';
-  renderHistory($('zen'),state.zenmoney_transactions,state,historyAccount);
+  renderHistory($('zen'),state.zenmoney_transactions,state,historyAccount,fn=>run(async()=>{const request=fn();if(request)await api(request.path,request.body,request.method);}));
   $('write-note').textContent=state.mode==='demo'?'DEMO: подтверждение и отправка работают только с учебными данными.':'Связь с существующей операцией подтверждается локально. Новые операции в ZenMoney пока не отправляются.';
   controls();
 }

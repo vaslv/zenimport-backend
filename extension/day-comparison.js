@@ -12,8 +12,9 @@ export function dayComparison(day,state){
   for(const r of banks){
     const c=card(bankLabels.get(r.id),r,r.description);c.dataset.bankId=r.id;
     const linked=r.state==='linked'||r.state==='sent';
-    const peers=zen.filter(z=>z.same_day_bank_ids.includes(r.id));
-    if(linked){c.append(el('p',r.linked?`Связано: ${(r.split_ids?.length?r.split_ids.map(id=>zenLabels.get(id)||id).join(', '):zenLabels.get(r.linked_id))||'ZenMoney за '+r.linked.date}`:'Связь требует проверки','comparison-linked'));}
+    const peers=zen.filter(z=>!z.excluded&&z.same_day_bank_ids.includes(r.id));
+    if(r.state==='ignored')c.append(el('p','Не требует сведения'));
+    else if(linked){c.append(el('p',r.linked?`Связано: ${(r.split_ids?.length?r.split_ids.map(id=>zenLabels.get(id)||id).join(', '):zenLabels.get(r.linked_id))||'ZenMoney за '+r.linked.date}`:'Связь требует проверки','comparison-linked'));}
     else if(peers.length)c.append(el('p',`Возможные пары по сумме: ${peers.map(z=>zenLabels.get(z.id)).join(', ')}. Не подтверждены.`,'comparison-possible'));
     else c.append(el('p','Нет пары по сумме в этот день','comparison-missing'));
     const other=(r.candidates||[]).filter(z=>z.date!==day.date);
@@ -24,7 +25,8 @@ export function dayComparison(day,state){
     const c=card(zenLabels.get(r.id),r,r.payee||r.comment);c.dataset.zenId=r.id;
     if(r.comment&&r.comment!==r.payee)c.append(el('p',r.comment));
     c.append(el('small',(r.transfer?'Перевод · ':'')+(r.categories.join(', ')||'Без категории')));
-    if(r.linked_bank_id){const linked=allBank.get(r.linked_bank_id);c.append(el('p',`${linked?.linked?'Связано':'Связь требует проверки'}: ${bankLabels.get(r.linked_bank_id)||'банк за '+(linked?.date||'другой день')}`,'comparison-linked'));}
+    if(r.excluded)c.append(el('p','Не требует сведения'));
+    else if(r.linked_bank_id){const linked=allBank.get(r.linked_bank_id);c.append(el('p',`${linked?.linked?'Связано':'Связь требует проверки'}: ${bankLabels.get(r.linked_bank_id)||'банк за '+(linked?.date||'другой день')}`,'comparison-linked'));}
     else if(r.same_day_bank_ids.length)c.append(el('p',`Возможные пары по сумме: ${r.same_day_bank_ids.map(id=>bankLabels.get(id)).join(', ')}. Не подтверждены.`,'comparison-possible'));
     else c.append(el('p','Нет пары по сумме в банке в этот день','comparison-missing'));
     zenColumn.append(c);
