@@ -1132,7 +1132,11 @@ def test_category_picker_prioritizes_history_and_saves_local_choice(browser,view
     def open_row():
         if view=='review':page.locator('.ledger-summary').first.click()
         else:expect(page.locator('.attention-operation').first).not_to_have_attribute('open','')
-    open_row();picker=page.locator('.category-picker');expect(picker).to_be_visible();picker.locator('.category-menu > summary').click()
+    open_row();picker=page.locator('.category-picker');expect(picker).to_be_visible()
+    expect(picker.locator('.category-priorities')).to_be_visible()
+    expect(picker.locator('.category-priorities')).to_contain_text('Предполагаемые категории: Продукты · 5; Такси · 1')
+    expect(picker.locator('.category-priorities strong')).to_have_count(2)
+    picker.locator('.category-menu > summary').click()
     assert picker.locator('.category-option').evaluate_all('(xs)=>xs.map(x=>x.dataset.categoryId)')==['food','taxi','auto','sport','']
     expect(picker.locator('.category-option strong')).to_have_count(2)
     expect(picker.locator('[data-category-id="food"]')).to_contain_text('В истории: 5')
@@ -1211,6 +1215,7 @@ def test_attention_split_categories_target_each_zen_part(browser):
     page.route('**/api/zenmoney/transactions/z1/category',save)
     page.goto(f'chrome-extension://{identifier}/app.html#attention')
     expect(page.locator('.category-picker')).to_have_count(2)
+    expect(page.locator('.category-priorities').first).to_have_text('Нет подходящих подтверждённых примеров для подсказки категории.')
     picker=page.locator('[data-zen-id="z1"]')
     picker.locator('.category-menu summary').click();picker.locator('[data-category-id="food"]').click()
     picker.get_by_role('button',name='Сохранить категорию').click()

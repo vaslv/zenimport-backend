@@ -98,7 +98,12 @@ def enrich(rows, accounts, transactions, categories):
         examples = dict(named.get((account['zenmoney_account'], sign, name), {})) if name else {}
         learned_examples = learned.get((row['bank_account'], sign, key), {}) if key else {}
         examples.update(learned_examples)
-        examples = [e for e in examples.values() if e['date'] < row['date']]
+        # Historical reconciliation can use later confirmed history, but never itself.
+        own_ids = set(row.get('split_ids') or [row.get('linked_id')])
+        historical = row['state'] in ('linked', 'sent') and bool(linked)
+        examples = [e for e in examples.values()
+                    if e['id'] not in own_ids and e.get('payment_id') != row['id']
+                    and (historical or e['date'] < row['date'])]
         counts = Counter(e['category'] for e in examples)
         conflicts = [{'id': k, 'title': tags[k], 'count': n, 'repeated': n >= 2} for k, n in sorted(counts.items(), key=lambda item: (-item[1], normalized(tags[item[0]]), item[0]))]
         row['category_ranking'] = conflicts

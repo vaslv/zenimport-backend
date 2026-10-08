@@ -21,7 +21,13 @@ export function categoryPicker(row,state,onAction){
   menu.append(toggle,list);menu.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();menu.open=false;toggle.focus();}});
   const save=el('button','Сохранить категорию');save.type='button';save.dataset.apiAction='';
   save.onclick=()=>{if(box.value===saved&&row.category_draft?.valid!==false)return;onAction(()=>({path:`/api/zenmoney/transactions/${encodeURIComponent(row.id)}/category`,method:'PUT',body:{category_id:box.value||null,expected_tags:row.tag_ids||[]}}));};
-  box.append(el('h3','Категория операции ZenMoney'),menu,message,save);
+  const evidence=el('p',undefined,'category-priorities');
+  if(ranking.length){
+    evidence.append(document.createTextNode('Предполагаемые категории: '));
+    ranking.forEach((c,i)=>{if(i)evidence.append(document.createTextNode('; '));evidence.append(el('strong',`${c.title} · ${c.count}`));});
+    evidence.append(document.createTextNode(ranking.length>1?' · несколько вариантов — проверьте выбор.':ranking[0].count>=2?' · повторяется в истории.':' · только один пример — проверьте выбор.'));
+  }else evidence.textContent='Нет подходящих подтверждённых примеров для подсказки категории.';
+  box.append(el('h3','Категория операции ZenMoney'),evidence,menu,message,save);
   if(row.category_draft?.valid===false)box.append(el('p','Категория недоступна или данные ZenMoney изменились. Проверьте выбор заново.','notice'));
   if(row.candidates?.length)box.append(el('p','Есть возможные совпадения с ZenMoney. Выбор категории не подтверждает создание новой операции.','muted'));
   update();return box;

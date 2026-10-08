@@ -96,3 +96,15 @@ def test_confirmed_uncategorized_payment_keeps_historical_ranking():
     assert result['linked'] and not result['linked']['categories']
     assert result['category_ranking'][0]['id']=='food'
     assert result['category_ranking'][0]['count']==2
+
+
+def test_historical_ranking_uses_later_history_but_excludes_payment_itself():
+    rows,accounts,history,categories=data()
+    row=rows[0]
+    row['date']='2026-08-01'
+    # For a new payment, later history remains excluded.
+    assert not enrich(copy.deepcopy(rows),accounts,history,categories)[0]['category_ranking']
+    tx={**history[0],'id':'current','date':row['date'],'tag':['other']}
+    row.update(state='linked',linked_id='current',candidates=[{'id':'current'}])
+    result=enrich(rows,accounts,[*history,tx],categories)[0]
+    assert [(c['id'],c['count']) for c in result['category_ranking']]==[('food',2)]
