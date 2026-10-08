@@ -126,6 +126,12 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
             sync(db)
             return confirm(db, identifier, data)
 
+    @app.post('/api/review-pairs/confirm')
+    def local_preview_pairs(data: BulkDayDecision):
+        from .day_review import confirm_days
+        with lock, transaction(path) as db:
+            return confirm_days(db, data.days, review(db), pairs_only=True)
+
     @app.post('/api/review-days/confirm')
     def local_days(data: BulkDayDecision):
         from .day_review import confirm_days

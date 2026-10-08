@@ -770,3 +770,43 @@ def test_work_days_filter_keeps_all_rows_of_problem_days(browser):
     expect(page.locator('.ledger-entry')).to_have_count(5)
     expect(page.locator('#review-search')).to_be_enabled()
     page.close()
+
+
+@pytest.mark.parametrize('scope',['day','all'])
+def test_attention_preview_pairs_save_explicitly(browser,scope):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True},recipient_profiles=[],outbox=[])
+    state['bank_accounts']=[{'id':'ba','bank':'bank','account':'1234','currency':'VND','zenmoney_account':'za'}]
+    state['zenmoney_accounts']=[{'id':'za','title':'Bank','instrument':1}]
+    state['review']=[];state['day_review']=[]
+    for i in [1,2]:
+        date=f'2026-10-0{i}'
+        z={'id':f'z{i}','date':date,'amount_minor':'-100','currency':'VND','payee':'Shop','categories':['Food'],
+           'transfer':False,'linked_bank_id':None,'same_day_bank_ids':[f'b{i}']}
+        state['review'].append({'id':f'b{i}','bank_account':'ba','date':date,'amount_minor':-100,'currency':'VND','description':'Bank purchase',
+             'raw':{},'state':'pending','mapped':True,'candidates':[z],'category_suggestion':None,'linked':None,'reconciliation_status':'possible'})
+        state['day_review'].append({'bank_account':'ba','date':date,'bank_count':1,'zen_count':1,'equal':True,'pairs':[],
+             'preview_pairs':[{'bank_id':f'b{i}','zen_id':f'z{i}'}],'ambiguous':0,'bulk_eligible':False,'snapshot':str(i)*64,'bank_ids':[f'b{i}'],'zen_rows':[z]})
+    page=context.new_page();calls=[]
+    page.route('**/api/state',lambda route:route.fulfill(content_type='application/json',body=json.dumps(state)))
+    def save(route):
+        body=json.loads(route.request.post_data);calls.append(body)
+        expected=['2026-10-01'] if scope=='day' else ['2026-10-01','2026-10-02']
+        assert sorted(d['date'] for d in body['days'])==expected
+        for d in state['day_review']:
+            if d['date'] not in expected:continue
+            d['preview_pairs']=[];z=d['zen_rows'][0];z['linked_bank_id']=d['bank_ids'][0]
+            row=next(r for r in state['review'] if r['id']==z['linked_bank_id'])
+            row.update(state='linked',linked=z,linked_id=z['id'],reconciliation_status='synced')
+        route.fulfill(content_type='application/json',body=json.dumps({'days':len(expected),'linked':len(expected)}))
+    page.route('**/api/review-pairs/confirm',save)
+    page.goto(f'chrome-extension://{identifier}/app.html#attention')
+    expect(page.locator('.attention-operation')).to_have_count(2)
+    expect(page.locator('.attention-operation').first).to_contain_text('Предварительная пара · не сохранена')
+    assert not calls
+    if scope=='day':page.locator('.attention-day[data-date="2026-10-01"]').get_by_role('button',name='Сохранить пары дня · 1',exact=True).click()
+    else:page.get_by_role('button',name='Сохранить пары всех показанных дней · 2',exact=True).click()
+    expect(page.locator('.attention-day')).to_have_count(1 if scope=='day' else 0)
+    assert len(calls)==1
+    page.close()

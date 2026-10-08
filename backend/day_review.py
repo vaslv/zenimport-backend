@@ -48,7 +48,9 @@ def proposals(db, rows):
                     'transfer': tx.get('incomeAccount') != tx.get('outcomeAccount'),
                     'linked_bank_id': used.get(match['id']),
                     'same_day_bank_ids': [r['id'] for r in bank if r['amount_minor'] == amount]})
-        equal = Counter(r['amount_minor'] for r in bank) == Counter({a: len(v) for a, v in zen.items()})
+        bank_counts = Counter(r['amount_minor'] for r in bank)
+        bank_by_id = {r['id']: r for r in bank}
+        equal = bank_counts == Counter({a: len(v) for a, v in zen.items()})
         pairs, ambiguous = [], 0
         valid = True
         for row in bank:
@@ -65,16 +67,21 @@ def proposals(db, rows):
                 pairs.append({'bank_id': pending[0]['id'], 'zen_id': matches[0]['id']})
             else:
                 ambiguous += len(pending)
+        account_valid = True
         try:
             mapped_account(db, account)
         except HTTPException:
             valid = False
+            account_valid = False
         # Hash includes full rows/candidate details/tags so stale previews cannot be accepted.
-        payload = {'account': account, 'bank': bank, 'zen': [t for t in transactions if t.get('date') == day and account['zenmoney_account'] in (t.get('incomeAccount'), t.get('outcomeAccount'))]}
+        payload = {'used_links': used, 'account': account, 'bank': bank, 'zen': [t for t in transactions if t.get('date') == day and account['zenmoney_account'] in (t.get('incomeAccount'), t.get('outcomeAccount'))]}
         snapshot = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         result.append({'bank_account': account_id, 'date': day, 'bank_count': len(bank),
                        'zen_count': sum(map(len, zen.values())), 'equal': equal,
                        'bank_ids': [r['id'] for r in bank], 'zen_rows': zen_rows,
+                       'preview_pairs': [p for p in pairs if account_valid and
+                           bank_counts[bank_by_id[p['bank_id']]['amount_minor']] == 1 and
+                           len(zen[bank_by_id[p['bank_id']]['amount_minor']]) == 1],
                        'pairs': sorted(pairs, key=lambda p: p['bank_id']) if equal and valid else [],
                        'ambiguous': ambiguous if equal else 0, 'snapshot': snapshot,
                        'bulk_eligible': bool(equal and valid and pairs and ambiguous == 0)})
@@ -83,6 +90,9 @@ def proposals(db, rows):
     for proposal in result:
         if any(owners[pair['zen_id']] > 1 for pair in proposal['pairs']):
             proposal['bulk_eligible'] = False
+    preview_owners = Counter(p['zen_id'] for d in result for p in d['preview_pairs'])
+    for d in result:
+        d['preview_pairs'] = [p for p in d['preview_pairs'] if preview_owners[p['zen_id']] == 1]
     return result
 
 
@@ -99,14 +109,14 @@ def confirm_day(db, account_id, day, snapshot, rows):
     return {'linked': len(proposal['pairs'])}
 
 
-def confirm_days(db, decisions, rows):
+def confirm_days(db, decisions, rows, *, pairs_only=False):
     """Validate the entire preview before any writes; caller owns the transaction."""
     current = {(p['bank_account'], p['date']): p for p in proposals(db, rows)}
     chosen, seen = [], set()
     for decision in decisions:
         key = (decision.bank_account, str(decision.date))
         proposal = current.get(key)
-        if key in seen or not proposal or not proposal['bulk_eligible'] or proposal['snapshot'] != decision.snapshot:
+        if key in seen or not proposal or not (proposal['preview_pairs'] if pairs_only else proposal['bulk_eligible']) or proposal['snapshot'] != decision.snapshot:
             fail('Список однозначных дней изменился. Обновите данные и повторите подтверждение.')
         seen.add(key)
         chosen.append(proposal)
@@ -115,10 +125,10 @@ def confirm_days(db, decisions, rows):
     index = candidate_index(db, [dict(a) for a in db.execute('SELECT * FROM bank_accounts')])
     linked = 0
     for proposal in chosen:
-        for pair in proposal['pairs']:
+        for pair in (proposal['preview_pairs'] if pairs_only else proposal['pairs']):
             row = by_id[pair['bank_id']]
             confirm(db, row['id'], Decision(action='link', match_id=pair['zen_id'],
                     reviewed_candidates=[c['id'] for c in row['candidates']]), index=index)
             linked += 1
-    audit(db, 'confirm_days', {'days': [d.model_dump(mode='json') for d in decisions], 'linked': linked})
+    audit(db, 'confirm_preview_pairs' if pairs_only else 'confirm_days', {'days': [d.model_dump(mode='json') for d in decisions], 'linked': linked})
     return {'days': len(chosen), 'linked': linked}

@@ -282,3 +282,33 @@ def test_day_details_include_all_zen_rows_and_zen_only_days(tmp_path):
     repeated=[z for z in third['zen_rows'] if z['amount_minor']=='-400']
     assert len(repeated)==2 and all(len(z['same_day_bank_ids'])==2 for z in repeated)
     assert all(r['state']=='pending' for r in state['review'])
+
+
+def test_preview_unique_pairs_in_mismatched_day_save_only_on_action(tmp_path):
+    client,path=bulk_fixture(tmp_path)
+    # Two equal repeated pairs remain ambiguous; a unique pair is still usable.
+    with transaction(path) as db:
+        apply_diff(db,{'serverTimestamp':2,'transaction':[{'id':'extra-preview','date':'2026-10-03',
+           'incomeAccount':DEMO_ACCOUNT,'outcomeAccount':DEMO_ACCOUNT,'income':0,'outcome':555}]})
+    before=client.get('/api/state').json()
+    day=next(d for d in before['day_review'] if d['date']=='2026-10-03')
+    assert not day['equal'] and not day['pairs'] and len(day['preview_pairs'])==1
+    assert all(r['state']=='pending' for r in before['review'])
+    body={'days':[{k:day[k] for k in ('bank_account','date','snapshot')}]}
+    assert client.post('/api/review-pairs/confirm',json=body).json()=={'days':1,'linked':1}
+    state=client.get('/api/state').json()
+    linked=[r for r in state['review'] if r['state']=='linked']
+    assert len(linked)==1 and linked[0]['amount_minor']==-300
+    assert not state['outbox']
+    assert client.post('/api/review-pairs/confirm',json=body).status_code==409
+
+
+def test_preview_all_days_is_atomic_and_rejects_stale_snapshot(tmp_path):
+    client,path=bulk_fixture(tmp_path)
+    days=client.get('/api/state').json()['day_review']
+    body={'days':[{k:d[k] for k in ('bank_account','date','snapshot')} for d in days if d['preview_pairs']]}
+    bad=copy.deepcopy(body);bad['days'][-1]['snapshot']='0'*64
+    assert client.post('/api/review-pairs/confirm',json=bad).status_code==409
+    assert all(r['state']=='pending' for r in client.get('/api/state').json()['review'])
+    assert client.post('/api/review-pairs/confirm',json=body).json()=={'days':3,'linked':4}
+    assert not client.get('/api/state').json()['outbox']
