@@ -96,7 +96,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
     if(!t.mapped)detail.append(node('p','Сопоставьте банковский счёт со счётом ZenMoney в разделе «Счета банка».','notice'));
     if(s==='conflict')detail.append(node('p','Связанная запись отсутствует или больше не совпадает по счёту, сумме и дате. Проверьте историю и отмените связь при необходимости.','notice'));
     if(linked)detail.append(node('p',`ZenMoney: ${linked.date} · ${linked.payee||linked.comment||'Без описания'} · ${linked.categories?.join(', ')||'Без категории'}`));
-    if(t.state==='linked'&&state.capabilities?.local_review)detail.append(button('Отменить связь',()=>({path:`/api/review/${t.id}/link`,body:{},method:'DELETE'})));
+    if(t.state==='linked'&&state.capabilities?.local_review)detail.append(button(t.group?.kind==='settlement'?'Отменить весь взаиморасчёт':'Отменить связь',()=>({path:`/api/review/${t.id}/link`,body:{},method:'DELETE'})));
     if(t.state==='pending'){
       if(t.candidates.length)detail.append(node('h3',`Совпадения в ZenMoney · ${t.candidates.length}`));
       for(const c of t.candidates){

@@ -889,3 +889,51 @@ def test_hide_reconciled_preserves_unresolved_and_missing_categories(browser):
     page.locator('nav a[href="#review"]').click()
     expect(page.locator('#hide-reconciled')).to_be_hidden()
     page.close()
+
+
+def test_settlement_manual_selection_group_display_and_undo(browser):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True},recipient_profiles=[],outbox=[])
+    state['bank_accounts']=[{'id':'ba','bank':'bank','account':'1234','currency':'VND','zenmoney_account':'za'}]
+    state['zenmoney_accounts']=[{'id':'za','title':'Bank','instrument':1}]
+    base={'bank_account':'ba','date':'2026-04-11','currency':'VND','raw':{},'state':'pending','mapped':True,
+          'candidates':[],'category_suggestion':None,'linked':None,'reconciliation_status':'new','split_ids':[]}
+    state['review']=[{**base,'id':id,'amount_minor':amount,'description':name} for id,amount,name in [('expense',-961440,'For friend'),('refund',1000000,'Refund'),('other',-10,'Other')]]
+    z={'id':'net','date':base['date'],'amount_minor':'38560','currency':'VND','payee':'Rounding','categories':['Income'],
+       'transfer':False,'linked_bank_id':None,'same_day_bank_ids':[]}
+    d={'bank_account':'ba','date':base['date'],'bank_count':3,'zen_count':1,'equal':False,'resolved':False,'pairs':[],
+       'preview_pairs':[],'ambiguous':0,'bulk_eligible':False,'snapshot':'a'*64,'bank_ids':['expense','refund','other'],'zen_rows':[z],
+       'split_candidates':[],'bank_total':'38550','zen_total':'38560'}
+    state['day_review']=[d];calls=[]
+    page=context.new_page()
+    page.route('**/api/state',lambda route:route.fulfill(content_type='application/json',body=json.dumps(state)))
+    def save(route):
+        body=json.loads(route.request.post_data)
+        assert body=={'bank_ids':['expense','refund'],'zen_ids':['net'],'snapshot':'a'*64}
+        calls.append('save')
+        group={'id':'group','kind':'settlement','bank_ids':['expense','refund'],'zen_ids':['net']}
+        for b in state['review'][:2]:b.update(state='linked',group=group,split_ids=['net'],linked={'settlement':True,'categories':['Income'],'date':base['date']},reconciliation_status='synced')
+        z['linked_bank_id']='refund'
+        route.fulfill(content_type='application/json',body='{"state":"linked"}')
+    def undo(route):
+        assert route.request.method=='DELETE';calls.append('undo')
+        for b in state['review'][:2]:b.update(state='pending',group=None,split_ids=[],linked=None,reconciliation_status='new')
+        z['linked_bank_id']=None
+        route.fulfill(content_type='application/json',body='{"state":"pending"}')
+    page.route('**/api/reconciliation-groups',save);page.route('**/api/review/expense/link',undo)
+    page.goto(f'chrome-extension://{identifier}/app.html#attention')
+    form=page.locator('.settlement-form');form.locator('summary').click()
+    form.get_by_role('button',name='Сохранить группу',exact=True).click()
+    expect(form).to_contain_text('Выберите связанные записи');assert not calls
+    for id in ['expense','refund','net']:form.locator(f'[data-member="{id}"]').check()
+    expect(form).to_contain_text('Разница: 0')
+    form.get_by_role('button',name='Сохранить группу',exact=True).click()
+    expect(page.locator('.attention-operation')).to_have_count(2)
+    paired=page.locator('.attention-operation').filter(has_text='Взаиморасчёт · связь подтверждена')
+    expect(paired).to_contain_text('Банк: 2 · ZenMoney: 1')
+    page.locator('#hide-reconciled').check();expect(page.locator('.attention-operation')).to_have_count(1)
+    page.locator('#hide-reconciled').uncheck();paired.locator('summary').click()
+    paired.get_by_role('button',name='Отменить весь взаиморасчёт').click()
+    expect(page.locator('.attention-operation')).to_have_count(4)
+    assert calls==['save','undo'];page.close()

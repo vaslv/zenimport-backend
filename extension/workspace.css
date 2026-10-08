@@ -35,3 +35,5 @@
 
 .workspace .work-days-filter{display:flex;align-items:center;gap:10px;margin-top:16px}.workspace .work-days-filter input{width:auto;margin:0}
 .workspace .attention-operation{padding:14px;margin:10px 0;border:1px solid #e2dfea;border-radius:12px}.workspace .attention-operation summary{cursor:pointer;overflow-wrap:anywhere}.workspace .attention-operation summary>span,.workspace .attention-operation summary>small{margin-left:12px}.workspace .attention-operation p{margin:8px 0}.workspace .attention-day{margin-bottom:28px}
+
+.workspace .settlement-form{padding:14px;border:1px solid #dedbe5;border-radius:12px}.workspace .settlement-form label{display:flex;align-items:center;gap:8px;margin:8px 0}.workspace .settlement-form input{width:auto}

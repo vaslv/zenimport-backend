@@ -28,23 +28,29 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
     if(hidden)section.append(el('p',`Скрыто сведённых записей: ${hidden}. Итоги выше относятся к полному дню.`,'muted'));
     if(!banks.length&&!zs.length)section.append(el('p','Все записи дня сведены и имеют категории; проверьте расхождения дня в полном виде.'));
     const usedB=new Set(),usedZ=new Set(),groups=[];
-    for(const b of banks){const parts=zs.filter(z=>(b.split_ids?.length?b.split_ids:[b.linked_id]).includes(z.id)&&z.linked_bank_id===b.id);if(parts.length&&b.linked){groups.push({banks:[b],zen:parts,confirmed:true});usedB.add(b.id);parts.forEach(z=>usedZ.add(z.id));}}
+    for(const b of banks){
+      if(b.group?.kind!=='settlement'||usedB.has(b.id)||!b.linked)continue;
+      const members=banks.filter(r=>b.group.bank_ids.includes(r.id)),parts=zs.filter(z=>b.group.zen_ids.includes(z.id));
+      if(members.length===b.group.bank_ids.length&&parts.length===b.group.zen_ids.length){groups.push({banks:members,zen:parts,confirmed:true,settlement:true});members.forEach(r=>usedB.add(r.id));parts.forEach(z=>usedZ.add(z.id));}
+    }
+    for(const b of banks){if(usedB.has(b.id)||b.group?.kind==='settlement')continue;const parts=zs.filter(z=>(b.split_ids?.length?b.split_ids:[b.linked_id]).includes(z.id)&&z.linked_bank_id===b.id);if(parts.length&&b.linked){groups.push({banks:[b],zen:parts,confirmed:true});usedB.add(b.id);parts.forEach(z=>usedZ.add(z.id));}}
     const amounts=new Map();
     for(const [kind,items,used] of [['banks',banks,usedB],['zen',zs,usedZ]])for(const r of items){if(used.has(r.id))continue;const key=String(Number(r.amount_minor));if(!amounts.has(key))amounts.set(key,{banks:[],zen:[],confirmed:false});amounts.get(key)[kind].push(r);}
     groups.push(...amounts.values());
     for(const g of groups)g.preview=!g.confirmed&&g.banks.length===1&&g.zen.length===1&&(d.preview_pairs||[]).some(p=>p.bank_id===g.banks[0].id&&p.zen_id===g.zen[0].id);
     for(const g of groups){
-      const sample=g.banks[0]||g.zen[0],amount=Number(sample.amount_minor),currency=sample.currency||account.currency;
+      const sample=g.banks[0]||g.zen[0],amount=g.settlement?g.banks.reduce((n,b)=>n+Number(b.amount_minor),0):Number(sample.amount_minor),currency=sample.currency||account.currency;
       const row=el('details',undefined,'attention-operation');
       const source=g.banks.length&&g.zen.length?'Банк + ZenMoney':g.banks.length?'Только банк':'Только ZenMoney';
-      const status=g.confirmed?'Связь подтверждена':g.preview?'Предварительная пара · не сохранена':g.banks.length&&g.zen.length?(g.banks.length===g.zen.length?'Суммы и количество совпадают · связь не подтверждена':'Количество различается'):'Нет пары в этот день';
+      const status=g.settlement?'Взаиморасчёт · связь подтверждена':g.confirmed?'Связь подтверждена':g.preview?'Предварительная пара · не сохранена':g.banks.length&&g.zen.length?(g.banks.length===g.zen.length?'Суммы и количество совпадают · связь не подтверждена':'Количество различается'):'Нет пары в этот день';
       const summary=el('summary');summary.append(el('strong',(amount>0?'+':'')+formatMoney(String(currency==='VND'?amount:amount/100),currency)),el('span',source,'badge'),el('span',status));
       if(g.banks.length>1||g.zen.length>1)summary.append(el('small',`Банк: ${g.banks.length} · ZenMoney: ${g.zen.length}`));
       const description=g.zen[0]?.categories?.join(', ')||g.banks[0]?.description||g.zen[0]?.payee||'Без категории';summary.append(el('p',description));row.append(summary);
-      for(const b of g.banks){row.append(el('p',`Банк: ${b.description}`));if(b.linked&&!g.confirmed)row.append(el('small',`Связано с ZenMoney за ${b.linked.date}`));}
+      for(const b of g.banks){row.append(el('p',`Банк: ${formatMoney(String(currency==='VND'?b.amount_minor:b.amount_minor/100),currency)} · ${b.description}`));if(b.linked&&!g.confirmed)row.append(el('small',`Связано с ZenMoney за ${b.linked.date}`));}
       for(const z of g.zen)row.append(el('p',`ZenMoney: ${formatMoney(String(currency==='VND'?Number(z.amount_minor):Number(z.amount_minor)/100),currency)} · ${z.payee||z.comment||'Без описания'} · ${z.categories.join(', ')|| (z.transfer?'Перевод':'Без категории')}`));
       if(g.confirmed&&g.zen.some(z=>!z.transfer&&!z.categories.length))row.append(el('p','Нужно определить категорию.'));
       for(const b of g.banks){
+        if(!g.settlement&&b.group?.kind==='settlement'&&b.state==='linked'&&state.capabilities?.local_review){const undo=el('button','Отменить весь взаиморасчёт');undo.dataset.apiAction='';undo.onclick=()=>onAction(()=>({path:`/api/review/${b.id}/link`,body:{},method:'DELETE'}));row.append(el('p','Состав группы изменился или больше не совпадает по сумме. Отмена освободит всех участников.'),undo);}
         const options=(d.split_candidates||[]).filter(p=>p.bank_id===b.id);
         if(options.length){
           row.append(el('h3','Возможная разбивка по категориям'));
@@ -55,7 +61,7 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
             row.append(detail);
           }
         }
-        if(b.state==='linked'&&b.split_ids?.length&&state.capabilities?.local_review){const undo=el('button','Отменить составную связь');undo.dataset.apiAction='';undo.onclick=()=>onAction(()=>({path:`/api/review/${b.id}/link`,body:{},method:'DELETE'}));row.append(undo);}
+        if(b.group?.kind!=='settlement'&&b.state==='linked'&&b.split_ids?.length&&state.capabilities?.local_review){const undo=el('button','Отменить составную связь');undo.dataset.apiAction='';undo.onclick=()=>onAction(()=>({path:`/api/review/${b.id}/link`,body:{},method:'DELETE'}));row.append(undo);}
       }
       if(!g.confirmed&&!g.preview&&state.capabilities?.local_review)for(const b of g.banks.filter(b=>b.state==='pending')){
         const candidates=g.zen.filter(z=>(b.candidates||[]).some(c=>c.id===z.id)&&!z.linked_bank_id);
@@ -64,7 +70,19 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
         candidates.forEach((z,i)=>select.append(new Option(`№${i+1} · ${z.payee||z.comment||'Без описания'} · ${z.categories.join(', ')||'Без категории'}${z.comment?' · '+z.comment:''}`,z.id)));label.append(select);row.append(label);
         const button=el('button','Подтвердить выбранную пару');button.dataset.apiAction='';button.onclick=()=>{if(!select.value){select.focus();return;}onAction(()=>({path:`/api/review/${b.id}/link`,body:{action:'link',match_id:select.value,reviewed_candidates:b.candidates.map(c=>c.id)}}));};row.append(button);
       }
+      if(g.settlement&&state.capabilities?.local_review){const undo=el('button','Отменить весь взаиморасчёт');undo.dataset.apiAction='';undo.onclick=()=>onAction(()=>({path:`/api/review/${g.banks[0].id}/link`,body:{},method:'DELETE'}));row.append(undo);}
       section.append(row);
+    }
+    const freeBanks=allBanks.filter(b=>b.state==='pending'),freeZen=allZen.filter(z=>!z.linked_bank_id);
+    if(state.capabilities?.local_review&&freeBanks.length&&freeZen.length){
+      const form=el('details',undefined,'settlement-form');form.append(el('summary','Создать группу взаиморасчёта'));
+      form.append(el('p','Отметьте связанные записи. Сохраняется только локальная группа; эти операции не обучают категории.'));
+      const chosenBanks=new Set(),chosenZen=new Set(),currency=account.currency;
+      const totals=el('p'),save=el('button','Сохранить группу');save.dataset.apiAction='';
+      const update=()=>{const bankSum=freeBanks.filter(b=>chosenBanks.has(b.id)).reduce((n,b)=>n+Number(b.amount_minor),0),zenSum=freeZen.filter(z=>chosenZen.has(z.id)).reduce((n,z)=>n+Number(z.amount_minor),0);const fmt=v=>formatMoney(String(v/(currency==='VND'?1:100)),currency);totals.textContent=`Банк: ${fmt(bankSum)} · ZenMoney: ${fmt(zenSum)} · Разница: ${fmt(bankSum-zenSum)}`;return chosenBanks.size&&chosenZen.size&&chosenBanks.size+chosenZen.size>=3&&bankSum===zenSum;};
+      for(const [label,items,chosen] of [['Банк',freeBanks,chosenBanks],['ZenMoney',freeZen,chosenZen]]){form.append(el('h3',label));for(const r of items){const line=el('label'),check=el('input');check.type='checkbox';check.dataset.member=r.id;check.onchange=()=>{check.checked?chosen.add(r.id):chosen.delete(r.id);update();};line.append(check,document.createTextNode(` ${r.description||r.payee||r.comment||'Без описания'} · ${formatMoney(String(Number(r.amount_minor)/(currency==='VND'?1:100)),currency)}`));form.append(line);}}
+      const message=el('p');save.onclick=()=>{if(!update()){message.textContent='Выберите связанные записи с обеих сторон с одинаковой итоговой суммой.';return;}onAction(()=>({path:'/api/reconciliation-groups',body:{bank_ids:[...chosenBanks],zen_ids:[...chosenZen],snapshot:d.snapshot}}));};
+      update();form.append(totals,save,message);section.append(form);
     }
     container.append(section);
   }
