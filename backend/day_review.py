@@ -60,7 +60,7 @@ def proposals(db, rows):
             if zen_account == target and lo <= day <= hi:
                 groups.setdefault((account_id, day), [])
     tx_by_id = {t['id']: t for t in transactions}
-    tags = {t['id']: t['title'] for t in entities(db, 'tag')}
+    tags = {t['id']: t['title'] for t in entities(db, 'tag') if not t.get('deleted')}
     used = {identifier: r['id'] for r in rows if r['state'] in ('linked', 'sent') for identifier in (r.get('split_ids') or [r['linked_id']]) if identifier}
     result = []
     for (account_id, day), bank in sorted(groups.items(), reverse=True):

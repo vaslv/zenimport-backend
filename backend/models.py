@@ -117,3 +117,7 @@ class SplitDecision(DayDecision):
 class SettlementDecision(DayDecision):
     bank_ids: list[str] = Field(min_length=1, max_length=100)
     zen_ids: list[str] = Field(min_length=1, max_length=100)
+
+
+class CategoryDraft(StrictModel):
+    category_id: str | None = Field(default=None, min_length=1, max_length=200)

@@ -121,6 +121,10 @@ def review(db):
     index = candidate_index(db, accounts.values(), transactions)
     from .link_groups import read as read_groups
     groups = {i:g for g in read_groups(db) for i in g['bank_ids']}
+    drafts = {r['bank_id']: r['category_id'] for r in db.execute('SELECT * FROM category_drafts')}
+    from .db import entities as read_entities
+    categories = read_entities(db, 'tag')
+    tags = {t['id']: t for t in categories if not t.get('deleted')}
     rows = []
     for r in db.execute('SELECT * FROM bank_transactions ORDER BY date DESC, id'):
         row = dict(r)
@@ -128,6 +132,8 @@ def review(db):
         row.update(currency=account['currency'], candidates=candidates(db, row, account, index),
                    mapped=bool(account['zenmoney_account']))
         row['raw'] = json.loads(row['raw'])
+        category = drafts.get(row['id'])
+        row['category_draft'] = ({'id': category, 'title': tags.get(category, {}).get('title', 'Категория недоступна'), 'valid': category in tags} if category else None)
         group = groups.get(row['id'])
         row['group'] = group
         row['split_ids'] = group['zen_ids'] if group and group['kind'] != 'single' else []
@@ -136,8 +142,7 @@ def review(db):
     from .exclusions import zen_ids
     excluded = zen_ids(db)
     from .reconciliation import enrich
-    from .db import entities as read_entities
-    return enrich(rows, accounts, [t for t in transactions if t['id'] not in excluded], read_entities(db, 'tag'))
+    return enrich(rows, accounts, [t for t in transactions if t['id'] not in excluded], categories)
 
 
 def confirm(db, identifier, decision, *, index=None):

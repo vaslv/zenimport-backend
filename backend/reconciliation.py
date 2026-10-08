@@ -82,6 +82,7 @@ def enrich(rows, accounts, transactions, categories):
             linked, row['linked_parts'] = group_views[group['id']]
         row['linked'] = linked
         row['category_suggestion'] = None
+        row['category_ranking'] = []
         if row['state'] in ('linked', 'sent'):
             row['reconciliation_status'] = 'synced' if linked else 'conflict'
         elif row['state'] != 'pending':
@@ -90,7 +91,7 @@ def enrich(rows, accounts, transactions, categories):
             row['reconciliation_status'] = 'unmapped'
         else:
             row['reconciliation_status'] = 'possible' if row['candidates'] else 'new'
-        if row['state'] != 'pending' or not row['mapped'] or row['candidates']:
+        if row['state'] != 'pending' or not row['mapped']:
             continue
         key, name = recipient(row)
         sign = 1 if row['amount_minor'] > 0 else -1
@@ -98,10 +99,11 @@ def enrich(rows, accounts, transactions, categories):
         learned_examples = learned.get((row['bank_account'], sign, key), {}) if key else {}
         examples.update(learned_examples)
         examples = [e for e in examples.values() if e['date'] < row['date']]
+        counts = Counter(e['category'] for e in examples)
+        conflicts = [{'id': k, 'title': tags[k], 'count': n, 'repeated': n >= 2} for k, n in sorted(counts.items(), key=lambda item: (-item[1], normalized(tags[item[0]]), item[0]))]
+        row['category_ranking'] = conflicts
         if len(examples) < 2:
             continue
-        counts = Counter(e['category'] for e in examples)
-        conflicts = [{'id': k, 'title': tags[k], 'count': n, 'repeated': n >= 2} for k, n in counts.most_common()]
         agreed = len(counts) == 1
         row['category_suggestion'] = {
             'category': conflicts[0]['id'] if agreed else None,

@@ -88,7 +88,7 @@ def test_v2_upgrade_preserves_existing_single_links(tmp_path):
         db.execute("UPDATE bank_transactions SET state='linked',linked_id='old-existing'")
     create_app(path,TOKEN,'live',zen_client=object())
     with transaction(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0]==5
+        assert db.execute('PRAGMA user_version').fetchone()[0]==6
         assert db.execute('SELECT linked_id FROM bank_transactions').fetchone()[0]=='old-existing'
         assert db.execute('SELECT count(*) FROM split_links').fetchone()[0]==0
 

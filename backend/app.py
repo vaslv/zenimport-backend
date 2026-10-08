@@ -8,7 +8,7 @@ from datetime import date
 from .zenstore import history, summary
 from fastapi.responses import FileResponse, JSONResponse
 from .db import initialize, transaction, entities
-from .models import BankImport, Mapping, Decision, DayDecision, BulkDayDecision, SplitDecision, SettlementDecision
+from .models import BankImport, Mapping, Decision, DayDecision, BulkDayDecision, SplitDecision, SettlementDecision, CategoryDraft
 from .service import (audit, candidates, confirm, fail, get_row, import_bank,
                       mapped_account, review, same_transaction)
 from .zenmoney import ZenMoney, request_diff
@@ -154,6 +154,12 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
             fail('Здесь доступно только подтверждение существующей связи', 422)
         with lock, transaction(path) as db:
             return confirm(db, identifier, data)
+
+    @app.put('/api/review/{identifier}/category')
+    def category_draft(identifier: str, data: CategoryDraft):
+        from .category_drafts import save
+        with lock, transaction(path) as db:
+            return save(db, identifier, data.category_id)
 
     @app.put('/api/exclusions/{source}/{identifier}')
     def exclude(source: str, identifier: str):
