@@ -24,7 +24,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
     if(reviewStatus(t)!=='synced'||(t.linked&&!t.linked.transfer&&(!t.linked.categories?.length||t.linked.missing_category)))needsWork.add(key(t.bank_account,t.date));
   }
   for(const d of state.day_review||[]){
-    if((!d.equal&&!d.resolved)||(d.zen_rows||[]).some(z=>!z.excluded&&(!z.linked_bank_id||(!z.transfer&&!z.categories?.length))))needsWork.add(key(d.bank_account,d.date));
+    if((!d.equal&&!d.resolved)||(d.zen_rows||[]).some(z=>!z.excluded&&(!z.linked_bank_id||(!z.transfer&&(!z.categories?.length||z.category_draft)))))needsWork.add(key(d.bank_account,d.date));
   }
   const showDay=(account,date)=>!workDays||needsWork.has(key(account,date));
   if(workDays){status='all';query='';limit=Infinity;}
@@ -104,8 +104,15 @@ export function renderReview(container,state,{account='',status='all',query='',s
     if(linked)detail.append(node('p',`ZenMoney: ${linked.date} · ${linked.payee||linked.comment||'Без описания'} · ${linked.categories?.join(', ')||'Без категории'}`));
     if(t.state==='linked'&&state.capabilities?.local_review)detail.append(button(t.group?.kind==='settlement'?'Отменить весь взаиморасчёт':'Отменить связь',()=>({path:`/api/review/${t.id}/link`,body:{},method:'DELETE'})));
     if(state.capabilities?.local_review&&['pending','ignored'].includes(t.state))detail.append(exclusionButton('bank',t.id,t.state==='ignored',onAction));
+    if(state.capabilities?.local_review&&linked){
+      const ids=t.group?.zen_ids||(t.split_ids?.length?t.split_ids:[t.linked_id]);
+      const zs=new Map((state.day_review||[]).flatMap(d=>d.zen_rows||[]).map(z=>[z.id,z]));
+      for(const id of ids){const z=zs.get(id);if(z&&!z.excluded&&!z.transfer&&(!z.categories?.length||z.category_draft))detail.append(categoryPicker(z,state,onAction));}
+    }
     if(t.state==='pending'){
-      const picker=categoryPicker(t,state,onAction);if(state.capabilities?.local_review||state.capabilities?.write)detail.append(picker);
+      const picker=node('select');picker.append(new Option('Без категории',''));
+      for(const c of state.categories||[])if(!c.deleted)picker.append(new Option(c.title,c.id));
+      if(state.capabilities?.write)detail.append(picker);
       if(t.candidates.length)detail.append(node('h3',`Совпадения в ZenMoney · ${t.candidates.length}`));
       for(const c of t.candidates){
         const candidate=node('div',undefined,'match-option');candidate.append(node('strong',`${c.date} · ${money(t)}`),node('p',c.categories?.join(', ')||'Без категории'),node('p',c.payee||c.comment||c.id),node('small',c.reason));

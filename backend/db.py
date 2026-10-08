@@ -41,7 +41,7 @@ def connect(path):
 def initialize(path, mode):
     with closing(connect(path)) as db, db:
         version = db.execute('PRAGMA user_version').fetchone()[0]
-        if version > 6:
+        if version > 7:
             raise RuntimeError('Database schema is newer than this application')
         db.executescript(SCHEMA)
         previous = db.execute("SELECT value FROM meta WHERE key='mode'").fetchone()
@@ -57,7 +57,8 @@ def initialize(path, mode):
         migrate_groups(db)
         db.execute('CREATE TABLE IF NOT EXISTS reconciliation_exclusions (zen_id TEXT PRIMARY KEY, created_at INTEGER NOT NULL)')
         db.execute('CREATE TABLE IF NOT EXISTS category_drafts (bank_id TEXT PRIMARY KEY REFERENCES bank_transactions(id), category_id TEXT NOT NULL, updated_at INTEGER NOT NULL)')
-        db.execute('PRAGMA user_version=6')
+        db.execute('CREATE TABLE IF NOT EXISTS zen_category_drafts (zen_id TEXT PRIMARY KEY, category_id TEXT NOT NULL, original_tags TEXT NOT NULL, updated_at INTEGER NOT NULL)')
+        db.execute('PRAGMA user_version=7')
 
 
 @contextmanager

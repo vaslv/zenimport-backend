@@ -104,7 +104,7 @@ def test_migration_preserves_v1_and_mode(tmp_path):
         assert history(db)['total'] == 1
         assert db.execute('SELECT count(*) FROM bank_accounts').fetchone()[0] == 1
         assert db.execute('SELECT count(*) FROM zen_sync_runs').fetchone()[0] == 1
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 6
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 7
         assert db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()[0] == '100'
     with pytest.raises(RuntimeError):
         initialize(path, 'live')

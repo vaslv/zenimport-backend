@@ -80,8 +80,7 @@ def test_installed_extension_end_to_end(browser):
     expect(page.locator('#status')).to_have_text('Данные обновлены.')
     page.locator('nav a[href="#review"]').click()
     page.locator('#review .ledger-summary').first.click()
-    page.locator('#review .category-menu summary').first.click()
-    page.locator('#review .category-option').filter(has_text='Еда').first.click()
+    page.locator('#review .ledger-detail select').first.select_option(label='Еда')
     page.get_by_role('button',name='Подтвердить создание',exact=True).first.click()
     expect(page.locator('#outbox')).to_contain_text('Подтверждена')
     page.on('dialog',lambda dialog:dialog.accept())
@@ -1117,16 +1116,18 @@ def test_category_picker_prioritizes_history_and_saves_local_choice(browser,view
     b={'id':'b','bank_account':'ba','date':'2026-10-01','amount_minor':-100,'currency':'VND','description':'Shop','raw':{},
        'state':'pending','mapped':True,'candidates':[],'category_suggestion':None,'category_draft':None,'linked':None,'reconciliation_status':'new',
        'category_ranking':[{'id':'taxi','title':'Такси','count':1},{'id':'food','title':'Продукты','count':5}]}
+    z={'id':'z','date':b['date'],'amount_minor':'-100','currency':'VND','payee':'Shop','categories':[],'tag_ids':[],'transfer':False,'linked_bank_id':'b','category_draft':None,'category_ranking':b['category_ranking'],'same_day_bank_ids':['b']}
+    b.update(state='linked',linked_id='z',linked=z,reconciliation_status='synced')
     state['review']=[b];state['day_review']=[{'bank_account':'ba','date':b['date'],'bank_count':1,'zen_count':0,'equal':False,'resolved':False,
-        'pairs':[],'preview_pairs':[],'snapshot':'a'*64,'bank_ids':['b'],'zen_rows':[]}]
+        'pairs':[],'preview_pairs':[],'snapshot':'a'*64,'bank_ids':['b'],'zen_rows':[z]}]
     page=context.new_page();calls=[]
     page.route('**/api/state',lambda route:route.fulfill(json=state))
     def save(route):
         body=json.loads(route.request.post_data);calls.append(body)
         assert route.request.method=='PUT'
-        id=body['category_id'];b['category_draft']={'id':id,'title':next(c['title'] for c in state['categories'] if c['id']==id),'valid':True} if id else None
+        id=body['category_id'];z['category_draft']={'id':id,'title':next(c['title'] for c in state['categories'] if c['id']==id),'valid':True} if id else None
         route.fulfill(json=body)
-    page.route('**/api/review/b/category',save)
+    page.route('**/api/zenmoney/transactions/z/category',save)
     page.goto(f'chrome-extension://{identifier}/app.html#{view}')
     def open_row():
         if view=='review':page.locator('.ledger-summary').first.click()
@@ -1138,14 +1139,14 @@ def test_category_picker_prioritizes_history_and_saves_local_choice(browser,view
     expect(picker.locator('[data-category-id="taxi"]')).to_contain_text('один пример')
     assert picker.locator('[data-category-id="food"] strong').evaluate('(e)=>Number(getComputedStyle(e).fontWeight)')>=700
     picker.locator('[data-category-id="sport"]').click();assert not calls
-    with page.expect_response(lambda r:r.url.endswith('/api/review/b/category') and r.request.method=='PUT'):
+    with page.expect_response(lambda r:r.url.endswith('/api/zenmoney/transactions/z/category') and r.request.method=='PUT'):
         picker.get_by_role('button',name='Сохранить категорию',exact=True).click()
     page.reload();open_row();expect(picker.locator('.category-menu > summary')).to_have_text('Категория: Спорт')
     expect(picker).to_contain_text('Категория сохранена локально')
     picker.locator('.category-menu > summary').click();picker.locator('[data-category-id=""]').click()
-    with page.expect_response(lambda r:r.url.endswith('/api/review/b/category') and r.request.method=='PUT'):
+    with page.expect_response(lambda r:r.url.endswith('/api/zenmoney/transactions/z/category') and r.request.method=='PUT'):
         picker.get_by_role('button',name='Сохранить категорию',exact=True).click()
-    assert calls==[{'category_id':'sport'},{'category_id':None}];page.close()
+    assert calls==[{'category_id':'sport','expected_tags':[]},{'category_id':None,'expected_tags':[]}];page.close()
 
 
 def test_attention_inline_category_and_pair_confirmation_share_one_day(browser):
@@ -1155,7 +1156,7 @@ def test_attention_inline_category_and_pair_confirmation_share_one_day(browser):
     state['bank_accounts']=[{'id':'ba','bank':'bank','account':'1234','currency':'VND','zenmoney_account':'za'}]
     state['zenmoney_accounts']=[{'id':'za','title':'Bank','instrument':1}];state['categories']=[{'id':'food','title':'Еда'}]
     common={'bank_account':'ba','date':'2026-10-01','currency':'VND','raw':{},'state':'pending','mapped':True,'linked':None,'category_suggestion':None,'category_draft':None}
-    z={'id':'z','date':common['date'],'amount_minor':'-100','currency':'VND','payee':'Known shop','categories':['Еда'],'transfer':False,'linked_bank_id':None}
+    z={'id':'z','date':common['date'],'amount_minor':'-100','currency':'VND','payee':'Known shop','categories':[],'tag_ids':[],'transfer':False,'linked_bank_id':None}
     pair={**common,'id':'paired','description':'Known shop','amount_minor':-100,'candidates':[z],'reconciliation_status':'possible'}
     new={**common,'id':'new','description':'New payment','amount_minor':-200,'candidates':[],'reconciliation_status':'new'}
     state['review']=[pair,new]
@@ -1164,17 +1165,18 @@ def test_attention_inline_category_and_pair_confirmation_share_one_day(browser):
     page=context.new_page();calls=[]
     page.route('**/api/state',lambda route:route.fulfill(json=state))
     def save_category(route):
-        assert json.loads(route.request.post_data)=={'category_id':'food'};calls.append('category')
-        new['category_draft']={'id':'food','title':'Еда','valid':True};route.fulfill(json={'category_id':'food'})
+        assert json.loads(route.request.post_data)=={'category_id':'food','expected_tags':[]};calls.append('category')
+        z['category_draft']={'id':'food','title':'Еда','valid':True};route.fulfill(json={'category_id':'food'})
     def save_pair(route):
         calls.append('pair');pair.update(state='linked',linked_id='z',linked=z,reconciliation_status='synced');z['linked_bank_id']='paired';day['preview_pairs']=[]
         route.fulfill(json={'days':1,'linked':1})
-    page.route('**/api/review/new/category',save_category);page.route('**/api/review-pairs/confirm',save_pair)
+    page.route('**/api/zenmoney/transactions/z/category',save_category);page.route('**/api/review-pairs/confirm',save_pair)
     page.goto(f'chrome-extension://{identifier}/app.html#attention')
-    picker=page.locator('.inline-category-picker[data-bank-id="new"]')
+    picker=page.locator('.inline-category-picker[data-zen-id="z"]')
+    expect(page.locator('.category-picker')).to_have_count(1)
     expect(picker).to_be_visible();expect(page.locator('.attention-operation[open]')).to_have_count(0)
     picker.locator('.category-menu summary').click();picker.locator('[data-category-id="food"]').click()
-    with page.expect_response(lambda r:r.url.endswith('/api/review/new/category')):picker.get_by_role('button',name='Сохранить категорию').click()
+    with page.expect_response(lambda r:r.url.endswith('/api/zenmoney/transactions/z/category')):picker.get_by_role('button',name='Сохранить категорию').click()
     expect(picker).to_contain_text('Категория сохранена локально')
     page.get_by_role('button',name='Сохранить пары дня · 1',exact=True).click()
     expect(page.locator('.inline-category-picker')).to_have_count(1)
@@ -1183,3 +1185,36 @@ def test_attention_inline_category_and_pair_confirmation_share_one_day(browser):
     page.set_viewport_size({'width':480,'height':700})
     expect(picker.get_by_role('button',name='Сохранить категорию')).to_be_visible()
     assert picker.evaluate('(e)=>e.scrollWidth<=e.clientWidth');page.close()
+
+
+def test_attention_split_categories_target_each_zen_part(browser):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True},recipient_profiles=[],outbox=[])
+    state['bank_accounts']=[{'id':'ba','bank':'bank','account':'1234','currency':'VND','zenmoney_account':'za'}]
+    state['zenmoney_accounts']=[{'id':'za','title':'Bank','instrument':1}]
+    state['categories']=[{'id':'food','title':'Еда'}]
+    zs=[{'id':id,'date':'2026-10-01','amount_minor':amount,'currency':'VND','payee':'Shop','categories':[],
+         'tag_ids':[],'transfer':False,'linked_bank_id':'b','category_draft':None} for id,amount in [('z1','-40'),('z2','-60')]]
+    b={'id':'b','bank_account':'ba','date':'2026-10-01','amount_minor':-100,'currency':'VND','description':'Shop','raw':{},
+       'state':'linked','mapped':True,'candidates':[],'linked_id':None,'split_ids':['z1','z2'],'reconciliation_status':'synced',
+       'linked':{'categories':[],'missing_category':True},'group':{'kind':'split','zen_ids':['z1','z2'],'bank_ids':['b']}}
+    state['review']=[b]
+    state['day_review']=[{'bank_account':'ba','date':b['date'],'bank_ids':['b'],'zen_rows':zs,'resolved':True,'equal':False,'preview_pairs':[]}]
+    page=context.new_page();calls=[]
+    page.route('**/api/state',lambda route:route.fulfill(json=state))
+    def save(route):
+        calls.append(route.request.url)
+        assert json.loads(route.request.post_data)=={'category_id':'food','expected_tags':[]}
+        zs[0]['category_draft']={'id':'food','title':'Еда','valid':True}
+        route.fulfill(json={'category_id':'food'})
+    page.route('**/api/zenmoney/transactions/z1/category',save)
+    page.goto(f'chrome-extension://{identifier}/app.html#attention')
+    expect(page.locator('.category-picker')).to_have_count(2)
+    picker=page.locator('[data-zen-id="z1"]')
+    picker.locator('.category-menu summary').click();picker.locator('[data-category-id="food"]').click()
+    picker.get_by_role('button',name='Сохранить категорию').click()
+    expect(picker).to_contain_text('Категория сохранена локально')
+    expect(page.locator('[data-zen-id="z2"] .category-menu summary')).to_have_text('Категория: Выберите категорию')
+    assert len(calls)==1
+    page.close()

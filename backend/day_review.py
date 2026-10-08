@@ -150,6 +150,8 @@ def proposals(db, rows):
     for option in all_options:
         if any(o['bank_id'] != option['bank_id'] and set(o['zen_ids']) & set(option['zen_ids']) for o in all_options):
             option['unique'] = False
+    from .category_drafts import decorate
+    decorate(db, result, rows, tx_by_id, tags)
     return result
 
 

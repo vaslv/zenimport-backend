@@ -91,7 +91,7 @@ def enrich(rows, accounts, transactions, categories):
             row['reconciliation_status'] = 'unmapped'
         else:
             row['reconciliation_status'] = 'possible' if row['candidates'] else 'new'
-        if row['state'] != 'pending' or not row['mapped']:
+        if row['state'] not in ('pending', 'linked', 'sent') or not row['mapped']:
             continue
         key, name = recipient(row)
         sign = 1 if row['amount_minor'] > 0 else -1

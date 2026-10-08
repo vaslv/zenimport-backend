@@ -16,7 +16,8 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
     bar.append(saveButton(`Сохранить пары всех показанных дней · ${ready.reduce((n,d)=>n+d.preview_pairs.length,0)}`,ready,true));container.append(bar);
   }
   const bankMap=new Map(state.review.map(r=>[r.id,r]));
-  const settled=b=>b&&['linked','sent'].includes(b.state)&&b.linked&&!b.linked.missing_category&&(b.linked.transfer||b.linked.categories?.length);
+  const draftIds=new Set((state.day_review||[]).flatMap(d=>d.zen_rows||[]).filter(z=>z.category_draft).map(z=>z.id));
+  const settled=b=>b&&!(b.group?.zen_ids||(b.split_ids?.length?b.split_ids:[b.linked_id])).some(id=>draftIds.has(id))&&['linked','sent'].includes(b.state)&&b.linked&&!b.linked.missing_category&&(b.linked.transfer||b.linked.categories?.length);
   for(const d of [...days].sort((a,b)=>b.date.localeCompare(a.date)||a.bank_account.localeCompare(b.bank_account))){
     const account=state.bank_accounts.find(a=>a.id===d.bank_account),title=state.zenmoney_accounts.find(a=>a.id===account?.zenmoney_account)?.title||account?.bank||'Счёт';
     const section=el('section',undefined,'attention-day');section.dataset.date=d.date;
@@ -56,7 +57,7 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
       const status=g.excluded?'Не требует сведения':g.settlement?'Взаиморасчёт · связь подтверждена':g.confirmed?'Связь подтверждена':g.preview?(g.pair?.order==='chronological'?'Пара по порядку · не сохранена':'Предварительная пара · не сохранена'):g.banks.length&&g.zen.length?(g.banks.length===g.zen.length?'Суммы и количество совпадают · связь не подтверждена':'Количество различается'):'Нет пары в этот день';
       const summary=el('summary');summary.append(el('strong',(amount>0?'+':'')+formatMoney(String(currency==='VND'?amount:amount/100),currency)),el('span',source,'badge'),el('span',status));
       if(g.banks.length>1||g.zen.length>1)summary.append(el('small',`Банк: ${g.banks.length} · ZenMoney: ${g.zen.length}`));
-      const description=g.zen[0]?.categories?.join(', ')||g.banks[0]?.category_draft?.title||g.banks[0]?.description||g.zen[0]?.payee||'Без категории';summary.append(el('p',description));row.append(summary);
+      const description=g.zen[0]?.categories?.join(', ')||g.zen[0]?.category_draft?.title||g.banks[0]?.description||g.zen[0]?.payee||'Без категории';summary.append(el('p',description));row.append(summary);
       for(const b of g.banks){row.append(el('p',`Банк: ${formatMoney(String(currency==='VND'?b.amount_minor:b.amount_minor/100),currency)} · ${b.description}`));if(b.linked&&!g.confirmed)row.append(el('small',`Связано с ZenMoney за ${b.linked.date}`));}
       for(const z of g.zen)row.append(el('p',`ZenMoney: ${formatMoney(String(currency==='VND'?Number(z.amount_minor):Number(z.amount_minor)/100),currency)} · ${z.payee||z.comment||'Без описания'} · ${z.categories.join(', ')|| (z.transfer?'Перевод':'Без категории')}`));
       if(g.pair?.order==='chronological'){
@@ -95,9 +96,9 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
       }
       if(g.settlement&&state.capabilities?.local_review){const undo=el('button','Отменить весь взаиморасчёт');undo.dataset.apiAction='';undo.onclick=()=>onAction(()=>({path:`/api/review/${g.banks[0].id}/link`,body:{},method:'DELETE'}));row.append(undo);}
       const item=el('div',undefined,'attention-item');item.append(row);
-      if(state.capabilities?.local_review)for(const b of g.banks)if(b.state==='pending'){
-        const picker=categoryPicker(b,state,onAction);picker.classList.add('inline-category-picker');
-        if(g.banks.length>1)picker.querySelector('h3').textContent=`Категория · ${b.description}`;
+      if(state.capabilities?.local_review)for(const z of g.zen)if(!z.excluded&&!z.transfer&&(!z.categories?.length||z.category_draft)){
+        const picker=categoryPicker(z,state,onAction);picker.classList.add('inline-category-picker');
+        if(g.zen.length>1)picker.querySelector('h3').textContent=`Категория ZenMoney · ${z.amount_minor} ${currency} · ${z.payee||z.comment||z.id}`;
         item.append(picker);
       }
       section.append(item);

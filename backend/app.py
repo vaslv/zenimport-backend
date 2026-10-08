@@ -155,11 +155,11 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
         with lock, transaction(path) as db:
             return confirm(db, identifier, data)
 
-    @app.put('/api/review/{identifier}/category')
+    @app.put('/api/zenmoney/transactions/{identifier}/category')
     def category_draft(identifier: str, data: CategoryDraft):
         from .category_drafts import save
         with lock, transaction(path) as db:
-            return save(db, identifier, data.category_id)
+            return save(db, identifier, data.category_id, data.expected_tags)
 
     @app.put('/api/exclusions/{source}/{identifier}')
     def exclude(source: str, identifier: str):
