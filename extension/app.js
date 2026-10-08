@@ -38,7 +38,7 @@ function navigate() {
 function render() {
   for(const id of ['metrics','accounts','bank-rows','review','outbox','zen','zen-accounts','categories'])$(id).replaceChildren();
   $('mode').textContent=state ? (state.mode==='demo'?'DEMO · учебные данные':'LIVE · история ZenMoney'):'Нет подключения';
-  $('last-sync').textContent=state?.last_sync ? `Синхронизация: ${new Date(state.last_sync*1000).toLocaleString('ru-RU')}`:'Синхронизации ещё не было';
+  $('last-sync').textContent=state?.last_sync ? `Данные ZenMoney получены: ${new Date(state.last_sync*1000).toLocaleString('ru-RU')}`:'Данные ZenMoney ещё не получены';
   if(!state) { controls(); return; }
   for(const [label,value] of [['Банковские операции',state.review.length],['Операции ZenMoney',state.zenmoney_summary?.transactions?.count??state.zenmoney_transactions.length],['На проверке',state.review.filter(t=>t.state==='pending').length]]) {
     const card=el('div',undefined,'metric'); card.append(el('strong',String(value)),el('span',label)); $('metrics').append(card);
