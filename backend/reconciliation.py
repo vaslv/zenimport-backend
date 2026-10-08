@@ -43,6 +43,7 @@ def enrich(rows, accounts, transactions, categories):
         if e and normalized(tx.get('payee')):
             named[(tx.get('incomeAccount'), e['direction'], normalized(tx['payee']))][tx['id']] = e
     for row in rows:
+        if (row.get('group') or {}).get('kind') == 'settlement': continue
         if row.get('split_ids') and row['state'] in ('linked', 'sent'):
             from .splits import linked_parts
             parts, linked = linked_parts(row, accounts[row['bank_account']], zen, tags)
@@ -61,6 +62,9 @@ def enrich(rows, accounts, transactions, categories):
         if e and key:
             learned[(row['bank_account'], e['direction'], key)][tx['id']] = e
 
+    from .link_groups import settlement_view
+    row_map = {r['id']: r for r in rows}
+    group_views = {}
     for row in rows:
         account = accounts[row['bank_account']]
         row['candidates'] = [{**c, 'categories': [tags.get(t, 'Неизвестная категория') for t in zen[c['id']].get('tag') or []],
@@ -71,6 +75,11 @@ def enrich(rows, accounts, transactions, categories):
         parts, split_linked = linked_parts(row, account, zen, tags)
         row['linked_parts'] = parts
         if row.get('split_ids'): linked = split_linked
+        group = row.get('group')
+        if group and group['kind'] == 'settlement':
+            if group['id'] not in group_views:
+                group_views[group['id']] = settlement_view(group, row_map, zen, account, tags)
+            linked, row['linked_parts'] = group_views[group['id']]
         row['linked'] = linked
         row['category_suggestion'] = None
         if row['state'] in ('linked', 'sent'):
@@ -112,7 +121,7 @@ def recipient_profiles(rows, accounts, transactions, categories):
     zen = {t['id']: t for t in transactions if not t.get('deleted') and not t.get('hold')}
     tags = {t['id']: t['title'] for t in categories if not t.get('deleted')}
     for row in rows:
-        if row.get('reconciliation_status') != 'synced':
+        if row.get('reconciliation_status') != 'synced' or (row.get('group') or {}).get('kind') == 'settlement':
             continue
         key, name = recipient(row)
         ids = row.get('split_ids') or [row.get('linked_id')]

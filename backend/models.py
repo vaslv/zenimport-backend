@@ -112,3 +112,8 @@ class BulkDayDecision(StrictModel):
 
 class SplitDecision(DayDecision):
     zen_ids: list[str] = Field(min_length=2, max_length=18)
+
+
+class SettlementDecision(DayDecision):
+    bank_ids: list[str] = Field(min_length=1, max_length=100)
+    zen_ids: list[str] = Field(min_length=1, max_length=100)

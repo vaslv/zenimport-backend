@@ -41,7 +41,7 @@ def connect(path):
 def initialize(path, mode):
     with closing(connect(path)) as db, db:
         version = db.execute('PRAGMA user_version').fetchone()[0]
-        if version > 3:
+        if version > 4:
             raise RuntimeError('Database schema is newer than this application')
         db.executescript(SCHEMA)
         previous = db.execute("SELECT value FROM meta WHERE key='mode'").fetchone()
@@ -51,8 +51,10 @@ def initialize(path, mode):
         db.execute("INSERT OR IGNORE INTO meta VALUES ('mode',?)", (mode,))
         from .zenstore import migrate
         migrate(db)
-        db.execute('CREATE TABLE IF NOT EXISTS split_links (bank_id TEXT NOT NULL REFERENCES bank_transactions(id), zen_id TEXT NOT NULL UNIQUE, PRIMARY KEY(bank_id,zen_id))')
-        db.execute('PRAGMA user_version=3')
+        if version < 4:
+            db.execute('CREATE TABLE IF NOT EXISTS split_links (bank_id TEXT NOT NULL REFERENCES bank_transactions(id), zen_id TEXT NOT NULL UNIQUE, PRIMARY KEY(bank_id,zen_id))')
+        from .link_groups import migrate as migrate_groups
+        migrate_groups(db)
 
 
 @contextmanager

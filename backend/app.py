@@ -8,7 +8,7 @@ from datetime import date
 from .zenstore import history, summary
 from fastapi.responses import FileResponse, JSONResponse
 from .db import initialize, transaction, entities
-from .models import BankImport, Mapping, Decision, DayDecision, BulkDayDecision, SplitDecision
+from .models import BankImport, Mapping, Decision, DayDecision, BulkDayDecision, SplitDecision, SettlementDecision
 from .service import (audit, candidates, confirm, fail, get_row, import_bank,
                       mapped_account, review, same_transaction)
 from .zenmoney import ZenMoney, request_diff
@@ -152,6 +152,12 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
         with lock, transaction(path) as db:
             return confirm(db, identifier, data)
 
+    @app.post('/api/reconciliation-groups')
+    def local_settlement(data: SettlementDecision):
+        from .link_groups import confirm_settlement
+        with lock, transaction(path) as db:
+            return confirm_settlement(db, data, review(db))
+
     @app.post('/api/review/{identifier}/split-link')
     def local_split(identifier: str, data: SplitDecision):
         from .day_review import confirm_split
@@ -164,10 +170,8 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
             row = get_row(db, 'bank_transactions', identifier)
             if row['state'] != 'linked':
                 fail('Отменить можно только локальную связь')
-            parts = [r['zen_id'] for r in db.execute('SELECT zen_id FROM split_links WHERE bank_id=?', (identifier,))]
-            db.execute('DELETE FROM split_links WHERE bank_id=?', (identifier,))
-            db.execute("UPDATE bank_transactions SET state='pending',linked_id=NULL WHERE id=?", (identifier,))
-            audit(db, 'unlink', {'id': identifier, 'previous': row['linked_id'], 'previous_parts': parts})
+            from .link_groups import unlink as unlink_group
+            unlink_group(db, identifier)
             return {'state': 'pending'}
 
     @app.post('/api/outbox/send')
@@ -190,7 +194,8 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
                     if existing:
                         if same_transaction(payload, existing):
                             db.execute("UPDATE outbox SET state='sent', error=NULL WHERE bank_transaction=?", (identifier,))
-                            db.execute("UPDATE bank_transactions SET state='sent' WHERE id=?", (identifier,))
+                            from .link_groups import insert
+                            insert(db, [identifier], [out['zen_id']], 'single', 'outbox', state='sent')
                             results.append({'id': identifier, 'state': 'sent'})
                         else:
                             db.execute("UPDATE outbox SET state='conflict',error='Удалённая операция отличается; нужна ручная сверка' WHERE bank_transaction=?", (identifier,))
@@ -213,7 +218,8 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
                         if not existing or not same_transaction(payload, existing):
                             raise ValueError('No matching acknowledgement')
                         db.execute("UPDATE outbox SET state='sent',error=NULL WHERE bank_transaction=?", (identifier,))
-                        db.execute("UPDATE bank_transactions SET state='sent' WHERE id=?", (identifier,))
+                        from .link_groups import insert
+                        insert(db, [identifier], [out['zen_id']], 'single', 'outbox', state='sent')
                         audit(db, 'sent', {'id': identifier, 'zen_id': out['zen_id']})
                     results.append({'id': identifier, 'state': 'sent'})
                 except Exception:

@@ -82,12 +82,13 @@ def test_split_search_ambiguity_direction_transfers_and_bounds():
 def test_v2_upgrade_preserves_existing_single_links(tmp_path):
     client,path=setup_split(tmp_path)
     with transaction(path) as db:
-        db.execute('DROP TABLE split_links')
+        db.execute('DROP VIEW split_links')
+        db.execute('CREATE TABLE split_links(bank_id TEXT, zen_id TEXT)')
         db.execute('PRAGMA user_version=2')
         db.execute("UPDATE bank_transactions SET state='linked',linked_id='old-existing'")
     create_app(path,TOKEN,'live',zen_client=object())
     with transaction(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0]==3
+        assert db.execute('PRAGMA user_version').fetchone()[0]==4
         assert db.execute('SELECT linked_id FROM bank_transactions').fetchone()[0]=='old-existing'
         assert db.execute('SELECT count(*) FROM split_links').fetchone()[0]==0
 

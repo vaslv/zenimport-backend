@@ -100,7 +100,7 @@ def project(db, kind, item, run_id, precise=None):
 
 def migrate(db):
     version = db.execute('PRAGMA user_version').fetchone()[0]
-    if version > 3:
+    if version > 4:
         raise RuntimeError('Database schema is newer than this application')
     create_schema(db)
     if version < 2:

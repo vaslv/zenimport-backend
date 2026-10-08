@@ -165,10 +165,7 @@ def confirm_split(db, identifier, decision, rows):
         fail('Составная связь изменилась. Обновите данные и проверьте состав.')
     from .service import get_row
     mapped_account(db, get_row(db, 'bank_accounts', row['bank_account']))
-    for zen_id in ids:
-        if db.execute("SELECT 1 FROM bank_transactions WHERE linked_id=? AND state IN ('linked','sent')", (zen_id,)).fetchone() or db.execute('SELECT 1 FROM split_links WHERE zen_id=?', (zen_id,)).fetchone():
-            fail('Запись ZenMoney уже связана')
-        db.execute('INSERT INTO split_links(bank_id,zen_id) VALUES (?,?)', (identifier, zen_id))
-    db.execute("UPDATE bank_transactions SET state='linked',linked_id=NULL WHERE id=?", (identifier,))
+    from .link_groups import insert
+    insert(db, [identifier], ids, 'split', 'manual')
     audit(db, 'confirm_split', {'id': identifier, 'zen_ids': ids, 'snapshot': decision.snapshot})
     return {'state': 'linked', 'parts': len(ids)}

@@ -117,9 +117,8 @@ def review(db):
     accounts = {r['id']: dict(r) for r in db.execute('SELECT * FROM bank_accounts')}
     transactions = entities(db, 'transaction')
     index = candidate_index(db, accounts.values(), transactions)
-    split_ids = {}
-    for link in db.execute('SELECT bank_id,zen_id FROM split_links ORDER BY zen_id'):
-        split_ids.setdefault(link['bank_id'], []).append(link['zen_id'])
+    from .link_groups import read as read_groups
+    groups = {i:g for g in read_groups(db) for i in g['bank_ids']}
     rows = []
     for r in db.execute('SELECT * FROM bank_transactions ORDER BY date DESC, id'):
         row = dict(r)
@@ -127,7 +126,10 @@ def review(db):
         row.update(currency=account['currency'], candidates=candidates(db, row, account, index),
                    mapped=bool(account['zenmoney_account']))
         row['raw'] = json.loads(row['raw'])
-        row['split_ids'] = split_ids.get(row['id'], [])
+        group = groups.get(row['id'])
+        row['group'] = group
+        row['split_ids'] = group['zen_ids'] if group and group['kind'] != 'single' else []
+        if group and group['kind'] == 'single': row['linked_id'] = group['zen_ids'][0]
         rows.append(row)
     from .reconciliation import enrich
     from .db import entities as read_entities
@@ -146,12 +148,8 @@ def confirm(db, identifier, decision, *, index=None):
     if decision.action == 'link':
         if decision.match_id not in [x['id'] for x in matches]:
             fail('Выберите существующее совпадение')
-        if db.execute("SELECT 1 FROM bank_transactions WHERE linked_id=? AND state IN ('linked','sent')",
-                      (decision.match_id,)).fetchone():
-            fail('Эта операция ZenMoney уже связана с банковской операцией')
-        if db.execute('SELECT 1 FROM split_links WHERE zen_id=?', (decision.match_id,)).fetchone():
-            fail('Эта запись ZenMoney уже входит в составную связь')
-        db.execute("UPDATE bank_transactions SET state='linked', linked_id=? WHERE id=?", (decision.match_id, identifier))
+        from .link_groups import insert
+        insert(db, [identifier], [decision.match_id], 'single', 'manual')
     elif decision.action == 'ignore':
         db.execute("UPDATE bank_transactions SET state='ignored' WHERE id=?", (identifier,))
     else:
