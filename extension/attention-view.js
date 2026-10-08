@@ -18,8 +18,10 @@ export function attentionDays(container,state,days,onAction){
     const heading=el('div',undefined,'section-heading');heading.append(el('h2',`${d.date} · ${title}`));
     if(state.capabilities?.local_review&&d.preview_pairs?.length)heading.append(saveButton(`Сохранить пары дня · ${d.preview_pairs.length}`,[d]));
     section.append(heading);
+    if(d.bank_total!==undefined){const total=v=>formatMoney(String(Number(v)/(account.currency==='VND'?1:100)),account.currency);section.append(el('p',`Итог банка: ${total(d.bank_total)} · Итог ZenMoney: ${total(d.zen_total)}`));}
+    if(d.split_search_limited)section.append(el('p','Поиск комбинаций ограничен из-за количества вариантов. Показанный список может быть неполным.'));
     const banks=(d.bank_ids||[]).map(id=>bankMap.get(id)).filter(Boolean),zs=d.zen_rows||[],usedB=new Set(),usedZ=new Set(),groups=[];
-    for(const b of banks){const z=zs.find(z=>z.id===b.linked_id&&z.linked_bank_id===b.id);if(z&&b.linked){groups.push({banks:[b],zen:[z],confirmed:true});usedB.add(b.id);usedZ.add(z.id);}}
+    for(const b of banks){const parts=zs.filter(z=>(b.split_ids?.length?b.split_ids:[b.linked_id]).includes(z.id)&&z.linked_bank_id===b.id);if(parts.length&&b.linked){groups.push({banks:[b],zen:parts,confirmed:true});usedB.add(b.id);parts.forEach(z=>usedZ.add(z.id));}}
     const amounts=new Map();
     for(const [kind,items,used] of [['banks',banks,usedB],['zen',zs,usedZ]])for(const r of items){if(used.has(r.id))continue;const key=String(Number(r.amount_minor));if(!amounts.has(key))amounts.set(key,{banks:[],zen:[],confirmed:false});amounts.get(key)[kind].push(r);}
     groups.push(...amounts.values());
@@ -33,8 +35,21 @@ export function attentionDays(container,state,days,onAction){
       if(g.banks.length>1||g.zen.length>1)summary.append(el('small',`Банк: ${g.banks.length} · ZenMoney: ${g.zen.length}`));
       const description=g.zen[0]?.categories?.join(', ')||g.banks[0]?.description||g.zen[0]?.payee||'Без категории';summary.append(el('p',description));row.append(summary);
       for(const b of g.banks){row.append(el('p',`Банк: ${b.description}`));if(b.linked&&!g.confirmed)row.append(el('small',`Связано с ZenMoney за ${b.linked.date}`));}
-      for(const z of g.zen)row.append(el('p',`ZenMoney: ${z.payee||z.comment||'Без описания'} · ${z.categories.join(', ')|| (z.transfer?'Перевод':'Без категории')}`));
+      for(const z of g.zen)row.append(el('p',`ZenMoney: ${formatMoney(String(currency==='VND'?Number(z.amount_minor):Number(z.amount_minor)/100),currency)} · ${z.payee||z.comment||'Без описания'} · ${z.categories.join(', ')|| (z.transfer?'Перевод':'Без категории')}`));
       if(g.confirmed&&g.zen.some(z=>!z.transfer&&!z.categories.length))row.append(el('p','Нужно определить категорию.'));
+      for(const b of g.banks){
+        const options=(d.split_candidates||[]).filter(p=>p.bank_id===b.id);
+        if(options.length){
+          row.append(el('h3','Возможная разбивка по категориям'));
+          for(const option of options){
+            const detail=el('details',undefined,'split-option');detail.append(el('summary',`${option.unique?'Единственная найденная комбинация':'Возможная комбинация'} · ${option.zen_ids.length} записей`));
+            for(const id of option.zen_ids){const z=zs.find(z=>z.id===id);detail.append(el('p',`${formatMoney(String(currency==='VND'?Number(z.amount_minor):Number(z.amount_minor)/100),currency)} · ${z.categories.join(', ')||'Без категории'} · ${z.payee||z.comment||''}`));}
+            if(state.capabilities?.local_review){const button=el('button','Сохранить составную связь');button.dataset.apiAction='';button.onclick=()=>onAction(()=>({path:`/api/review/${b.id}/split-link`,body:{snapshot:d.snapshot,zen_ids:option.zen_ids}}));detail.append(button);}
+            row.append(detail);
+          }
+        }
+        if(b.state==='linked'&&b.split_ids?.length&&state.capabilities?.local_review){const undo=el('button','Отменить составную связь');undo.dataset.apiAction='';undo.onclick=()=>onAction(()=>({path:`/api/review/${b.id}/link`,body:{},method:'DELETE'}));row.append(undo);}
+      }
       if(!g.confirmed&&!g.preview&&state.capabilities?.local_review)for(const b of g.banks.filter(b=>b.state==='pending')){
         const candidates=g.zen.filter(z=>(b.candidates||[]).some(c=>c.id===z.id)&&!z.linked_bank_id);
         if(!candidates.length)continue;

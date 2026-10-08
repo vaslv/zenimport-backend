@@ -36,11 +36,24 @@ def enrich(rows, accounts, transactions, categories):
         return {'id': tx['id'], 'date': tx['date'], 'category': cat[0], 'title': tags[cat[0]],
                 'payee': tx.get('payee') or '', 'direction': 1 if inc > 0 else -1}
 
+    split_members = {identifier for row in rows for identifier in row.get('split_ids', [])}
     for tx in zen.values():
+        if tx['id'] in split_members: continue
         e = example(tx)
         if e and normalized(tx.get('payee')):
             named[(tx.get('incomeAccount'), e['direction'], normalized(tx['payee']))][tx['id']] = e
     for row in rows:
+        if row.get('split_ids') and row['state'] in ('linked', 'sent'):
+            from .splits import linked_parts
+            parts, linked = linked_parts(row, accounts[row['bank_account']], zen, tags)
+            key, _ = recipient(row)
+            if linked and key:
+                for part in parts:
+                    e = example(zen[part['id']])
+                    if e:
+                        e = {**e, 'id': row['id'] + ':' + e['category'], 'payment_id': row['id']}
+                        learned[(row['bank_account'], e['direction'], key)][e['id']] = e
+            continue
         tx = zen.get(row.get('linked_id'))
         if row['state'] not in ('linked', 'sent') or not tx or tx['id'] not in {c['id'] for c in row['candidates']}:
             continue
@@ -54,6 +67,10 @@ def enrich(rows, accounts, transactions, categories):
                               'transfer': zen[c['id']].get('incomeAccount') != zen[c['id']].get('outcomeAccount')}
                              for c in row['candidates'] if c['id'] in zen]
         linked = next((c for c in row['candidates'] if c['id'] == row.get('linked_id')), None)
+        from .splits import linked_parts
+        parts, split_linked = linked_parts(row, account, zen, tags)
+        row['linked_parts'] = parts
+        if row.get('split_ids'): linked = split_linked
         row['linked'] = linked
         row['category_suggestion'] = None
         if row['state'] in ('linked', 'sent'):
@@ -80,7 +97,7 @@ def enrich(rows, accounts, transactions, categories):
         row['category_suggestion'] = {
             'category': conflicts[0]['id'] if agreed else None,
             'title': conflicts[0]['title'] if agreed else None,
-            'count': len(examples), 'conflict': not agreed, 'distribution': conflicts,
+            'count': len({e.get('payment_id', e['id']) for e in examples}), 'conflict': not agreed, 'distribution': conflicts,
             'confidence': 'high' if agreed else 'ambiguous',
             'requires_confirmation': True,
             'reason': ('То же описание в подтверждённых связях этого счёта' if key and key.startswith('description:')
@@ -98,17 +115,23 @@ def recipient_profiles(rows, accounts, transactions, categories):
         if row.get('reconciliation_status') != 'synced':
             continue
         key, name = recipient(row)
-        tx = zen.get(row.get('linked_id'))
-        if not key or not tx or tx.get('incomeAccount') != tx.get('outcomeAccount'):
-            continue
-        cats = tx.get('tag') or []
-        if len(cats) != 1 or cats[0] not in tags:
+        ids = row.get('split_ids') or [row.get('linked_id')]
+        cats = set()
+        for identifier in ids:
+            tx = zen.get(identifier)
+            if not tx or tx.get('incomeAccount') != tx.get('outcomeAccount'):
+                continue
+            txcats = tx.get('tag') or []
+            if len(txcats) == 1 and txcats[0] in tags:
+                cats.add(txcats[0])
+        if not key or not cats:
             continue
         profile = profiles.setdefault((row['bank_account'], key, row['amount_minor'] > 0),
             {'bank_account': row['bank_account'], 'key': key, 'name': name or row.get('description', key),
              'direction': 'income' if row['amount_minor'] > 0 else 'expense', 'categories': {}})
-        category = profile['categories'].setdefault(cats[0], {'id': cats[0], 'title': tags[cats[0]], 'count': 0})
-        category['count'] += 1
+        for cat in cats:
+            category = profile['categories'].setdefault(cat, {'id': cat, 'title': tags[cat], 'count': 0})
+            category['count'] += 1
     result = []
     for profile in profiles.values():
         profile['categories'] = sorted(profile['categories'].values(), key=lambda c: (-c['count'], c['id']))

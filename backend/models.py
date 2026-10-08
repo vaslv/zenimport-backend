@@ -108,3 +108,7 @@ class ReviewedDay(DayDecision):
 
 class BulkDayDecision(StrictModel):
     days: list[ReviewedDay] = Field(min_length=1, max_length=5000)
+
+
+class SplitDecision(DayDecision):
+    zen_ids: list[str] = Field(min_length=2, max_length=18)

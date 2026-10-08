@@ -8,7 +8,7 @@ from datetime import date
 from .zenstore import history, summary
 from fastapi.responses import FileResponse, JSONResponse
 from .db import initialize, transaction, entities
-from .models import BankImport, Mapping, Decision, DayDecision, BulkDayDecision
+from .models import BankImport, Mapping, Decision, DayDecision, BulkDayDecision, SplitDecision
 from .service import (audit, candidates, confirm, fail, get_row, import_bank,
                       mapped_account, review, same_transaction)
 from .zenmoney import ZenMoney, request_diff
@@ -152,14 +152,22 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
         with lock, transaction(path) as db:
             return confirm(db, identifier, data)
 
+    @app.post('/api/review/{identifier}/split-link')
+    def local_split(identifier: str, data: SplitDecision):
+        from .day_review import confirm_split
+        with lock, transaction(path) as db:
+            return confirm_split(db, identifier, data, review(db))
+
     @app.delete('/api/review/{identifier}/link')
     def unlink(identifier: str):
         with lock, transaction(path) as db:
             row = get_row(db, 'bank_transactions', identifier)
             if row['state'] != 'linked':
                 fail('Отменить можно только локальную связь')
+            parts = [r['zen_id'] for r in db.execute('SELECT zen_id FROM split_links WHERE bank_id=?', (identifier,))]
+            db.execute('DELETE FROM split_links WHERE bank_id=?', (identifier,))
             db.execute("UPDATE bank_transactions SET state='pending',linked_id=NULL WHERE id=?", (identifier,))
-            audit(db, 'unlink', {'id': identifier, 'previous': row['linked_id']})
+            audit(db, 'unlink', {'id': identifier, 'previous': row['linked_id'], 'previous_parts': parts})
             return {'state': 'pending'}
 
     @app.post('/api/outbox/send')

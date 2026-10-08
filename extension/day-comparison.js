@@ -13,7 +13,7 @@ export function dayComparison(day,state){
     const c=card(bankLabels.get(r.id),r,r.description);c.dataset.bankId=r.id;
     const linked=r.state==='linked'||r.state==='sent';
     const peers=zen.filter(z=>z.same_day_bank_ids.includes(r.id));
-    if(linked){c.append(el('p',r.linked?`Связано: ${zenLabels.get(r.linked_id)||'ZenMoney за '+r.linked.date}`:'Связь требует проверки','comparison-linked'));}
+    if(linked){c.append(el('p',r.linked?`Связано: ${(r.split_ids?.length?r.split_ids.map(id=>zenLabels.get(id)||id).join(', '):zenLabels.get(r.linked_id))||'ZenMoney за '+r.linked.date}`:'Связь требует проверки','comparison-linked'));}
     else if(peers.length)c.append(el('p',`Возможные пары по сумме: ${peers.map(z=>zenLabels.get(z.id)).join(', ')}. Не подтверждены.`,'comparison-possible'));
     else c.append(el('p','Нет пары по сумме в этот день','comparison-missing'));
     const other=(r.candidates||[]).filter(z=>z.date!==day.date);

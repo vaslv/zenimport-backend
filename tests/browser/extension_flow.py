@@ -810,3 +810,48 @@ def test_attention_preview_pairs_save_explicitly(browser,scope):
     expect(page.locator('.attention-day')).to_have_count(1 if scope=='day' else 0)
     assert len(calls)==1
     page.close()
+
+
+def test_split_proposal_shows_categories_saves_and_unlinks(browser):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True},recipient_profiles=[],outbox=[])
+    state['bank_accounts']=[{'id':'ba','bank':'bank','account':'1234','currency':'VND','zenmoney_account':'za'}]
+    state['zenmoney_accounts']=[{'id':'za','title':'Bank','instrument':1}]
+    base={'bank_account':'ba','date':'2026-10-01','currency':'VND','raw':{},'state':'pending','mapped':True,
+          'candidates':[],'category_suggestion':None,'linked':None,'reconciliation_status':'new','split_ids':[]}
+    state['review']=[{**base,'id':'b','amount_minor':-100,'description':'Supermarket'}, {**base,'id':'extra','amount_minor':-50,'description':'Other'}]
+    zs=[{'id':id,'date':'2026-10-01','amount_minor':str(-amount),'currency':'VND','payee':'Shop','categories':[cat],
+         'transfer':False,'linked_bank_id':None,'same_day_bank_ids':[]} for id,amount,cat in [('food',40,'Food'),('toys',60,'Toys')]]
+    option={'bank_id':'b','zen_ids':['food','toys'],'unique':True}
+    d={'bank_account':'ba','date':'2026-10-01','bank_count':2,'zen_count':2,'equal':False,'resolved':False,'pairs':[],
+       'preview_pairs':[],'ambiguous':0,'bulk_eligible':False,'snapshot':'a'*64,'bank_ids':['b','extra'],'zen_rows':zs,
+       'split_candidates':[option],'split_search_limited':False,'bank_total':'-150','zen_total':'-100'}
+    state['day_review']=[d]
+    page=context.new_page();calls=[]
+    page.route('**/api/state',lambda route:route.fulfill(content_type='application/json',body=json.dumps(state)))
+    def save(route):
+        calls.append('save');assert json.loads(route.request.post_data)=={'snapshot':'a'*64,'zen_ids':['food','toys']}
+        state['review'][0].update(state='linked',split_ids=['food','toys'],linked={'split':True,'date':d['date'],'categories':['Food','Toys'],'transfer':False},reconciliation_status='synced')
+        for z in zs:z['linked_bank_id']='b'
+        d['split_candidates']=[]
+        route.fulfill(content_type='application/json',body='{"state":"linked","parts":2}')
+    def undo(route):
+        calls.append('undo');state['review'][0].update(state='pending',split_ids=[],linked=None,reconciliation_status='new')
+        for z in zs:z['linked_bank_id']=None
+        d['split_candidates']=[option]
+        route.fulfill(content_type='application/json',body='{"state":"pending"}')
+    page.route('**/api/review/b/split-link',save);page.route('**/api/review/b/link',undo)
+    page.goto(f'chrome-extension://{identifier}/app.html#attention')
+    entry=page.locator('.attention-operation').filter(has_text='Возможная разбивка по категориям')
+    entry.locator('summary').first.click();entry.locator('.split-option summary').click()
+    expect(entry.locator('.split-option')).to_contain_text('Food');expect(entry.locator('.split-option')).to_contain_text('Toys')
+    assert not calls
+    entry.get_by_role('button',name='Сохранить составную связь').click()
+    expect(page.locator('.attention-operation')).to_have_count(2)
+    paired=page.locator('.attention-operation').filter(has_text='Связь подтверждена')
+    paired.locator('summary').click();expect(paired).to_contain_text('Банк: 1 · ZenMoney: 2')
+    paired.get_by_role('button',name='Отменить составную связь').click()
+    expect(page.locator('.split-option')).to_have_count(1)
+    assert calls==['save','undo']
+    page.close()

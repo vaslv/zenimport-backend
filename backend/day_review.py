@@ -3,6 +3,7 @@ import hashlib
 import json
 from collections import Counter, defaultdict
 from datetime import date
+from decimal import Decimal
 from fastapi import HTTPException
 from .service import candidate_index, mapped_account, fail, confirm, audit
 from .models import Decision
@@ -29,7 +30,7 @@ def proposals(db, rows):
                 groups.setdefault((account_id, day), [])
     tx_by_id = {t['id']: t for t in transactions}
     tags = {t['id']: t['title'] for t in entities(db, 'tag')}
-    used = {r['linked_id']: r['id'] for r in rows if r['state'] in ('linked', 'sent')}
+    used = {identifier: r['id'] for r in rows if r['state'] in ('linked', 'sent') for identifier in (r.get('split_ids') or [r['linked_id']]) if identifier}
     result = []
     for (account_id, day), bank in sorted(groups.items(), reverse=True):
         account = accounts[account_id]
@@ -46,6 +47,7 @@ def proposals(db, rows):
                 zen_rows.append({**match, 'amount_minor': str(amount), 'currency': account['currency'],
                     'categories': [tags.get(t, t) for t in tx.get('tag') or []],
                     'transfer': tx.get('incomeAccount') != tx.get('outcomeAccount'),
+                    'split_eligible': (Decimal(str(tx.get('income', 0))) > 0) != (Decimal(str(tx.get('outcome', 0))) > 0),
                     'linked_bank_id': used.get(match['id']),
                     'same_day_bank_ids': [r['id'] for r in bank if r['amount_minor'] == amount]})
         bank_counts = Counter(r['amount_minor'] for r in bank)
@@ -56,7 +58,7 @@ def proposals(db, rows):
         for row in bank:
             matches = zen.get(row['amount_minor'], [])
             if row['state'] in ('linked', 'sent'):
-                valid &= any(m['id'] == row['linked_id'] for m in matches)
+                valid &= bool(row.get('linked')) if row.get('split_ids') else any(m['id'] == row['linked_id'] for m in matches)
             elif row['state'] != 'pending':
                 valid = False
         remaining = {a: [m for m in v if m['id'] not in used] for a, v in zen.items()}
@@ -84,7 +86,11 @@ def proposals(db, rows):
                            len(zen[bank_by_id[p['bank_id']]['amount_minor']]) == 1],
                        'pairs': sorted(pairs, key=lambda p: p['bank_id']) if equal and valid else [],
                        'ambiguous': ambiguous if equal else 0, 'snapshot': snapshot,
-                       'bulk_eligible': bool(equal and valid and pairs and ambiguous == 0)})
+                       'bulk_eligible': bool(equal and valid and pairs and ambiguous == 0),
+                       'resolved': bool(bank) and all(r.get('reconciliation_status') == 'synced' for r in bank) and
+                           all(z['linked_bank_id'] in {r['id'] for r in bank} for z in zen_rows),
+                       'bank_total': str(sum(r['amount_minor'] for r in bank)),
+                       'zen_total': str(sum(Decimal(z['amount_minor']) for z in zen_rows))})
     # Two bank accounts mapped to the same ZenMoney account must not claim one ID.
     owners = Counter(pair['zen_id'] for proposal in result for pair in proposal['pairs'])
     for proposal in result:
@@ -93,6 +99,18 @@ def proposals(db, rows):
     preview_owners = Counter(p['zen_id'] for d in result for p in d['preview_pairs'])
     for d in result:
         d['preview_pairs'] = [p for p in d['preview_pairs'] if preview_owners[p['zen_id']] == 1]
+    from .splits import search_splits
+    for d in result:
+        reserved = {p['zen_id'] for p in d['preview_pairs']}
+        pending = [r for r in groups[(d['bank_account'], d['date'])] if r['state'] == 'pending']
+        available = [z for z in d['zen_rows'] if not z['linked_bank_id']]
+        # Rows with any exact same-day candidate are not split speculatively.
+        pending = [r for r in pending if not any(Decimal(z['amount_minor']) == r['amount_minor'] for z in available)]
+        d['split_candidates'], d['split_search_limited'] = search_splits(pending, [z for z in available if z['id'] not in reserved])
+    all_options = [o for d in result for o in d['split_candidates']]
+    for option in all_options:
+        if any(o['bank_id'] != option['bank_id'] and set(o['zen_ids']) & set(option['zen_ids']) for o in all_options):
+            option['unique'] = False
     return result
 
 
@@ -132,3 +150,25 @@ def confirm_days(db, decisions, rows, *, pairs_only=False):
             linked += 1
     audit(db, 'confirm_preview_pairs' if pairs_only else 'confirm_days', {'days': [d.model_dump(mode='json') for d in decisions], 'linked': linked})
     return {'days': len(chosen), 'linked': linked}
+
+
+def confirm_split(db, identifier, decision, rows):
+    row = next((r for r in rows if r['id'] == identifier), None)
+    if not row or row['state'] != 'pending':
+        fail('Операция уже обработана или не найдена')
+    from .service import get_row
+    mapped_account(db, get_row(db, 'bank_accounts', row['bank_account']))
+    day = next(d for d in proposals(db, rows) if d['bank_account'] == row['bank_account'] and d['date'] == row['date'])
+    ids = sorted(decision.zen_ids)
+    if len(ids) != len(set(ids)) or day['snapshot'] != decision.snapshot or not any(
+            p['bank_id'] == identifier and p['zen_ids'] == ids for p in day['split_candidates']):
+        fail('Составная связь изменилась. Обновите данные и проверьте состав.')
+    from .service import get_row
+    mapped_account(db, get_row(db, 'bank_accounts', row['bank_account']))
+    for zen_id in ids:
+        if db.execute("SELECT 1 FROM bank_transactions WHERE linked_id=? AND state IN ('linked','sent')", (zen_id,)).fetchone() or db.execute('SELECT 1 FROM split_links WHERE zen_id=?', (zen_id,)).fetchone():
+            fail('Запись ZenMoney уже связана')
+        db.execute('INSERT INTO split_links(bank_id,zen_id) VALUES (?,?)', (identifier, zen_id))
+    db.execute("UPDATE bank_transactions SET state='linked',linked_id=NULL WHERE id=?", (identifier,))
+    audit(db, 'confirm_split', {'id': identifier, 'zen_ids': ids, 'snapshot': decision.snapshot})
+    return {'state': 'linked', 'parts': len(ids)}

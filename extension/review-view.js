@@ -17,10 +17,10 @@ export function renderReview(container,state,{account='',status='all',query='',s
   const key=(account,date)=>JSON.stringify([account,date]);
   const needsWork=new Set();
   for(const t of state.review){
-    if(reviewStatus(t)!=='synced'||(t.linked&&!t.linked.transfer&&!t.linked.categories?.length))needsWork.add(key(t.bank_account,t.date));
+    if(reviewStatus(t)!=='synced'||(t.linked&&!t.linked.transfer&&(!t.linked.categories?.length||t.linked.missing_category)))needsWork.add(key(t.bank_account,t.date));
   }
   for(const d of state.day_review||[]){
-    if(!d.equal||(d.zen_rows||[]).some(z=>!z.linked_bank_id||(!z.transfer&&!z.categories?.length)))needsWork.add(key(d.bank_account,d.date));
+    if((!d.equal&&!d.resolved)||(d.zen_rows||[]).some(z=>!z.linked_bank_id||(!z.transfer&&!z.categories?.length)))needsWork.add(key(d.bank_account,d.date));
   }
   const showDay=(account,date)=>!workDays||needsWork.has(key(account,date));
   if(workDays){status='all';query='';limit=Infinity;}
