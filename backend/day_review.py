@@ -2,12 +2,41 @@
 import hashlib
 import json
 from collections import Counter, defaultdict
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from fastapi import HTTPException
 from .service import candidate_index, mapped_account, fail, confirm, audit
 from .models import Decision
 from .db import entities
+
+
+
+def bank_time(row):
+    raw = row.get('raw') or {}
+    for value in [raw.get('date'), (raw.get('details') or {}).get('processDate')]:
+        if not isinstance(value, str):
+            continue
+        for fmt in ('%d/%m/%Y %H:%M:%S', '%d/%m/%Y %H:%M', '%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S'):
+            try:
+                stamp = datetime.strptime(value.strip(), fmt)
+                if stamp.date().isoformat() == row['date']:
+                    return stamp
+            except ValueError:
+                pass
+    return None
+
+
+def chronological_pairs(bank, zen, transactions):
+    """Order both free sets oldest first. Never use changed/import order as event time."""
+    bank_times = {r['id']: bank_time(r) for r in bank}
+    zen_times = {r['id']: transactions[r['id']].get('created') for r in zen}
+    if any(t is None for t in bank_times.values()) or any(type(t) is not int or t <= 0 for t in zen_times.values()):
+        return None
+    tied = len(set(bank_times.values())) != len(bank) or len(set(zen_times.values())) != len(zen)
+    banks = sorted(bank, key=lambda r: (bank_times[r['id']], r['external_id'], r['id']))
+    zens = sorted(zen, key=lambda r: (zen_times[r['id']], r['id']))
+    return [{'bank_id': b['id'], 'zen_id': z['id'], 'order': 'chronological', 'order_tied': tied}
+            for b, z in zip(banks, zens)]
 
 
 def proposals(db, rows):
@@ -50,7 +79,7 @@ def proposals(db, rows):
                     'categories': [tags.get(t, t) for t in tx.get('tag') or []],
                     'transfer': tx.get('incomeAccount') != tx.get('outcomeAccount'),
                     'split_eligible': (Decimal(str(tx.get('income', 0))) > 0) != (Decimal(str(tx.get('outcome', 0))) > 0),
-                    'linked_bank_id': used.get(match['id']), 'excluded': match['id'] in excluded,
+                    'created': tx.get('created'), 'linked_bank_id': used.get(match['id']), 'excluded': match['id'] in excluded,
                     'same_day_bank_ids': [r['id'] for r in bank if r['state'] != 'ignored' and r['amount_minor'] == amount]})
         all_bank = bank
         all_zen_rows = zen_rows
@@ -59,7 +88,6 @@ def proposals(db, rows):
         zen = {amount: [m for m in matches if m['id'] not in excluded] for amount, matches in zen.items()}
         zen = {amount: matches for amount, matches in zen.items() if matches}
         bank_counts = Counter(r['amount_minor'] for r in bank)
-        bank_by_id = {r['id']: r for r in bank}
         equal = bank_counts == Counter({a: len(v) for a, v in zen.items()})
         pairs, ambiguous = [], 0
         valid = True
@@ -70,11 +98,13 @@ def proposals(db, rows):
             elif row['state'] != 'pending':
                 valid = False
         remaining = {a: [m for m in v if m['id'] not in used] for a, v in zen.items()}
-        for amount in {r['amount_minor'] for r in bank if r['state'] == 'pending'}:
+        for amount in sorted({r['amount_minor'] for r in bank if r['state'] == 'pending'}):
             pending = [r for r in bank if r['state'] == 'pending' and r['amount_minor'] == amount]
             matches = remaining.get(amount, [])
             if len(pending) == len(matches) == 1:
                 pairs.append({'bank_id': pending[0]['id'], 'zen_id': matches[0]['id']})
+            elif len(pending) == len(matches) and (ordered := chronological_pairs(pending, matches, tx_by_id)):
+                pairs.extend(ordered)
             else:
                 ambiguous += len(pending)
         account_valid = True
@@ -89,9 +119,7 @@ def proposals(db, rows):
         result.append({'bank_account': account_id, 'date': day, 'bank_count': len(bank),
                        'zen_count': sum(map(len, zen.values())), 'equal': equal,
                        'bank_ids': [r['id'] for r in all_bank], 'zen_rows': all_zen_rows,
-                       'preview_pairs': [p for p in pairs if account_valid and
-                           bank_counts[bank_by_id[p['bank_id']]['amount_minor']] == 1 and
-                           len(zen[bank_by_id[p['bank_id']]['amount_minor']]) == 1],
+                       'preview_pairs': pairs if account_valid else [],
                        'pairs': sorted(pairs, key=lambda p: p['bank_id']) if equal and valid else [],
                        'ambiguous': ambiguous if equal else 0, 'snapshot': snapshot,
                        'bulk_eligible': bool(equal and valid and pairs and ambiguous == 0),
@@ -159,7 +187,7 @@ def confirm_days(db, decisions, rows, *, pairs_only=False):
             confirm(db, row['id'], Decision(action='link', match_id=pair['zen_id'],
                     reviewed_candidates=[c['id'] for c in row['candidates']]), index=index)
             linked += 1
-    audit(db, 'confirm_preview_pairs' if pairs_only else 'confirm_days', {'days': [d.model_dump(mode='json') for d in decisions], 'linked': linked})
+    audit(db, 'confirm_preview_pairs' if pairs_only else 'confirm_days', {'days': [d.model_dump(mode='json') for d in decisions], 'linked': linked, 'pairs': [p for d in chosen for p in (d['preview_pairs'] if pairs_only else d['pairs'])]})
     return {'days': len(chosen), 'linked': linked}
 
 

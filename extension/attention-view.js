@@ -10,6 +10,7 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
   if(state.capabilities?.local_review&&ready.length){
     const bar=el('section',undefined,'preview-pairs-actions');
     bar.append(el('p',`Предварительно спарено: ${ready.reduce((n,d)=>n+d.preview_pairs.length,0)}. Связи ещё не сохранены. Действие включает все показанные дни выбранного счёта и периода.`));
+    if(ready.some(d=>d.preview_pairs.some(p=>p.order==='chronological')))bar.append(el('p','Повторяющиеся суммы спарены по времени банка и времени создания записей ZenMoney, от ранних к поздним. Время создания может отличаться от времени покупки.'));
     bar.append(saveButton(`Сохранить пары всех показанных дней · ${ready.reduce((n,d)=>n+d.preview_pairs.length,0)}`,ready));container.append(bar);
   }
   const bankMap=new Map(state.review.map(r=>[r.id,r]));
@@ -38,6 +39,10 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
       if(members.length===b.group.bank_ids.length&&parts.length===b.group.zen_ids.length){groups.push({banks:members,zen:parts,confirmed:true,settlement:true});members.forEach(r=>usedB.add(r.id));parts.forEach(z=>usedZ.add(z.id));}
     }
     for(const b of banks){if(usedB.has(b.id)||b.group?.kind==='settlement')continue;const parts=zs.filter(z=>(b.split_ids?.length?b.split_ids:[b.linked_id]).includes(z.id)&&z.linked_bank_id===b.id);if(parts.length&&b.linked){groups.push({banks:[b],zen:parts,confirmed:true});usedB.add(b.id);parts.forEach(z=>usedZ.add(z.id));}}
+    for(const pair of d.preview_pairs||[]){
+      const b=banks.find(b=>b.id===pair.bank_id),z=zs.find(z=>z.id===pair.zen_id);
+      if(b&&z&&!usedB.has(b.id)&&!usedZ.has(z.id)){groups.push({banks:[b],zen:[z],confirmed:false,pair});usedB.add(b.id);usedZ.add(z.id);}
+    }
     const amounts=new Map();
     for(const [kind,items,used] of [['banks',banks,usedB],['zen',zs,usedZ]])for(const r of items){if(used.has(r.id))continue;const key=String(Number(r.amount_minor));if(!amounts.has(key))amounts.set(key,{banks:[],zen:[],confirmed:false});amounts.get(key)[kind].push(r);}
     groups.push(...amounts.values());
@@ -46,12 +51,16 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
       const sample=g.banks[0]||g.zen[0],amount=g.settlement?g.banks.reduce((n,b)=>n+Number(b.amount_minor),0):Number(sample.amount_minor),currency=sample.currency||account.currency;
       const row=el('details',undefined,'attention-operation');
       const source=g.banks.length&&g.zen.length?'Банк + ZenMoney':g.banks.length?'Только банк':'Только ZenMoney';
-      const status=g.excluded?'Не требует сведения':g.settlement?'Взаиморасчёт · связь подтверждена':g.confirmed?'Связь подтверждена':g.preview?'Предварительная пара · не сохранена':g.banks.length&&g.zen.length?(g.banks.length===g.zen.length?'Суммы и количество совпадают · связь не подтверждена':'Количество различается'):'Нет пары в этот день';
+      const status=g.excluded?'Не требует сведения':g.settlement?'Взаиморасчёт · связь подтверждена':g.confirmed?'Связь подтверждена':g.preview?(g.pair?.order==='chronological'?'Пара по порядку · не сохранена':'Предварительная пара · не сохранена'):g.banks.length&&g.zen.length?(g.banks.length===g.zen.length?'Суммы и количество совпадают · связь не подтверждена':'Количество различается'):'Нет пары в этот день';
       const summary=el('summary');summary.append(el('strong',(amount>0?'+':'')+formatMoney(String(currency==='VND'?amount:amount/100),currency)),el('span',source,'badge'),el('span',status));
       if(g.banks.length>1||g.zen.length>1)summary.append(el('small',`Банк: ${g.banks.length} · ZenMoney: ${g.zen.length}`));
       const description=g.zen[0]?.categories?.join(', ')||g.banks[0]?.description||g.zen[0]?.payee||'Без категории';summary.append(el('p',description));row.append(summary);
       for(const b of g.banks){row.append(el('p',`Банк: ${formatMoney(String(currency==='VND'?b.amount_minor:b.amount_minor/100),currency)} · ${b.description}`));if(b.linked&&!g.confirmed)row.append(el('small',`Связано с ZenMoney за ${b.linked.date}`));}
       for(const z of g.zen)row.append(el('p',`ZenMoney: ${formatMoney(String(currency==='VND'?Number(z.amount_minor):Number(z.amount_minor)/100),currency)} · ${z.payee||z.comment||'Без описания'} · ${z.categories.join(', ')|| (z.transfer?'Перевод':'Без категории')}`));
+      if(g.pair?.order==='chronological'){
+        row.append(el('p',`Время банка: ${g.banks[0].raw?.date||'не указано'} · Запись ZenMoney создана: ${new Date(g.zen[0].created*1000).toLocaleString('ru-RU')}`));
+        if(g.pair.order_tied)row.append(el('p','Есть одинаковые отметки времени: при равенстве используется стабильный порядок идентификаторов. Проверьте категории перед сохранением.'));
+      }
       if(state.capabilities?.local_review){
         for(const b of g.banks)if(['pending','ignored'].includes(b.state)){const actions=el('div',`Банк · ${b.description} `);actions.append(exclusionButton('bank',b.id,b.state==='ignored',onAction));row.append(actions);}
         for(const z of g.zen)if(!z.linked_bank_id){const actions=el('div',`ZenMoney · ${z.payee||z.comment||'Без описания'} `);actions.append(exclusionButton('zenmoney',z.id,!!z.excluded,onAction));row.append(actions);}
@@ -65,7 +74,11 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
           for(const option of options){
             const detail=el('details',undefined,'split-option');detail.append(el('summary',`${option.unique?'Единственная найденная комбинация':'Возможная комбинация'} · ${option.zen_ids.length} записей`));
             for(const id of option.zen_ids){const z=zs.find(z=>z.id===id);detail.append(el('p',`${formatMoney(String(currency==='VND'?Number(z.amount_minor):Number(z.amount_minor)/100),currency)} · ${z.categories.join(', ')||'Без категории'} · ${z.payee||z.comment||''}`));}
-            if(state.capabilities?.local_review){const button=el('button','Сохранить составную связь');button.dataset.apiAction='';button.onclick=()=>onAction(()=>({path:`/api/review/${b.id}/split-link`,body:{snapshot:d.snapshot,zen_ids:option.zen_ids}}));detail.append(button);}
+            if(g.pair?.order==='chronological'){
+        row.append(el('p',`Время банка: ${g.banks[0].raw?.date||'не указано'} · Запись ZenMoney создана: ${new Date(g.zen[0].created*1000).toLocaleString('ru-RU')}`));
+        if(g.pair.order_tied)row.append(el('p','Есть одинаковые отметки времени: при равенстве используется стабильный порядок идентификаторов. Проверьте категории перед сохранением.'));
+      }
+      if(state.capabilities?.local_review){const button=el('button','Сохранить составную связь');button.dataset.apiAction='';button.onclick=()=>onAction(()=>({path:`/api/review/${b.id}/split-link`,body:{snapshot:d.snapshot,zen_ids:option.zen_ids}}));detail.append(button);}
             row.append(detail);
           }
         }

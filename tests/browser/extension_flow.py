@@ -996,3 +996,49 @@ def test_exclude_from_zenmoney_history_without_bank_mapping(browser):
     row.locator('summary').click();row.get_by_role('button',name='Вернуть в сведение').click()
     expect(row.locator('.transaction-labels')).not_to_contain_text('Не требует сведения')
     assert calls==[True,False];page.close()
+
+
+@pytest.mark.parametrize('scope',['day','all'])
+def test_repeated_amount_pairs_are_separate_and_saved_together(browser,scope):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True},review=[],day_review=[],recipient_profiles=[],outbox=[])
+    state['bank_accounts']=[{'id':'ba','bank':'bank','account':'1234','currency':'VND','zenmoney_account':'za'}]
+    state['zenmoney_accounts']=[{'id':'za','title':'Bank','instrument':1}]
+    for day in ['2026-10-01','2026-10-02']:
+        banks=[];zs=[];pairs=[]
+        for i in range(2):
+            bid=f'{day}-b{i}';zid=f'{day}-z{i}'
+            z={'id':zid,'date':day,'amount_minor':'-100','currency':'VND','payee':f'Shop {i}','categories':['Food'],
+               'created':1700000000+i*100,'transfer':False,'linked_bank_id':None,'same_day_bank_ids':[]};zs.append(z)
+            b={'id':bid,'bank_account':'ba','date':day,'amount_minor':-100,'currency':'VND','description':f'Payment {i}',
+               'raw':{'date':f'{day} 0{i+8}:00:00'},'state':'pending','mapped':True,'candidates':[],'category_suggestion':None,'linked':None,'reconciliation_status':'possible'}
+            banks.append(b);pairs.append({'bank_id':bid,'zen_id':zid,'order':'chronological','order_tied':True})
+        for b in banks:b['candidates']=zs
+        state['review'].extend(banks)
+        state['day_review'].append({'bank_account':'ba','date':day,'bank_count':2,'zen_count':2,'equal':True,'resolved':False,'pairs':pairs,
+            'preview_pairs':pairs,'ambiguous':0,'bulk_eligible':True,'snapshot':'a'*64,'bank_ids':[b['id'] for b in banks],'zen_rows':zs})
+    page=context.new_page();calls=[]
+    page.route('**/api/state',lambda route:route.fulfill(json=state))
+    def save(route):
+        data=json.loads(route.request.post_data);calls.append(data)
+        chosen=[d['date'] for d in data['days']]
+        assert sorted(chosen)==(['2026-10-01'] if scope=='day' else ['2026-10-01','2026-10-02'])
+        for d in state['day_review']:
+            if d['date'] not in chosen:continue
+            for pair in d['preview_pairs']:
+                b=next(b for b in state['review'] if b['id']==pair['bank_id']);z=next(z for z in d['zen_rows'] if z['id']==pair['zen_id'])
+                z['linked_bank_id']=b['id'];b.update(state='linked',linked=z,linked_id=z['id'],reconciliation_status='synced')
+            d.update(preview_pairs=[],resolved=True)
+        route.fulfill(json={'days':len(chosen),'linked':2*len(chosen)})
+    page.route('**/api/review-pairs/confirm',save)
+    page.goto(f'chrome-extension://{identifier}/app.html#attention')
+    expect(page.locator('.attention-operation')).to_have_count(4)
+    expect(page.locator('.attention-operation').first).to_contain_text('Пара по порядку · не сохранена')
+    first=page.locator('.attention-operation').first;first.locator('summary').click()
+    expect(first).to_contain_text('Запись ZenMoney создана:');expect(first).to_contain_text('стабильный порядок идентификаторов')
+    assert not calls
+    if scope=='all':page.get_by_role('button',name='Сохранить пары всех показанных дней · 4',exact=True).click()
+    else:page.locator('[data-date="2026-10-01"].attention-day').get_by_role('button',name='Сохранить пары дня · 2',exact=True).click()
+    expect(page.locator('.attention-operation')).to_have_count(0 if scope=='all' else 2)
+    assert len(calls)==1;page.close()

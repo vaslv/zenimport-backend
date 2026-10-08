@@ -79,7 +79,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
         box.append(node('summary',`${title}: банк ${d.bank_count} / ZenMoney ${d.zen_count} · ${d.equal?'Суммы дня совпадают':'День не совпадает'}`));
         box.append(node('p','Проверка всех загруженных операций счёта за день, включая скрытые фильтрами. Перед подтверждением убедитесь, что история банка за день загружена полностью.'));
         if(Array.isArray(d.zen_rows))box.append(dayComparison(d,state));
-        if(d.ambiguous)box.append(node('p',`Неоднозначных операций: ${d.ambiguous}. Повторяющиеся суммы требуют отдельной проверки.`));
+        if(d.ambiguous)box.append(node('p',`Неоднозначных операций: ${d.ambiguous}. Количество записей различается или не хватает времени для упорядочивания.`));
         for(const pair of d.pairs){const r=state.review.find(r=>r.id===pair.bank_id),c=r?.candidates.find(c=>c.id===pair.zen_id);if(r)box.append(node('p',`${money(r)} · ${r.description} → ${c?.payee||c?.comment||'ZenMoney'} · ${c?.categories?.join(', ')||'Без категории'}`));}
         if(d.pairs.length&&state.capabilities?.local_review)box.append(button(`Подтвердить пары дня · ${d.pairs.length}`,()=>({path:`/api/review-days/${d.bank_account}/${d.date}/confirm`,body:{snapshot:d.snapshot}})));
         group.append(box);
