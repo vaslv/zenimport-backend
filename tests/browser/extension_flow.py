@@ -80,7 +80,8 @@ def test_installed_extension_end_to_end(browser):
     expect(page.locator('#status')).to_have_text('Данные обновлены.')
     page.locator('nav a[href="#review"]').click()
     page.locator('#review .ledger-summary').first.click()
-    page.locator('#review select').first.select_option(label='Еда')
+    page.locator('#review .category-menu summary').first.click()
+    page.locator('#review .category-option').filter(has_text='Еда').first.click()
     page.get_by_role('button',name='Подтвердить создание',exact=True).first.click()
     expect(page.locator('#outbox')).to_contain_text('Подтверждена')
     page.on('dialog',lambda dialog:dialog.accept())
@@ -702,7 +703,7 @@ def test_readonly_full_day_comparison_shows_both_sources(browser):
     page.goto(f'chrome-extension://{identifier}/app.html#review')
     page.locator('.full-day-review > summary').click()
     first=page.locator('.full-day-review .comparison-day[data-date="2026-10-01"]')
-    first.locator('summary').click()
+    first.locator(':scope > summary').click()
     expect(first).to_contain_text('Bank purchase');expect(first).to_contain_text('Only Zen <img src=x>')
     expect(first).to_contain_text('Нет пары по сумме в этот день')
     expect(first).to_contain_text('Нет пары по сумме в банке в этот день')
@@ -758,7 +759,7 @@ def test_work_days_filter_keeps_all_rows_of_problem_days(browser):
         route.fulfill(content_type='application/json',body='{"state":"linked"}')
     page.route('**/api/review/b1/link',link_pair)
     pending=page.locator('.attention-day[data-date="2026-10-02"] .attention-operation').filter(has_text='связь не подтверждена')
-    pending.locator('summary').click()
+    pending.locator(':scope > summary').click()
     pending.locator('select').select_option('z1')
     assert not calls
     pending.get_by_role('button',name='Подтвердить выбранную пару').click()
@@ -983,7 +984,7 @@ def test_exclude_last_unmatched_record_and_restore_from_registry(browser,source)
     page.route('**/api/exclusions/**',change)
     page.goto(f'chrome-extension://{identifier}/app.html#attention')
     expect(page.locator('.attention-day')).to_have_count(1)
-    page.locator('.attention-operation summary').click()
+    page.locator('.attention-operation > summary').click()
     page.get_by_role('button',name='Не требует сведения',exact=True).click()
     expect(page.locator('.attention-day')).to_have_count(0)
     expect(page.locator('.excluded-records')).to_contain_text('Исключены из сведения · 1')
@@ -1053,7 +1054,7 @@ def test_repeated_amount_pairs_are_separate_and_saved_together(browser,scope):
     page.goto(f'chrome-extension://{identifier}/app.html#attention')
     expect(page.locator('.attention-operation')).to_have_count(4)
     expect(page.locator('.attention-operation').first).to_contain_text('Пара по порядку · не сохранена')
-    first=page.locator('.attention-operation').first;first.locator('summary').click()
+    first=page.locator('.attention-operation').first;first.locator(':scope > summary').click()
     expect(first).to_contain_text('Запись ZenMoney создана:');expect(first).to_contain_text('стабильный порядок идентификаторов')
     assert not calls
     if scope=='all':
@@ -1103,3 +1104,43 @@ def test_mass_preview_scrolls_all_pairs_and_stale_save_is_not_retried(browser):
     expect(page.get_by_role('dialog')).to_have_count(0)
     assert len(calls)==1 and all(b['state']=='pending' for b in state['review'])
     page.close()
+
+
+@pytest.mark.parametrize('view',['attention','review'])
+def test_category_picker_prioritizes_history_and_saves_local_choice(browser,view):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True},recipient_profiles=[],outbox=[])
+    state['bank_accounts']=[{'id':'ba','bank':'bank','account':'1234','currency':'VND','zenmoney_account':'za'}]
+    state['zenmoney_accounts']=[{'id':'za','title':'Bank','instrument':1}]
+    state['categories']=[{'id':id,'title':title} for id,title in [('food','Продукты'),('taxi','Такси'),('sport','Спорт'),('auto','Автомобиль')]]+[{'id':'deleted','title':'Удалена','deleted':True}]
+    b={'id':'b','bank_account':'ba','date':'2026-10-01','amount_minor':-100,'currency':'VND','description':'Shop','raw':{},
+       'state':'pending','mapped':True,'candidates':[],'category_suggestion':None,'category_draft':None,'linked':None,'reconciliation_status':'new',
+       'category_ranking':[{'id':'taxi','title':'Такси','count':1},{'id':'food','title':'Продукты','count':5}]}
+    state['review']=[b];state['day_review']=[{'bank_account':'ba','date':b['date'],'bank_count':1,'zen_count':0,'equal':False,'resolved':False,
+        'pairs':[],'preview_pairs':[],'snapshot':'a'*64,'bank_ids':['b'],'zen_rows':[]}]
+    page=context.new_page();calls=[]
+    page.route('**/api/state',lambda route:route.fulfill(json=state))
+    def save(route):
+        body=json.loads(route.request.post_data);calls.append(body)
+        assert route.request.method=='PUT'
+        id=body['category_id'];b['category_draft']={'id':id,'title':next(c['title'] for c in state['categories'] if c['id']==id),'valid':True} if id else None
+        route.fulfill(json=body)
+    page.route('**/api/review/b/category',save)
+    page.goto(f'chrome-extension://{identifier}/app.html#{view}')
+    def open_row():page.locator('.attention-operation > summary' if view=='attention' else '.ledger-summary').first.click()
+    open_row();picker=page.locator('.category-picker');picker.locator('.category-menu > summary').click()
+    assert picker.locator('.category-option').evaluate_all('(xs)=>xs.map(x=>x.dataset.categoryId)')==['food','taxi','auto','sport','']
+    expect(picker.locator('.category-option strong')).to_have_count(2)
+    expect(picker.locator('[data-category-id="food"]')).to_contain_text('В истории: 5')
+    expect(picker.locator('[data-category-id="taxi"]')).to_contain_text('один пример')
+    assert picker.locator('[data-category-id="food"] strong').evaluate('(e)=>Number(getComputedStyle(e).fontWeight)')>=700
+    picker.locator('[data-category-id="sport"]').click();assert not calls
+    with page.expect_response(lambda r:r.url.endswith('/api/review/b/category') and r.request.method=='PUT'):
+        picker.get_by_role('button',name='Сохранить категорию',exact=True).click()
+    page.reload();open_row();expect(picker.locator('.category-menu > summary')).to_have_text('Категория: Спорт')
+    expect(picker).to_contain_text('Категория сохранена локально')
+    picker.locator('.category-menu > summary').click();picker.locator('[data-category-id=""]').click()
+    with page.expect_response(lambda r:r.url.endswith('/api/review/b/category') and r.request.method=='PUT'):
+        picker.get_by_role('button',name='Сохранить категорию',exact=True).click()
+    assert calls==[{'category_id':'sport'},{'category_id':None}];page.close()

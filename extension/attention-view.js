@@ -1,3 +1,4 @@
+import {categoryPicker} from './category-picker.js';
 import {reviewPairs} from './pairs-review-dialog.js';
 import {exclusionButton} from './exclusions-view.js';
 import {formatMoney} from './zenmoney-view.js';
@@ -55,7 +56,7 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
       const status=g.excluded?'Не требует сведения':g.settlement?'Взаиморасчёт · связь подтверждена':g.confirmed?'Связь подтверждена':g.preview?(g.pair?.order==='chronological'?'Пара по порядку · не сохранена':'Предварительная пара · не сохранена'):g.banks.length&&g.zen.length?(g.banks.length===g.zen.length?'Суммы и количество совпадают · связь не подтверждена':'Количество различается'):'Нет пары в этот день';
       const summary=el('summary');summary.append(el('strong',(amount>0?'+':'')+formatMoney(String(currency==='VND'?amount:amount/100),currency)),el('span',source,'badge'),el('span',status));
       if(g.banks.length>1||g.zen.length>1)summary.append(el('small',`Банк: ${g.banks.length} · ZenMoney: ${g.zen.length}`));
-      const description=g.zen[0]?.categories?.join(', ')||g.banks[0]?.description||g.zen[0]?.payee||'Без категории';summary.append(el('p',description));row.append(summary);
+      const description=g.zen[0]?.categories?.join(', ')||g.banks[0]?.category_draft?.title||g.banks[0]?.description||g.zen[0]?.payee||'Без категории';summary.append(el('p',description));row.append(summary);
       for(const b of g.banks){row.append(el('p',`Банк: ${formatMoney(String(currency==='VND'?b.amount_minor:b.amount_minor/100),currency)} · ${b.description}`));if(b.linked&&!g.confirmed)row.append(el('small',`Связано с ZenMoney за ${b.linked.date}`));}
       for(const z of g.zen)row.append(el('p',`ZenMoney: ${formatMoney(String(currency==='VND'?Number(z.amount_minor):Number(z.amount_minor)/100),currency)} · ${z.payee||z.comment||'Без описания'} · ${z.categories.join(', ')|| (z.transfer?'Перевод':'Без категории')}`));
       if(g.pair?.order==='chronological'){
@@ -66,6 +67,7 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
         for(const b of g.banks)if(['pending','ignored'].includes(b.state)){const actions=el('div',`Банк · ${b.description} `);actions.append(exclusionButton('bank',b.id,b.state==='ignored',onAction));row.append(actions);}
         for(const z of g.zen)if(!z.linked_bank_id){const actions=el('div',`ZenMoney · ${z.payee||z.comment||'Без описания'} `);actions.append(exclusionButton('zenmoney',z.id,!!z.excluded,onAction));row.append(actions);}
       }
+      if(state.capabilities?.local_review)for(const b of g.banks)if(b.state==='pending')row.append(categoryPicker(b,state,onAction));
       if(g.confirmed&&g.zen.some(z=>!z.transfer&&!z.categories.length))row.append(el('p','Нужно определить категорию.'));
       for(const b of g.banks){
         if(!g.settlement&&b.group?.kind==='settlement'&&b.state==='linked'&&state.capabilities?.local_review){const undo=el('button','Отменить весь взаиморасчёт');undo.dataset.apiAction='';undo.onclick=()=>onAction(()=>({path:`/api/review/${b.id}/link`,body:{},method:'DELETE'}));row.append(el('p','Состав группы изменился или больше не совпадает по сумме. Отмена освободит всех участников.'),undo);}

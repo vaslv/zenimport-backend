@@ -1,3 +1,4 @@
+import {categoryPicker} from './category-picker.js';
 import {reviewPairs} from './pairs-review-dialog.js';
 import {exclusionButton,excludedRecords} from './exclusions-view.js';
 import {attentionDays} from './attention-view.js';
@@ -87,7 +88,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
       }
     }
     const s=reviewStatus(t),suggestion=t.category_suggestion,linked=t.linked;
-    const categories=linked?.categories||[],title=categories.length?categories.join(', '):suggestion?.title||t.raw?.details?.corresponsiveName||'Без категории';
+    const categories=linked?.categories||[],title=categories.length?categories.join(', '):(t.state==='pending'?t.category_draft?.title:null)||suggestion?.title||t.raw?.details?.corresponsiveName||'Без категории';
     const a=accounts.get(t.bank_account),accountTitle=zen.get(a?.zenmoney_account)?.title||`${a?.bank||'Банк'} · ${a?.account?.slice(-4)||''}`;
     const item=node('details',undefined,'ledger-entry');item.dataset.transaction=t.id;item.dataset.state=s;
     const summary=node('summary',undefined,'ledger-summary');
@@ -104,6 +105,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
     if(t.state==='linked'&&state.capabilities?.local_review)detail.append(button(t.group?.kind==='settlement'?'Отменить весь взаиморасчёт':'Отменить связь',()=>({path:`/api/review/${t.id}/link`,body:{},method:'DELETE'})));
     if(state.capabilities?.local_review&&['pending','ignored'].includes(t.state))detail.append(exclusionButton('bank',t.id,t.state==='ignored',onAction));
     if(t.state==='pending'){
+      const picker=categoryPicker(t,state,onAction);if(state.capabilities?.local_review||state.capabilities?.write)detail.append(picker);
       if(t.candidates.length)detail.append(node('h3',`Совпадения в ZenMoney · ${t.candidates.length}`));
       for(const c of t.candidates){
         const candidate=node('div',undefined,'match-option');candidate.append(node('strong',`${c.date} · ${money(t)}`),node('p',c.categories?.join(', ')||'Без категории'),node('p',c.payee||c.comment||c.id),node('small',c.reason));
@@ -114,11 +116,11 @@ export function renderReview(container,state,{account='',status='all',query='',s
         const why=node('section',undefined,'category-evidence');why.append(node('h3',suggestion.conflict?'История неоднозначна':`Предполагаемая категория: ${suggestion.title}`),node('p',`${suggestion.reason}. ${suggestion.count} операций.`));
         suggestion.distribution.forEach(c=>why.append(node('p',`${c.title}: ${c.count}`)));
         suggestion.examples.forEach(e=>why.append(node('small',`${e.date} · ${e.payee||'Подтверждённая связь'} · ${e.title}`)));detail.append(why);
-      }else if(!t.candidates.length)detail.append(node('p','Пока недостаточно подтверждённой истории этого получателя для подсказки категории.','muted'));
+      }else if(!t.candidates.length)detail.append(node('p','Пока недостаточно повторений для уверенного выбора категории. Доступные примеры показаны в списке.','muted'));
       if(!state.capabilities?.write)detail.append(node('p','Запись отключена: новые операции пока не отправляются в ZenMoney.','muted'));
       else if(t.mapped){
-        const select=node('select');select.setAttribute('aria-label','Категория');select.append(new Option('Категория',''));state.categories.forEach(c=>select.append(new Option(c.title,c.id)));if(suggestion?.category)select.value=suggestion.category;detail.append(select);
-        detail.append(button('Подтвердить создание',()=>{if(t.candidates.length&&!confirm('Есть похожие операции. Создать отдельную?'))return null;return {path:`/api/review/${t.id}/confirm`,body:{action:'create',category:select.value||null,reviewed_candidates:t.candidates.map(c=>c.id)}};}));
+
+        detail.append(button('Подтвердить создание',()=>{if(t.candidates.length&&!confirm('Есть похожие операции. Создать отдельную?'))return null;return {path:`/api/review/${t.id}/confirm`,body:{action:'create',category:picker.value||null,reviewed_candidates:t.candidates.map(c=>c.id)}};}));
       }
     }
     const raw=node('details',undefined,'raw-details');raw.append(node('summary','Исходные данные банка'),node('pre',JSON.stringify(t.raw,null,2)));detail.append(raw);item.append(detail);group.append(item);
