@@ -43,14 +43,16 @@ def mapped_account(db, account):
     return target
 
 
-def candidate_index(db, accounts, transactions=None):
+def candidate_index(db, accounts, transactions=None, *, include_excluded=False):
     """One request-local index; never reused across synchronization/confirmation."""
+    from .exclusions import zen_ids
+    excluded = set() if include_excluded else zen_ids(db)
     scales = {a['zenmoney_account']: SCALES[a['currency']] for a in accounts if a['zenmoney_account']}
     index = {}
     if not scales:
         return index
     for position, tx in enumerate(entities(db, 'transaction') if transactions is None else transactions):
-        if tx.get('deleted') or tx.get('hold') or not tx.get('date'):
+        if tx['id'] in excluded or tx.get('deleted') or tx.get('hold') or not tx.get('date'):
             continue
         for account_id in {tx.get('incomeAccount'), tx.get('outcomeAccount')} & scales.keys():
             net = Decimal(0)
@@ -131,9 +133,11 @@ def review(db):
         row['split_ids'] = group['zen_ids'] if group and group['kind'] != 'single' else []
         if group and group['kind'] == 'single': row['linked_id'] = group['zen_ids'][0]
         rows.append(row)
+    from .exclusions import zen_ids
+    excluded = zen_ids(db)
     from .reconciliation import enrich
     from .db import entities as read_entities
-    return enrich(rows, accounts, transactions, read_entities(db, 'tag'))
+    return enrich(rows, accounts, [t for t in transactions if t['id'] not in excluded], read_entities(db, 'tag'))
 
 
 def confirm(db, identifier, decision, *, index=None):

@@ -124,7 +124,7 @@ def confirm_settlement(db, data, rows):
     day = next(d for d in proposals(db, rows) if d['bank_account'] == account['id'] and d['date'] == banks[0]['date'])
     if data.snapshot != day['snapshot']:
         fail('Данные дня изменились; обновите список')
-    zs = {z['id']: z for z in day['zen_rows'] if not z['linked_bank_id']}
+    zs = {z['id']: z for z in day['zen_rows'] if not z['linked_bank_id'] and not z.get('excluded')}
     if any(i not in zs for i in data.zen_ids) or sum(r['amount_minor'] for r in banks) != sum(Decimal(zs[i]['amount_minor']) for i in data.zen_ids):
         fail('Суммы сторон не совпадают или записи ZenMoney уже заняты')
     identifier = insert(db, data.bank_ids, data.zen_ids, 'settlement', 'manual')

@@ -13,7 +13,9 @@ from .db import entities
 def proposals(db, rows):
     accounts = {r['id']: dict(r) for r in db.execute('SELECT * FROM bank_accounts')}
     transactions = entities(db, 'transaction')
-    index = candidate_index(db, accounts.values(), transactions)
+    index = candidate_index(db, accounts.values(), transactions, include_excluded=True)
+    from .exclusions import zen_ids
+    excluded = zen_ids(db)
     groups = defaultdict(list)
     for row in rows:
         groups[(row['bank_account'], row['date'])].append(row)
@@ -48,8 +50,14 @@ def proposals(db, rows):
                     'categories': [tags.get(t, t) for t in tx.get('tag') or []],
                     'transfer': tx.get('incomeAccount') != tx.get('outcomeAccount'),
                     'split_eligible': (Decimal(str(tx.get('income', 0))) > 0) != (Decimal(str(tx.get('outcome', 0))) > 0),
-                    'linked_bank_id': used.get(match['id']),
-                    'same_day_bank_ids': [r['id'] for r in bank if r['amount_minor'] == amount]})
+                    'linked_bank_id': used.get(match['id']), 'excluded': match['id'] in excluded,
+                    'same_day_bank_ids': [r['id'] for r in bank if r['state'] != 'ignored' and r['amount_minor'] == amount]})
+        all_bank = bank
+        all_zen_rows = zen_rows
+        bank = [r for r in bank if r['state'] != 'ignored']
+        zen_rows = [z for z in zen_rows if not z['excluded']]
+        zen = {amount: [m for m in matches if m['id'] not in excluded] for amount, matches in zen.items()}
+        zen = {amount: matches for amount, matches in zen.items() if matches}
         bank_counts = Counter(r['amount_minor'] for r in bank)
         bank_by_id = {r['id']: r for r in bank}
         equal = bank_counts == Counter({a: len(v) for a, v in zen.items()})
@@ -76,21 +84,24 @@ def proposals(db, rows):
             valid = False
             account_valid = False
         # Hash includes full rows/candidate details/tags so stale previews cannot be accepted.
-        payload = {'used_links': used, 'account': account, 'bank': bank, 'zen': [t for t in transactions if t.get('date') == day and account['zenmoney_account'] in (t.get('incomeAccount'), t.get('outcomeAccount'))]}
+        payload = {'used_links': used, 'account': account, 'bank': all_bank, 'excluded_zen_ids': sorted(excluded), 'zen': [t for t in transactions if t.get('date') == day and account['zenmoney_account'] in (t.get('incomeAccount'), t.get('outcomeAccount'))]}
         snapshot = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         result.append({'bank_account': account_id, 'date': day, 'bank_count': len(bank),
                        'zen_count': sum(map(len, zen.values())), 'equal': equal,
-                       'bank_ids': [r['id'] for r in bank], 'zen_rows': zen_rows,
+                       'bank_ids': [r['id'] for r in all_bank], 'zen_rows': all_zen_rows,
                        'preview_pairs': [p for p in pairs if account_valid and
                            bank_counts[bank_by_id[p['bank_id']]['amount_minor']] == 1 and
                            len(zen[bank_by_id[p['bank_id']]['amount_minor']]) == 1],
                        'pairs': sorted(pairs, key=lambda p: p['bank_id']) if equal and valid else [],
                        'ambiguous': ambiguous if equal else 0, 'snapshot': snapshot,
                        'bulk_eligible': bool(equal and valid and pairs and ambiguous == 0),
-                       'resolved': bool(bank) and all(r.get('reconciliation_status') == 'synced' for r in bank) and
+                       'resolved': all(r.get('reconciliation_status') == 'synced' for r in bank) and
                            all(z['linked_bank_id'] in {r['id'] for r in bank} for z in zen_rows),
-                       'bank_total': str(sum(r['amount_minor'] for r in bank)),
-                       'zen_total': str(sum(Decimal(z['amount_minor']) for z in zen_rows))})
+                       'bank_total': str(sum(r['amount_minor'] for r in all_bank)),
+                       'reconcile_bank_total': str(sum(r['amount_minor'] for r in bank)),
+                       'reconcile_zen_total': str(sum(Decimal(z['amount_minor']) for z in zen_rows)),
+                       'excluded_count': len(all_bank)-len(bank)+len(all_zen_rows)-len(zen_rows),
+                       'zen_total': str(sum(Decimal(z['amount_minor']) for z in all_zen_rows))})
     # Two bank accounts mapped to the same ZenMoney account must not claim one ID.
     owners = Counter(pair['zen_id'] for proposal in result for pair in proposal['pairs'])
     for proposal in result:
@@ -103,7 +114,7 @@ def proposals(db, rows):
     for d in result:
         reserved = {p['zen_id'] for p in d['preview_pairs']}
         pending = [r for r in groups[(d['bank_account'], d['date'])] if r['state'] == 'pending']
-        available = [z for z in d['zen_rows'] if not z['linked_bank_id']]
+        available = [z for z in d['zen_rows'] if not z['linked_bank_id'] and not z.get('excluded')]
         # Rows with any exact same-day candidate are not split speculatively.
         pending = [r for r in pending if not any(Decimal(z['amount_minor']) == r['amount_minor'] for z in available)]
         d['split_candidates'], d['split_search_limited'] = search_splits(pending, [z for z in available if z['id'] not in reserved])

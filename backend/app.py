@@ -65,6 +65,8 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
     def state():
         with transaction(path, read_only=True) as db:
             cursor = db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()
+            from .exclusions import zen_ids
+            excluded = zen_ids(db)
             rows = review(db)
             from .day_review import proposals
             days = proposals(db, rows)
@@ -78,6 +80,7 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
                     'zenmoney_accounts': entities(db, 'account'), 'categories': entities(db, 'tag'),
                     'zenmoney_instruments': entities(db, 'instrument'), 'zenmoney_merchants': entities(db, 'merchant'),
                     'zenmoney_transactions': history(db)['items'], 'zenmoney_summary': summary(db), 'review': rows, 'day_review': days, 'recipient_profiles': profiles,
+                    'excluded_zen_ids': sorted(excluded),
                     'outbox': [dict(r) for r in db.execute('SELECT bank_transaction,zen_id,state,error FROM outbox')]}
 
     @app.get('/api/zenmoney/history')
@@ -151,6 +154,18 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
             fail('Здесь доступно только подтверждение существующей связи', 422)
         with lock, transaction(path) as db:
             return confirm(db, identifier, data)
+
+    @app.put('/api/exclusions/{source}/{identifier}')
+    def exclude(source: str, identifier: str):
+        from .exclusions import set_excluded
+        with lock, transaction(path) as db:
+            return set_excluded(db, source, identifier, True)
+
+    @app.delete('/api/exclusions/{source}/{identifier}')
+    def restore_excluded(source: str, identifier: str):
+        from .exclusions import set_excluded
+        with lock, transaction(path) as db:
+            return set_excluded(db, source, identifier, False)
 
     @app.post('/api/reconciliation-groups')
     def local_settlement(data: SettlementDecision):

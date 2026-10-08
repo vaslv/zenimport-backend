@@ -41,7 +41,7 @@ def connect(path):
 def initialize(path, mode):
     with closing(connect(path)) as db, db:
         version = db.execute('PRAGMA user_version').fetchone()[0]
-        if version > 4:
+        if version > 5:
             raise RuntimeError('Database schema is newer than this application')
         db.executescript(SCHEMA)
         previous = db.execute("SELECT value FROM meta WHERE key='mode'").fetchone()
@@ -55,6 +55,8 @@ def initialize(path, mode):
             db.execute('CREATE TABLE IF NOT EXISTS split_links (bank_id TEXT NOT NULL REFERENCES bank_transactions(id), zen_id TEXT NOT NULL UNIQUE, PRIMARY KEY(bank_id,zen_id))')
         from .link_groups import migrate as migrate_groups
         migrate_groups(db)
+        db.execute('CREATE TABLE IF NOT EXISTS reconciliation_exclusions (zen_id TEXT PRIMARY KEY, created_at INTEGER NOT NULL)')
+        db.execute('PRAGMA user_version=5')
 
 
 @contextmanager
