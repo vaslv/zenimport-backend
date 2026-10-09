@@ -122,3 +122,12 @@ class SettlementDecision(DayDecision):
 class CategoryDraft(StrictModel):
     expected_tags: list[str]
     category_id: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class CategorySendItem(StrictModel):
+    zen_id: str = Field(min_length=1, max_length=200)
+    snapshot: str = Field(min_length=64, max_length=64)
+
+
+class CategorySend(StrictModel):
+    items: list[CategorySendItem] = Field(min_length=1, max_length=20)

@@ -1,4 +1,4 @@
-"""Read-only transport. No application, database or bank dependencies."""
+"""Fixed-endpoint transport with separate reads and category updates."""
 import json
 import time
 from collections.abc import Callable, Sequence
@@ -102,6 +102,29 @@ class Client:
             if isinstance(force_fetch, str) or any(k not in FORCE_FETCH for k in force_fetch):
                 raise ValueError('Unsupported forceFetch collection')
             payload['forceFetch'] = list(dict.fromkeys(force_fetch))
+        return self._exchange(payload)
+
+    def update_categories(self, changes, server_timestamp=0):
+        if type(server_timestamp) is not int or server_timestamp < 0 or not changes or len(changes) > 20:
+            raise ValueError('Invalid category update request')
+        transactions = []
+        for before, payload in changes:
+            if not before.get('id') or before.get('deleted') or before.get('hold') or before.get('incomeAccount') != before.get('outcomeAccount'):
+                raise ValueError('Cannot categorize this transaction')
+            if not isinstance(payload.get('tag'), list) or len(payload['tag']) != 1 or not isinstance(payload['tag'][0], str) or not payload['tag'][0]:
+                raise ValueError('Expected one category')
+            if type(payload.get('changed')) is not int:
+                raise ValueError('Expected changed timestamp')
+            clean = lambda item: {k:v for k,v in item.items() if k not in ('tag', 'changed')}
+            if clean(before) != clean(payload):
+                raise ValueError('Only category updates are allowed')
+            transactions.append(payload)
+        if len({t['id'] for t in transactions}) != len(transactions):
+            raise ValueError('Duplicate transaction')
+        return self._exchange({'currentClientTimestamp': int(self._clock()), 'serverTimestamp': server_timestamp, 'transaction': transactions})
+
+    def _exchange(self, payload):
+        server_timestamp = payload['serverTimestamp']
         try:
             # No redirects, proxy environment or retries; bearer stays on the fixed endpoint.
             with httpx.Client(timeout=self._timeout, transport=self._transport,

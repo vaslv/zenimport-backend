@@ -24,6 +24,11 @@ class ZenMoney:
             raise ValueError('Live client supports read-only synchronization')
         return Client(self.token).read_diff(payload['serverTimestamp'], force_fetch=payload.get('forceFetch'))
 
+    def update_categories(self, changes, server_timestamp):
+        if self.mode == 'demo':
+            raise ValueError('Category sending is enabled only for live integration')
+        return Client(self.token).update_categories(changes, server_timestamp)
+
 
 def apply_diff(db, result, requested_cursor=None):
     from .zenstore import store_diff

@@ -1,6 +1,6 @@
 export function exclusionButton(source,id,excluded,onAction){
   const button=document.createElement('button');button.className='secondary';button.dataset.apiAction='';
-  button.textContent=excluded?'Вернуть в сведение':'Не требует сведения';
+  button.textContent=excluded?'Вернуть в проверку':'Игнорировать';
   button.onclick=()=>onAction(()=>({path:`/api/exclusions/${source}/${encodeURIComponent(id)}`,body:{},method:excluded?'DELETE':'PUT'}));
   return button;
 }

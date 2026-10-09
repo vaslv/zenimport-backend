@@ -1,3 +1,4 @@
+import {categorySendDialog} from './category-send-dialog.js';
 import {renderReview} from './review-view.js';
 import {destroyCategoryPickers} from './category-picker.js';
 import {renderAccountCards,renderHistory} from './zenmoney-view.js';
@@ -19,6 +20,7 @@ function controls() {
   $('history-account').disabled=busy||!connected;
   $('show-archived').disabled=busy;
   $('save').disabled=busy; $('url').disabled=busy; $('token').disabled=busy;
+  $('category-send').disabled=busy||!connected||!state?.category_draft_count;
   $('send').disabled=busy||!connected||!state?.capabilities?.write||!state?.outbox?.some(x=>['queued','uncertain'].includes(x.state));
   $('demo').disabled=busy||!connected||state?.mode!=='demo';
   $('connection').textContent=busy?'Обновление…':connected?'Сервер подключён':'Нет подключения';
@@ -40,6 +42,12 @@ function navigate() {
 function render() {
   destroyCategoryPickers($('review'));
   for(const id of ['metrics','accounts','bank-rows','review','outbox','zen','zen-accounts','categories'])$(id).replaceChildren();
+  $('category-send').hidden=!state?.capabilities?.category_write;
+  $('category-send').textContent=`Отправить категории в ZenMoney · ${state?.category_draft_count||0}`;
+  const unresolved=(state?.category_sends||[]).filter(s=>s.state!=='sent');
+  $('category-verify').hidden=!state?.capabilities?.category_write||!unresolved.length;
+  $('category-send-status').hidden=!unresolved.length;
+  $('category-send-status').textContent=unresolved.length?'Есть неподтверждённые результаты отправки. Проверьте результат перед повторной отправкой.':'';
   $('mode').textContent=state ? (state.mode==='demo'?'DEMO · учебные данные':'LIVE · история ZenMoney'):'Нет подключения';
   $('last-sync').textContent=state?.last_sync ? `Данные ZenMoney получены: ${new Date(state.last_sync*1000).toLocaleString('ru-RU')}`:'Данные ZenMoney ещё не получены';
   if(!state) { controls(); return; }
@@ -152,6 +160,8 @@ $('history-filter').onsubmit=event=>{event.preventDefault();run(async()=>{histor
 $('history-prev').onclick=()=>run(async()=>{historyOffset=Math.max(0,historyOffset-100);});
 $('history-next').onclick=()=>run(async()=>{historyOffset+=100;});
 $('refresh').onclick=()=>run(async()=>{});
+$('category-send').onclick=()=>run(async()=>{const preview=await api('/api/category-updates/preview',{});categorySendDialog(preview.items,state,request=>run(()=>api(request.path,request.body)));});
+$('category-verify').onclick=()=>run(()=>api('/api/category-updates/verify',{}));
 $('sync').onclick=()=>run(()=>api('/api/zenmoney/sync',{}));
 $('demo').onclick=async()=>{const config=await settings();chrome.tabs.create({url:config.baseUrl+'/demo-bank'});};
 $('send').onclick=()=>{if(confirm('Отправить подтверждённые демонстрационные операции?'))run(()=>api('/api/outbox/send',{}));};

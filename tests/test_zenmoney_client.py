@@ -63,3 +63,17 @@ def test_limits_and_cursor():
         response_client(httpx.Response(200)).read_diff(force_fetch=['unknown'])
     with pytest.raises(ValueError):
         ZenMoney('live', 'secret').diff({'serverTimestamp': 0, 'transaction': []})
+
+
+def test_category_transport_cannot_change_amount_or_identity():
+    before={'id':'t','incomeAccount':'a','outcomeAccount':'a','income':0,'outcome':42,'tag':None,'changed':1,'extra':{'x':2}}
+    payload={**before,'tag':['food'],'changed':2}
+    seen=[]
+    def handle(request):
+        seen.append(json.loads(request.content));return httpx.Response(200,json={'serverTimestamp':3})
+    client=Client('private-secret',transport=httpx.MockTransport(handle),clock=lambda:2)
+    client.update_categories([(before,payload)],1)
+    assert seen[0]['transaction']==[payload] and len(seen)==1
+    for bad in [{**payload,'outcome':43},{**payload,'id':'new'},{**payload,'tag':[]}]:
+        with pytest.raises(ValueError):client.update_categories([(before,bad)],1)
+    assert len(seen)==1

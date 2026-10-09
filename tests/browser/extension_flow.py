@@ -984,12 +984,12 @@ def test_exclude_last_unmatched_record_and_restore_from_registry(browser,source)
     page.goto(f'chrome-extension://{identifier}/app.html#attention')
     expect(page.locator('.attention-day')).to_have_count(1)
     page.locator('.attention-operation > summary').click()
-    page.get_by_role('button',name='Не требует сведения',exact=True).click()
+    page.get_by_role('button',name='Игнорировать',exact=True).click()
     expect(page.locator('.attention-day')).to_have_count(0)
     expect(page.locator('.excluded-records')).to_contain_text('Исключены из сведения · 1')
     page.reload();expect(page.locator('.attention-day')).to_have_count(0)
     page.locator('.excluded-records summary').click()
-    page.locator('.excluded-records').get_by_role('button',name='Вернуть в сведение').click()
+    page.locator('.excluded-records').get_by_role('button',name='Вернуть в проверку').click()
     expect(page.locator('.attention-day')).to_have_count(1)
     expect(page.locator('.excluded-records')).to_have_count(0)
     assert calls==[True,False];page.close()
@@ -1009,9 +1009,9 @@ def test_exclude_from_zenmoney_history_without_bank_mapping(browser):
     page.route('**/api/exclusions/zenmoney/adjustment',change)
     page.goto(f'chrome-extension://{identifier}/app.html#zenmoney/transactions')
     row=page.locator('[data-transaction-id="adjustment"]')
-    row.locator('summary').click();row.get_by_role('button',name='Не требует сведения',exact=True).click()
+    row.locator('summary').click();row.get_by_role('button',name='Игнорировать',exact=True).click()
     expect(row.locator('.transaction-labels')).to_contain_text('Не требует сведения')
-    row.locator('summary').click();row.get_by_role('button',name='Вернуть в сведение').click()
+    row.locator('summary').click();row.get_by_role('button',name='Вернуть в проверку').click()
     expect(row.locator('.transaction-labels')).not_to_contain_text('Не требует сведения')
     assert calls==[True,False];page.close()
 
@@ -1246,4 +1246,36 @@ def test_attention_split_categories_target_each_zen_part(browser):
     expect(picker).to_contain_text('Категория сохранена локально')
     expect(page.locator('[data-zen-id="z2"] .ts-control .item')).to_have_count(0)
     assert len(calls)==1
+    page.close()
+
+
+def test_category_send_preview_cancel_confirm_and_verify(browser):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True,'category_write':True},category_draft_count=2,category_sends=[])
+    items=[{'zen_id':id,'snapshot':letter*64,'date':'2026-05-26','income':0,'outcome':6000,'account':'Bank',
+            'instrument':1,'payee':'Shop','before_categories':[],'category':'Услуги','error':None} for id,letter in [('z1','a'),('z2','b')]]
+    state['zenmoney_instruments']=[{'id':1,'shortTitle':'VND'}]
+    page=context.new_page();calls=[]
+    page.route('**/api/state',lambda route:route.fulfill(json=state))
+    page.route('**/api/category-updates/preview',lambda route:route.fulfill(json={'items':items}))
+    def send(route):
+        calls.append(json.loads(route.request.post_data))
+        state['category_sends']=[{'zen_id':'z1','state':'uncertain','error':'Verify'}]
+        route.fulfill(json={'results':state['category_sends']})
+    page.route('**/api/category-updates/send',send)
+    def verify(route):
+        state.update(category_draft_count=0,category_sends=[{'zen_id':'z1','state':'sent','error':None}]);route.fulfill(json={'results':state['category_sends']})
+    page.route('**/api/category-updates/verify',verify)
+    page.goto(f'chrome-extension://{identifier}/app.html#attention')
+    page.locator('#category-send').click();dialog=page.locator('.category-send-dialog')
+    expect(dialog).to_be_visible();expect(dialog.locator('.category-send-item')).to_have_count(2)
+    expect(dialog).to_contain_text('Без категории → Услуги')
+    dialog.get_by_role('button',name='Отмена',exact=True).click();assert not calls
+    page.locator('#category-send').click();dialog.locator('input[type=checkbox]').nth(1).uncheck()
+    dialog.get_by_role('button',name='Подтвердить отправку · 1',exact=True).click()
+    expect(page.locator('#category-verify')).to_be_visible()
+    assert calls==[{'items':[{'zen_id':'z1','snapshot':'a'*64}]}]
+    page.locator('#category-verify').click()
+    expect(page.locator('#category-verify')).to_be_hidden();expect(page.locator('#category-send')).to_be_disabled()
     page.close()

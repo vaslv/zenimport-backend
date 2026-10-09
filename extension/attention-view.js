@@ -66,7 +66,7 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
         if(g.pair.order_tied)row.append(el('p','Есть одинаковые отметки времени: при равенстве используется стабильный порядок идентификаторов. Проверьте категории перед сохранением.'));
       }
       if(state.capabilities?.local_review){
-        for(const b of g.banks)if(['pending','ignored'].includes(b.state)){const actions=el('div',`Банк · ${b.description} `);actions.append(exclusionButton('bank',b.id,b.state==='ignored',onAction));row.append(actions);}
+
         for(const z of g.zen)if(!z.linked_bank_id){const actions=el('div',`ZenMoney · ${z.payee||z.comment||'Без описания'} `);actions.append(exclusionButton('zenmoney',z.id,!!z.excluded,onAction));row.append(actions);}
       }
       if(g.confirmed&&g.zen.some(categoryNeedsWork))row.append(el('p','Нужно определить категорию.'));
@@ -97,6 +97,7 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
       }
       if(g.settlement&&state.capabilities?.local_review){const undo=el('button','Отменить весь взаиморасчёт');undo.dataset.apiAction='';undo.onclick=()=>onAction(()=>({path:`/api/review/${g.banks[0].id}/link`,body:{},method:'DELETE'}));row.append(undo);}
       const item=el('div',undefined,'attention-item');item.append(row);
+      if(state.capabilities?.local_review)for(const b of g.banks)if(['pending','ignored'].includes(b.state)){const actions=el('div',undefined,'inline-exclusion');if(g.banks.length>1)actions.append(el('span',b.description+' '));actions.append(exclusionButton('bank',b.id,b.state==='ignored',onAction));item.append(actions);}
       if(g.zen.some(z=>z.category_draft?.valid===true))item.append(el('p','Категория выбрана · ожидает отправки в ZenMoney','pending-category'));
       if(state.capabilities?.local_review)for(const z of g.zen)if(!z.excluded&&!z.transfer&&(!z.categories?.length||z.category_draft)){
         const picker=categoryPicker(z,state,onAction);picker.classList.add('inline-category-picker');

@@ -5,6 +5,8 @@ from .service import get_entity, fail, audit
 
 
 def save(db, identifier, category, expected_tags):
+    job = db.execute("SELECT 1 FROM zen_category_sends WHERE zen_id=? AND state='uncertain'", (identifier,)).fetchone()
+    if job: fail('Сначала проверьте результат предыдущей отправки')
     tx = get_entity(db, 'transaction', identifier)
     tags = sorted(tx.get('tag') or [])
     if tags != sorted(expected_tags):

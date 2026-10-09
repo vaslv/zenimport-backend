@@ -8,7 +8,7 @@ from datetime import date
 from .zenstore import history, summary
 from fastapi.responses import FileResponse, JSONResponse
 from .db import initialize, transaction, entities
-from .models import BankImport, Mapping, Decision, DayDecision, BulkDayDecision, SplitDecision, SettlementDecision, CategoryDraft
+from .models import BankImport, Mapping, Decision, DayDecision, BulkDayDecision, SplitDecision, SettlementDecision, CategoryDraft, CategorySend
 from .service import (audit, candidates, confirm, fail, get_row, import_bank,
                       mapped_account, review, same_transaction)
 from .zenmoney import ZenMoney, request_diff
@@ -72,7 +72,7 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
             days = proposals(db, rows)
             from .reconciliation import recipient_profiles
             profiles = recipient_profiles(rows, {}, entities(db, 'transaction'), entities(db, 'tag'))
-            return {'mode': mode, 'capabilities': {'write': mode == 'demo', 'local_review': True}, 'last_sync': int(cursor['value']) if cursor else None,
+            return {'mode': mode, 'capabilities': {'write': mode == 'demo', 'local_review': True, 'category_write': mode == 'live'}, 'last_sync': int(cursor['value']) if cursor else None,
                     'bank_accounts': [dict(r) for r in db.execute('SELECT * FROM bank_accounts')],
                     'bank_imports': [{'id': r['id'], 'received_at': r['received_at'], 'bank_account': r['bank_account'],
                                       'capture': json.loads(r['payload']).get('capture')}
@@ -81,6 +81,8 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
                     'zenmoney_instruments': entities(db, 'instrument'), 'zenmoney_merchants': entities(db, 'merchant'),
                     'zenmoney_transactions': history(db)['items'], 'zenmoney_summary': summary(db), 'review': rows, 'day_review': days, 'recipient_profiles': profiles,
                     'excluded_zen_ids': sorted(excluded),
+                    'category_sends': [dict(r) for r in db.execute('SELECT zen_id,state,error FROM zen_category_sends')],
+                    'category_draft_count': db.execute('SELECT count(*) FROM zen_category_drafts').fetchone()[0],
                     'outbox': [dict(r) for r in db.execute('SELECT bank_transaction,zen_id,state,error FROM outbox')]}
 
     @app.get('/api/zenmoney/history')
@@ -154,6 +156,27 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
             fail('Здесь доступно только подтверждение существующей связи', 422)
         with lock, transaction(path) as db:
             return confirm(db, identifier, data)
+
+    @app.post('/api/category-updates/preview')
+    def preview_categories():
+        if mode != 'live': fail('Отправка категорий доступна в LIVE', 403)
+        from .category_send import refresh, preview
+        with lock:
+            refresh(path, client)
+            with transaction(path, read_only=True) as db: return {'items': preview(db)}
+
+    @app.post('/api/category-updates/send')
+    def send_categories(data: CategorySend):
+        if mode != 'live': fail('Отправка категорий доступна в LIVE', 403)
+        from .category_send import send
+        with lock: return send(path, client, data.items)
+
+    @app.post('/api/category-updates/verify')
+    def verify_categories():
+        from .category_send import refresh, results
+        with lock:
+            refresh(path, client)
+            with transaction(path, read_only=True) as db: return {'results': results(db)}
 
     @app.put('/api/zenmoney/transactions/{identifier}/category')
     def category_draft(identifier: str, data: CategoryDraft):
