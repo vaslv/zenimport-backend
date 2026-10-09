@@ -1,4 +1,5 @@
-import {categoryPicker} from './category-picker.js';
+import {categoryPicker,destroyCategoryPickers} from './category-picker.js';
+import {categoryNeedsWork,zenRowsById,bankNeedsCategory,linkedIds} from './category-state.js';
 import {reviewPairs} from './pairs-review-dialog.js';
 import {exclusionButton,excludedRecords} from './exclusions-view.js';
 import {attentionDays} from './attention-view.js';
@@ -14,17 +15,18 @@ function icon(title,transfer){
   p.setAttribute('d',transfer?'M4 8h15m-4-4 4 4-4 4M20 16H5m4-4-4 4 4 4':/ресторан|еда|продукт|кофе/i.test(title)?'M4 9h16l-2 11H6L4 9Zm4 0 2-6m6 6-2-6M9 12v5m6-5v5':/транспорт|автомоб|такси/i.test(title)?'m5 9 2-5h10l2 5M4 9h16v9H4V9Zm3 9v2m10-2v2M7 13h1m8 0h1':'M5 5h14v14H5V5Zm4 4h6m-6 4h6');
   svg.append(p);return svg;
 }
-export function renderReview(container,state,{account='',status='all',query='',start='',end='',limit=100,workDays=false,hideReconciled=false,onMore,onAction}){
-  container.replaceChildren();
+export function renderReview(container,state,{account='',status='all',query='',start='',end='',limit=100,workDays=false,hideReconciled=false,onMore,onAction,onShowAll}){
+  destroyCategoryPickers(container);container.replaceChildren();
+  const zenRows=zenRowsById(state);
   const accounts=new Map(state.bank_accounts.map(a=>[a.id,a])),zen=new Map(state.zenmoney_accounts.map(a=>[a.id,a]));
   const key=(account,date)=>JSON.stringify([account,date]);
   const needsWork=new Set();
   for(const t of state.review){
     if(t.state==='ignored')continue;
-    if(reviewStatus(t)!=='synced'||(t.linked&&!t.linked.transfer&&(!t.linked.categories?.length||t.linked.missing_category)))needsWork.add(key(t.bank_account,t.date));
+    if(reviewStatus(t)!=='synced'||bankNeedsCategory(t,zenRows))needsWork.add(key(t.bank_account,t.date));
   }
   for(const d of state.day_review||[]){
-    if((!d.equal&&!d.resolved)||(d.zen_rows||[]).some(z=>!z.excluded&&(!z.linked_bank_id||(!z.transfer&&(!z.categories?.length||z.category_draft)))))needsWork.add(key(d.bank_account,d.date));
+    if((!d.equal&&!d.resolved)||(d.zen_rows||[]).some(z=>!z.excluded&&(!z.linked_bank_id||categoryNeedsWork(z))))needsWork.add(key(d.bank_account,d.date));
   }
   const showDay=(account,date)=>!workDays||needsWork.has(key(account,date));
   if(workDays){status='all';query='';limit=Infinity;}
@@ -36,6 +38,8 @@ export function renderReview(container,state,{account='',status='all',query='',s
     const days=(state.day_review||[]).filter(d=>showDay(d.bank_account,d.date)&&(!account||d.bank_account===account)&&(!start||d.date>=start)&&(!end||d.date<=end));
     // Accounts without mapping have no day_review; keep their rows visible too.
     for(const t of filtered)if(!days.some(d=>d.bank_account===t.bank_account&&d.date===t.date))days.push({bank_account:t.bank_account,date:t.date,bank_ids:filtered.filter(r=>r.bank_account===t.bank_account&&r.date===t.date).map(r=>r.id),zen_rows:[]});
+    const pending=[...new Map((state.day_review||[]).filter(d=>(!account||d.bank_account===account)&&(!start||d.date>=start)&&(!end||d.date<=end)).flatMap(d=>d.zen_rows||[]).filter(z=>z.category_draft?.valid===true).map(z=>[z.id,z])).values()];
+    if(pending.length){const note=node('p',`Категории выбраны локально: ${pending.length}. Ожидают отправки в ZenMoney. `,'pending-categories');const link=node('a','Посмотреть в разделе «Операции»');link.href='#review';link.onclick=()=>onShowAll?.();note.append(link);container.append(note);}
     attentionDays(container,state,days,onAction,{hideReconciled});
     excludedRecords(container,state,{account,start,end,onAction});
     return {counts,total:rows.length,shown:rows.length,days:days.length};
@@ -88,7 +92,8 @@ export function renderReview(container,state,{account='',status='all',query='',s
       }
     }
     const s=reviewStatus(t),suggestion=t.category_suggestion,linked=t.linked;
-    const categories=linked?.categories||[],title=categories.length?categories.join(', '):(t.state==='pending'?t.category_draft?.title:null)||suggestion?.title||t.raw?.details?.corresponsiveName||'Без категории';
+    const drafts=linkedIds(t).map(id=>zenRows.get(id)?.category_draft).filter(d=>d?.valid===true);
+    const categories=drafts.length?drafts.map(d=>d.title):linked?.categories||[],title=categories.length?categories.join(', '):(t.state==='pending'?t.category_draft?.title:null)||suggestion?.title||t.raw?.details?.corresponsiveName||'Без категории';
     const a=accounts.get(t.bank_account),accountTitle=zen.get(a?.zenmoney_account)?.title||`${a?.bank||'Банк'} · ${a?.account?.slice(-4)||''}`;
     const item=node('details',undefined,'ledger-entry');item.dataset.transaction=t.id;item.dataset.state=s;
     const summary=node('summary',undefined,'ledger-summary');
@@ -96,6 +101,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
     const content=node('span',undefined,'ledger-text');content.append(node('strong',title,'ledger-title'),node('span','▱ '+accountTitle,'ledger-account'));
     if(t.description&&t.description!==title)content.append(node('span',t.description,'ledger-description'));
     const statusLabel=node('span',labels[s]||s,'sync-status status-'+s);content.append(statusLabel);
+    if(drafts.length)content.append(node('span','Категория выбрана · ожидает отправки','pending-category'));
     if(suggestion)content.append(node('span',`${suggestion.conflict?'Категория неоднозначна':'Уверенная подсказка'} · ${suggestion.count} примера · требуется подтверждение`,'suggestion-label '+(suggestion.conflict?'confidence-low':'confidence-high')));
     const sum=node('span',money(t),'ledger-amount'+(t.amount_minor>0?' income':''));summary.append(symbol,content,sum);item.append(summary);
     const detail=node('div',undefined,'ledger-detail');detail.append(node('p',t.description));

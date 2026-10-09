@@ -1118,7 +1118,7 @@ def test_category_picker_prioritizes_history_and_saves_local_choice(browser,view
        'category_ranking':[{'id':'taxi','title':'Такси','count':1},{'id':'food','title':'Продукты','count':5}]}
     z={'id':'z','date':b['date'],'amount_minor':'-100','currency':'VND','payee':'Shop','categories':[],'tag_ids':[],'transfer':False,'linked_bank_id':'b','category_draft':None,'category_ranking':b['category_ranking'],'same_day_bank_ids':['b']}
     b.update(state='linked',linked_id='z',linked=z,reconciliation_status='synced')
-    state['review']=[b];state['day_review']=[{'bank_account':'ba','date':b['date'],'bank_count':1,'zen_count':0,'equal':False,'resolved':False,
+    state['review']=[b];state['day_review']=[{'bank_account':'ba','date':b['date'],'bank_count':1,'zen_count':1,'equal':True,'resolved':True,
         'pairs':[],'preview_pairs':[],'snapshot':'a'*64,'bank_ids':['b'],'zen_rows':[z]}]
     page=context.new_page();calls=[]
     page.route('**/api/state',lambda route:route.fulfill(json=state))
@@ -1130,27 +1130,43 @@ def test_category_picker_prioritizes_history_and_saves_local_choice(browser,view
     page.route('**/api/zenmoney/transactions/z/category',save)
     page.goto(f'chrome-extension://{identifier}/app.html#{view}')
     def open_row():
-        if view=='review':page.locator('.ledger-summary').first.click()
+        if page.url.endswith('#review'):page.locator('.ledger-summary').first.click()
         else:expect(page.locator('.attention-operation').first).not_to_have_attribute('open','')
     open_row();picker=page.locator('.category-picker');expect(picker).to_be_visible()
     expect(picker.locator('.category-priorities')).to_be_visible()
     expect(picker.locator('.category-priorities')).to_contain_text('Предполагаемые категории: Продукты · 5; Такси · 1')
     expect(picker.locator('.category-priorities strong')).to_have_count(2)
-    picker.locator('.category-menu > summary').click()
+    picker.locator('.ts-control').click()
+    expect(picker.locator('.category-option')).to_have_count(5)
     assert picker.locator('.category-option').evaluate_all('(xs)=>xs.map(x=>x.dataset.categoryId)')==['food','taxi','auto','sport','']
     expect(picker.locator('.category-option strong')).to_have_count(2)
     expect(picker.locator('[data-category-id="food"]')).to_contain_text('В истории: 5')
     expect(picker.locator('[data-category-id="taxi"]')).to_contain_text('один пример')
     assert picker.locator('[data-category-id="food"] strong').evaluate('(e)=>Number(getComputedStyle(e).fontWeight)')>=700
-    picker.locator('[data-category-id="sport"]').click();assert not calls
+    search=picker.get_by_label('Поиск по категориям',exact=True)
+    search.fill('спо')
+    expect(picker.locator('.category-option:visible')).to_have_count(1)
+    expect(picker.locator('.category-option:visible')).to_have_text('Спорт')
+    search.fill('НетТакойКатегории');expect(picker.locator('.no-results')).to_be_visible()
+    search.fill('');search.press('Escape');expect(picker.locator('.ts-dropdown')).not_to_be_visible()
+    picker.locator('.ts-control').click();page.locator('#title').click()
+    expect(picker.locator('.ts-dropdown')).not_to_be_visible()
+    picker.locator('.ts-control').click();picker.locator('[data-category-id="sport"]').click();assert not calls
     with page.expect_response(lambda r:r.url.endswith('/api/zenmoney/transactions/z/category') and r.request.method=='PUT'):
         picker.get_by_role('button',name='Сохранить категорию',exact=True).click()
-    page.reload();open_row();expect(picker.locator('.category-menu > summary')).to_have_text('Категория: Спорт')
+    if view=='attention':
+        expect(page.locator('.attention-day')).to_have_count(0)
+        expect(page.locator('.pending-categories')).to_contain_text('Категории выбраны локально: 1')
+        page.locator('.pending-categories a').click()
+    page.reload();open_row();expect(picker.locator('.ts-control .item')).to_have_text('Спорт')
     expect(picker).to_contain_text('Категория сохранена локально')
-    picker.locator('.category-menu > summary').click();picker.locator('[data-category-id=""]').click()
+    picker.locator('.ts-control').click();picker.locator('[data-category-id=""]').click()
     with page.expect_response(lambda r:r.url.endswith('/api/zenmoney/transactions/z/category') and r.request.method=='PUT'):
         picker.get_by_role('button',name='Сохранить категорию',exact=True).click()
-    assert calls==[{'category_id':'sport','expected_tags':[]},{'category_id':None,'expected_tags':[]}];page.close()
+    assert calls==[{'category_id':'sport','expected_tags':[]},{'category_id':None,'expected_tags':[]}]
+    page.goto(f'chrome-extension://{identifier}/app.html#attention')
+    expect(page.locator('.attention-day')).to_have_count(1)
+    page.close()
 
 
 def test_attention_inline_category_and_pair_confirmation_share_one_day(browser):
@@ -1179,12 +1195,12 @@ def test_attention_inline_category_and_pair_confirmation_share_one_day(browser):
     picker=page.locator('.inline-category-picker[data-zen-id="z"]')
     expect(page.locator('.category-picker')).to_have_count(1)
     expect(picker).to_be_visible();expect(page.locator('.attention-operation[open]')).to_have_count(0)
-    picker.locator('.category-menu summary').click();picker.locator('[data-category-id="food"]').click()
+    picker.locator('.ts-control').click();picker.locator('[data-category-id="food"]').click()
     with page.expect_response(lambda r:r.url.endswith('/api/zenmoney/transactions/z/category')):picker.get_by_role('button',name='Сохранить категорию').click()
     expect(picker).to_contain_text('Категория сохранена локально')
     page.get_by_role('button',name='Сохранить пары дня · 1',exact=True).click()
     expect(page.locator('.inline-category-picker')).to_have_count(1)
-    expect(picker.locator('.category-menu summary')).to_have_text('Категория: Еда')
+    expect(picker.locator('.ts-control .item')).to_have_text('Еда')
     assert page.url.endswith('#attention') and calls==['category','pair']
     page.set_viewport_size({'width':480,'height':700})
     expect(picker.get_by_role('button',name='Сохранить категорию')).to_be_visible()
@@ -1215,11 +1231,19 @@ def test_attention_split_categories_target_each_zen_part(browser):
     page.route('**/api/zenmoney/transactions/z1/category',save)
     page.goto(f'chrome-extension://{identifier}/app.html#attention')
     expect(page.locator('.category-picker')).to_have_count(2)
+    page.locator('[data-zen-id="z1"] select').evaluate('(s)=>{document.body.dataset.destroyedPickers="0";s.tomselect.on("destroy",()=>document.body.dataset.destroyedPickers=String(Number(document.body.dataset.destroyedPickers)+1));}')
+    page.locator('#refresh').click()
+    expect(page.locator('body')).to_have_attribute('data-destroyed-pickers','1')
+    expect(page.locator('.category-picker')).to_have_count(2)
     expect(page.locator('.category-priorities').first).to_have_text('Нет подходящих подтверждённых примеров для подсказки категории.')
     picker=page.locator('[data-zen-id="z1"]')
-    picker.locator('.category-menu summary').click();picker.locator('[data-category-id="food"]').click()
+    picker.locator('.ts-control').click()
+    page.locator('[data-zen-id="z2"] .ts-control').click()
+    expect(picker.locator('.ts-dropdown')).not_to_be_visible()
+    expect(page.locator('[data-zen-id="z2"] .ts-dropdown')).to_be_visible()
+    picker.locator('.ts-control').click();picker.locator('[data-category-id="food"]').click()
     picker.get_by_role('button',name='Сохранить категорию').click()
     expect(picker).to_contain_text('Категория сохранена локально')
-    expect(page.locator('[data-zen-id="z2"] .category-menu summary')).to_have_text('Категория: Выберите категорию')
+    expect(page.locator('[data-zen-id="z2"] .ts-control .item')).to_have_count(0)
     assert len(calls)==1
     page.close()

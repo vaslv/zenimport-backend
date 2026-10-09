@@ -1,4 +1,5 @@
 import {renderReview} from './review-view.js';
+import {destroyCategoryPickers} from './category-picker.js';
 import {renderAccountCards,renderHistory} from './zenmoney-view.js';
 import {api, settings, normalizeBaseUrl} from './api.js';
 const $ = id => document.getElementById(id);
@@ -37,6 +38,7 @@ function navigate() {
   if(name==='zenmoney')setZenTab(location.hash.split('/')[1]||zenTab);
 }
 function render() {
+  destroyCategoryPickers($('review'));
   for(const id of ['metrics','accounts','bank-rows','review','outbox','zen','zen-accounts','categories'])$(id).replaceChildren();
   $('mode').textContent=state ? (state.mode==='demo'?'DEMO · учебные данные':'LIVE · история ZenMoney'):'Нет подключения';
   $('last-sync').textContent=state?.last_sync ? `Данные ZenMoney получены: ${new Date(state.last_sync*1000).toLocaleString('ru-RU')}`:'Данные ZenMoney ещё не получены';
@@ -88,8 +90,9 @@ function renderLedger(){
   const filter=$('review-account');filter.replaceChildren(new Option('Все счета',''));
   for(const a of state.bank_accounts){const z=state.zenmoney_accounts.find(z=>z.id===a.zenmoney_account);filter.append(new Option(z?.title||`${a.bank} · ${a.account.slice(-4)}`,a.id));}
   filter.value=reviewAccount;
-  if($('review-start').value&&$('review-end').value&&$('review-start').value>$('review-end').value){$('review').replaceChildren(el('p','Начало периода позже конца.','empty'));return;}
+  if($('review-start').value&&$('review-end').value&&$('review-start').value>$('review-end').value){destroyCategoryPickers($('review'));$('review').replaceChildren(el('p','Начало периода позже конца.','empty'));return;}
   const result=renderReview($('review'),state,{account:reviewAccount,status:reviewFilter,query:$('review-search').value,start:$('review-start').value,end:$('review-end').value,limit:reviewLimit,workDays:location.hash==='#attention',hideReconciled:$('hide-reconciled').checked,
+    onShowAll:()=>{reviewFilter='all';reviewLimit=100;$('review-search').value='';},
     onMore:()=>{reviewLimit+=100;renderLedger();controls();},
     onAction:fn=>run(async()=>{const request=fn();if(request)await api(request.path,request.body,request.method);})});
   $('review-count').textContent=location.hash==='#attention'?`Дней, требующих внимания: ${result.days||0}`:`Показано ${result.shown} из ${result.total} · Банковская история, новые сначала`;

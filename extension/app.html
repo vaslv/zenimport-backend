@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="workspace.css"><title>ZenImport · Операции</title></head>
+<link rel="stylesheet" href="vendor/tom-select/tom-select.css"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="workspace.css"><title>ZenImport · Операции</title></head>
 <body class="workspace"><div class="shell"><aside class="sidebar"><a class="brand" href="#review">ZI <span>ZenImport</span></a>
 <p class="sidebar-note">Банки и ZenMoney<br>в одном рабочем месте</p>
 <nav aria-label="Разделы">
@@ -34,4 +34,4 @@
 <label id="hide-reconciled-label" class="work-days-filter" hidden><input id="hide-reconciled" type="checkbox"> Скрыть сведённые операции</label>
 <div class="status-filters" role="group" aria-label="Статус операции"><button data-review-status="all" aria-pressed="true">Все</button><button data-review-status="synced" aria-pressed="false">Уже в ZenMoney</button><button data-review-status="new" aria-pressed="false">Новые</button><button data-review-status="attention" aria-pressed="false">Проверить</button></div><p id="review-count" class="muted"></p><div id="review"></div><div id="queue-panel"><div class="section-heading"><h2>Очередь</h2><button id="send" data-api-action>Отправить подтверждённые</button></div><div id="outbox"></div></div></section>
 <section id="view-settings" data-view="settings" hidden><article><h2>Подключение к backend</h2><form id="settings"><label for="url">Адрес сервера</label><input id="url" type="url" required placeholder="http://127.0.0.1:18791"><label for="token">API-токен backend</label><input id="token" type="password" required autocomplete="off"><p class="muted">Возьмите API_TOKEN из локального файла .env. Токен ZenMoney здесь не нужен.</p><button id="save">Сохранить и подключиться</button></form></article></section>
-</main></div><script type="module" src="app.js"></script></body></html>
+</main></div><script src="vendor/tom-select/tom-select.complete.min.js"></script><script type="module" src="app.js"></script></body></html>

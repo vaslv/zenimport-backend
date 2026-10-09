@@ -150,3 +150,21 @@ test('negative amounts require an independently matching older balance',async()=
   assert.equal(report.negativeAmounts[0].direction,'D');assert.equal(report.moneyIssueCount,0);
   assert.ok(!JSON.stringify(report).includes('-1000'));
 });
+
+test('local category decisions resolve review work without pretending to sync',async()=>{
+  const {categoryNeedsWork,bankNeedsCategory}=await import('../extension/category-state.js');
+  const z={id:'z',categories:[],transfer:false};
+  assert.equal(categoryNeedsWork(z),true);
+  z.category_draft={id:'food',valid:true};
+  assert.equal(categoryNeedsWork(z),false);
+  const b={linked_id:'z',linked:{categories:[]}};
+  assert.equal(bankNeedsCategory(b,new Map([['z',z]])),false);
+  z.category_draft.valid=false;
+  assert.equal(categoryNeedsWork(z),true);
+  assert.equal(bankNeedsCategory(b,new Map([['z',z]])),true);
+  const part={id:'part',categories:[],transfer:false};
+  z.category_draft.valid=true;b.split_ids=['z','part'];
+  assert.equal(bankNeedsCategory(b,new Map([['z',z],['part',part]])),true);
+  part.category_draft={id:'other',valid:true};
+  assert.equal(bankNeedsCategory(b,new Map([['z',z],['part',part]])),false);
+});

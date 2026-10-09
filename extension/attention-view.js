@@ -1,4 +1,5 @@
 import {categoryPicker} from './category-picker.js';
+import {categoryNeedsWork,zenRowsById,bankNeedsCategory} from './category-state.js';
 import {reviewPairs} from './pairs-review-dialog.js';
 import {exclusionButton} from './exclusions-view.js';
 import {formatMoney} from './zenmoney-view.js';
@@ -16,8 +17,8 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
     bar.append(saveButton(`Сохранить пары всех показанных дней · ${ready.reduce((n,d)=>n+d.preview_pairs.length,0)}`,ready,true));container.append(bar);
   }
   const bankMap=new Map(state.review.map(r=>[r.id,r]));
-  const draftIds=new Set((state.day_review||[]).flatMap(d=>d.zen_rows||[]).filter(z=>z.category_draft).map(z=>z.id));
-  const settled=b=>b&&!(b.group?.zen_ids||(b.split_ids?.length?b.split_ids:[b.linked_id])).some(id=>draftIds.has(id))&&['linked','sent'].includes(b.state)&&b.linked&&!b.linked.missing_category&&(b.linked.transfer||b.linked.categories?.length);
+  const zenRows=zenRowsById(state);
+  const settled=b=>b&&['linked','sent'].includes(b.state)&&b.linked&&!bankNeedsCategory(b,zenRows);
   for(const d of [...days].sort((a,b)=>b.date.localeCompare(a.date)||a.bank_account.localeCompare(b.bank_account))){
     const account=state.bank_accounts.find(a=>a.id===d.bank_account),title=state.zenmoney_accounts.find(a=>a.id===account?.zenmoney_account)?.title||account?.bank||'Счёт';
     const section=el('section',undefined,'attention-day');section.dataset.date=d.date;
@@ -68,7 +69,7 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
         for(const b of g.banks)if(['pending','ignored'].includes(b.state)){const actions=el('div',`Банк · ${b.description} `);actions.append(exclusionButton('bank',b.id,b.state==='ignored',onAction));row.append(actions);}
         for(const z of g.zen)if(!z.linked_bank_id){const actions=el('div',`ZenMoney · ${z.payee||z.comment||'Без описания'} `);actions.append(exclusionButton('zenmoney',z.id,!!z.excluded,onAction));row.append(actions);}
       }
-      if(g.confirmed&&g.zen.some(z=>!z.transfer&&!z.categories.length))row.append(el('p','Нужно определить категорию.'));
+      if(g.confirmed&&g.zen.some(categoryNeedsWork))row.append(el('p','Нужно определить категорию.'));
       for(const b of g.banks){
         if(!g.settlement&&b.group?.kind==='settlement'&&b.state==='linked'&&state.capabilities?.local_review){const undo=el('button','Отменить весь взаиморасчёт');undo.dataset.apiAction='';undo.onclick=()=>onAction(()=>({path:`/api/review/${b.id}/link`,body:{},method:'DELETE'}));row.append(el('p','Состав группы изменился или больше не совпадает по сумме. Отмена освободит всех участников.'),undo);}
         const options=(d.split_candidates||[]).filter(p=>p.bank_id===b.id);
@@ -96,6 +97,7 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
       }
       if(g.settlement&&state.capabilities?.local_review){const undo=el('button','Отменить весь взаиморасчёт');undo.dataset.apiAction='';undo.onclick=()=>onAction(()=>({path:`/api/review/${g.banks[0].id}/link`,body:{},method:'DELETE'}));row.append(undo);}
       const item=el('div',undefined,'attention-item');item.append(row);
+      if(g.zen.some(z=>z.category_draft?.valid===true))item.append(el('p','Категория выбрана · ожидает отправки в ZenMoney','pending-category'));
       if(state.capabilities?.local_review)for(const z of g.zen)if(!z.excluded&&!z.transfer&&(!z.categories?.length||z.category_draft)){
         const picker=categoryPicker(z,state,onAction);picker.classList.add('inline-category-picker');
         if(g.zen.length>1)picker.querySelector('h3').textContent=`Категория ZenMoney · ${z.amount_minor} ${currency} · ${z.payee||z.comment||z.id}`;
