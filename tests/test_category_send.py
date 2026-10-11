@@ -111,3 +111,38 @@ def test_verified_api_normalization_and_conflict_recheck_never_write(tmp_path):
     assert content({'opIncome':None,'opIncomeInstrument':1})!=content({'opIncome':0,'opIncomeInstrument':1})
     assert content({'opIncome':None})!=content({'opIncome':1})
     assert content({})!=content({'opIncome':0})
+
+
+
+def test_preview_survives_remote_clock_adjustment_and_uses_fresh_record(tmp_path):
+    c,path,remote=setup(tmp_path)
+    for tx in remote.data['transaction']:
+        tx.update(changed=100, opIncome=None, opOutcome=None,
+                  opIncomeInstrument=None, opOutcomeInstrument=None)
+    body=request(c)
+    for tx in remote.data['transaction']:
+        tx.update(changed=99, opIncome=0, opOutcome=0)
+    assert request(c)==body
+    result=c.post('/api/category-updates/send',json=body)
+    assert result.status_code==200
+    assert all(r['state']=='sent' for r in result.json()['results'])
+    assert len(remote.writes)==1
+    assert all(before['changed']==99 for before,payload in remote.writes[0])
+
+
+@pytest.mark.parametrize('field,value',[
+    ('income',1),('outcome',12345),('date','2026-01-01'),
+    ('incomeAccount','other'),('incomeInstrument',999),
+    ('tag',['other']),('comment','Edited'),('payee','Other recipient'),
+    ('opOutcome',7),('opOutcomeInstrument',999),
+])
+def test_content_changes_still_block_entire_category_batch(tmp_path,field,value):
+    c,path,remote=setup(tmp_path)
+    body=request(c)
+    remote.data['transaction'][0][field]=value
+    response=c.post('/api/category-updates/send',json=body)
+    assert response.status_code==409
+    assert not remote.writes
+    with transaction(path,read_only=True) as db:
+        assert db.execute('SELECT count(*) FROM zen_category_drafts').fetchone()[0]==2
+        assert db.execute('SELECT count(*) FROM zen_category_sends').fetchone()[0]==0

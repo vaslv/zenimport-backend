@@ -82,7 +82,9 @@ def preview(db):
                       'instrument':tx.get('incomeInstrument'), 'payee':tx.get('payee') or tx.get('comment') or '',
                       'before_categories':[tags.get(t,{}).get('title',t) for t in tx.get('tag') or []],
                       'category':tags.get(row['category_id'],{}).get('title','Недоступна'), 'error':reason,
-                      'snapshot':fingerprint([tx,draft,jobs.get(row['zen_id'])])})
+                      # API clock adjustment can change 'changed' between identical reads.
+                      # Compare the same semantic content used by write verification.
+                      'snapshot':fingerprint([content(tx),draft,jobs.get(row['zen_id'])])})
     return items
 
 
