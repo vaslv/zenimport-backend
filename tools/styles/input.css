@@ -1,0 +1,6 @@
+/* Incremental adoption: no global reset; only explicit tw: classes override legacy CSS. */
+@layer theme, utilities;
+@import "tailwindcss/theme.css" layer(theme) prefix(tw);
+@import "tailwindcss/utilities.css" layer(utilities) prefix(tw) important source(none);
+@source "../../extension/category-picker.js";
+@source "../../extension/attention-view.js";

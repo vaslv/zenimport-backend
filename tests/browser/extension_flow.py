@@ -1469,6 +1469,24 @@ def test_new_operations_categories_and_scoped_creation_confirmation(browser):
     expect(page.locator('.attention-day summary .beneficiary-account')).to_have_count(1)
     expect(page.locator('.attention-day summary .beneficiary-account')).to_have_text('Beneficiary account: VQR123 · Shop <img src=x>')
     expect(page.locator('.attention-day summary img')).to_have_count(0)
+    original_viewport=page.viewport_size
+    for width in (1280,480):
+        page.set_viewport_size({'width':width,'height':1000})
+        panel=page.locator('[data-zen-id="mixed"]')
+        panel.scroll_into_view_if_needed()
+        layout=panel.evaluate("""node=>{
+          const parent=node.closest('.attention-item').getBoundingClientRect(),box=node.getBoundingClientRect();
+          const input=node.querySelector('.recipient-rule-toggle input').getBoundingClientRect();
+          const text=node.querySelector('.recipient-rule-toggle span').getBoundingClientRect();
+          return {left:box.left-parent.left,right:parent.right-box.right,inputWidth:input.width,
+                  gap:text.left-input.right,top:input.top-text.top,overflow:node.scrollWidth-node.clientWidth,
+                  border:getComputedStyle(node).borderTopWidth};
+        }""")
+        assert layout['left']>=15 and layout['right']>=15,layout
+        assert 12<=layout['inputWidth']<=20 and 8<=layout['gap']<=16,layout
+        assert abs(layout['top'])<8 and layout['overflow']<=1 and layout['border']=='0px',layout
+        panel.screenshot(path=f'/results/category-layout-{width}.png')
+    page.set_viewport_size(original_viewport)
     known=page.locator('[data-zen-id="known"]')
     expect(known.locator('.ts-control .item')).to_have_text('Еда')
     expect(known).to_contain_text('Назначена автоматически по точному описанию платежа')

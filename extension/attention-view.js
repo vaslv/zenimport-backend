@@ -107,12 +107,12 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
       if(state.capabilities?.local_review)for(const b of g.banks)if(['pending','ignored'].includes(b.state)){const actions=el('div',undefined,'inline-exclusion');if(g.banks.length>1)actions.append(el('span',b.description+' '));actions.append(exclusionButton('bank',b.id,b.state==='ignored',onAction));item.append(actions);}
       if(g.zen.some(z=>z.category_draft?.valid===true))item.append(el('p','Категория выбрана · ожидает отправки в ZenMoney','pending-category'));
       if(state.capabilities?.local_review)for(const z of g.zen)if(!z.excluded&&!z.transfer&&(!z.categories?.length||z.category_draft)){
-        const picker=categoryPicker(z,state,onAction);picker.classList.add('inline-category-picker');
+        const picker=categoryPicker(z,state,onAction);picker.classList.add('inline-category-picker','tw:m-4');
         if(g.zen.length>1)picker.querySelector('h3').textContent=`Категория ZenMoney · ${z.amount_minor} ${currency} · ${z.payee||z.comment||z.id}`;
         item.append(picker);
       }
       for(const b of g.banks){
-        if(state.capabilities?.create&&b.state==='pending'&&!g.zen.length)item.append(newOperationPicker(b,state,onAction));
+        if(state.capabilities?.create&&b.state==='pending'&&!g.zen.length){const picker=newOperationPicker(b,state,onAction);picker.classList.add('tw:m-4');item.append(picker);}
         if(b.creation_job?.state==='prepared')item.append(localRecord(b,onAction));
     if(b.creation_job&&!['sent','prepared'].includes(b.creation_job.state))item.append(el('p',b.creation_job.error||'Создание ожидает проверки результата в ZenMoney.','notice'));
       }

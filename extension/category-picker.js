@@ -2,7 +2,7 @@ const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefine
 let activePicker;
 export function destroyCategoryPickers(container){for(const select of container.querySelectorAll('.category-picker select'))select.tomselect?.destroy();}
 export function categoryPicker(row,state,onAction,{newOperation=false}={}){
-  const box=el('section',undefined,'category-picker');box.dataset.zenId=row.id;
+  const box=el('section',undefined,'category-picker tw:flex tw:flex-col tw:gap-3 tw:rounded-xl tw:border-0 tw:bg-slate-50 tw:p-4 tw:min-w-0');box.dataset.zenId=row.id;
   const categories=(state.categories||[]).filter(c=>!c.deleted),byId=new Map(categories.map(c=>[c.id,c]));
   const compare=(a,b)=>a.title.localeCompare(b.title,'ru',{sensitivity:'base'})||a.id.localeCompare(b.id);
   const ranking=(row.category_ranking||row.category_suggestion?.distribution||[]).filter(c=>byId.has(c.id)&&c.count>0).map(c=>({...c,title:byId.get(c.id).title})).sort((a,b)=>b.count-a.count||compare(a,b));
@@ -29,10 +29,10 @@ export function categoryPicker(row,state,onAction,{newOperation=false}={}){
     }
   });
   picker.control_input.setAttribute('aria-label','Поиск по категориям');
-  const save=el('button','Сохранить категорию');save.type='button';save.dataset.apiAction='';
-  const remember=el('input');remember.type='checkbox';
+  const save=el('button','Сохранить категорию');save.type='button';save.className='tw:self-start tw:m-0';save.dataset.apiAction='';
+  const remember=el('input');remember.type='checkbox';remember.className='tw:m-0 tw:mt-1 tw:size-4 tw:shrink-0 tw:p-0 tw:accent-rose-500';
   const recipientName=String(row.raw?.details?.corresponsiveName||'').trim();
-  if(newOperation&&recipientName){const label=el('label');label.append(remember,document.createTextNode(` Всегда использовать выбранную категорию для ${recipientName} (${row.amount_minor>0?'поступления':'расходы'}, этот банк)`));box.append(label);}
+  if(newOperation&&recipientName){const label=el('label',undefined,'recipient-rule-toggle tw:flex tw:items-start tw:gap-3 tw:m-0 tw:cursor-pointer tw:text-sm tw:leading-6');label.append(remember,el('span',` Всегда использовать выбранную категорию для ${recipientName} (${row.amount_minor>0?'поступления':'расходы'}, этот банк)`, 'tw:min-w-0 tw:break-words'));box.append(label);}
   save.onclick=()=>{if(box.value===saved&&row.category_draft?.valid!==false&&!remember.checked)return;onAction(()=>({path:newOperation?`/api/new-operations/${encodeURIComponent(row.id)}/category`:`/api/zenmoney/transactions/${encodeURIComponent(row.id)}/category`,method:'PUT',body:newOperation?{category_id:box.value||null,...(remember.checked?{remember_recipient:true}:{})}:{category_id:box.value||null,expected_tags:row.tag_ids||[]}}));};
   const evidence=el('p',undefined,'category-priorities');
   if(ranking.length){
@@ -42,7 +42,7 @@ export function categoryPicker(row,state,onAction,{newOperation=false}={}){
   }else evidence.textContent=fallback?'Нет подходящих подтверждённых примеров. По умолчанию выбрана «Корректировка»; сохраните её или выберите другую категорию.':'Нет подходящих подтверждённых примеров для подсказки категории.';
   box.prepend(el('h3',newOperation?'Категория новой операции':'Категория операции ZenMoney'),evidence);box.append(message,save);
   if(newOperation&&row.category_draft?.source==='auto'&&row.category_draft?.valid)box.append(el('p',row.raw?.details?.corresponsiveAccount||(!row.description?.trim()&&row.raw?.details?.corresponsiveName)?'Назначена автоматически: у получателя не менее трёх подтверждённых операций с одной категорией и нет других категорий. Проверьте перед созданием.':'Назначена автоматически по точному описанию платежа: не менее трёх подтверждённых операций с одной категорией и нет других категорий. Проверьте перед созданием.','notice'));
-  if(newOperation&&row.recipient_rule){box.append(el('p',`Ваше правило для ${recipientName}: ${row.recipient_rule.title||'категория недоступна'}.`,'notice'));const remove=el('button','Удалить правило получателя');remove.dataset.apiAction='';remove.onclick=()=>onAction(()=>({path:`/api/new-operations/${encodeURIComponent(row.id)}/recipient-rule`,method:'DELETE'}));box.append(remove);}
+  if(newOperation&&row.recipient_rule){box.append(el('p',`Ваше правило для ${recipientName}: ${row.recipient_rule.title||'категория недоступна'}.`,'notice'));const remove=el('button','Удалить правило получателя');remove.className='tw:self-start tw:m-0';remove.dataset.apiAction='';remove.onclick=()=>onAction(()=>({path:`/api/new-operations/${encodeURIComponent(row.id)}/recipient-rule`,method:'DELETE'}));box.append(remove);}
   if(row.category_draft?.source==='rule'&&row.category_draft.valid)box.append(el('p','Категория назначена по вашему правилу.','notice'));
   if(row.category_draft?.valid===false)box.append(el('p','Категория недоступна или данные ZenMoney изменились. Проверьте выбор заново.','notice'));
   if(!newOperation&&row.candidates?.length)box.append(el('p','Есть возможные совпадения с ZenMoney. Выбор категории не подтверждает создание новой операции.','muted'));
