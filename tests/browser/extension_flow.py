@@ -1595,11 +1595,19 @@ def test_inline_bank_statuses_categories_and_account_boundary(browser,sync_failu
             bank.evaluate("document.querySelector('#unknown-row').remove()")
             expect(bank.locator('#zenimport-status')).to_contain_text('Данные ZenMoney получены',timeout=40000)
             assert worker.evaluate('inlineTest.syncs')==2
-        bank.add_style_tag(content='table{width:100%;border-collapse:collapse}td{padding:12px}body{font-family:system-ui}')
+        bank.add_style_tag(content='table{width:100%;border-collapse:collapse}td{padding:12px}body{font-family:system-ui}tbody tr:not([data-zenimport-row]){background:rgb(240,245,250)}')
         expect(bank.locator('#zenimport-status')).to_contain_text('Опознано строк: 2 из 2')
         cards = bank.locator('tbody zenimport-operation')
         expect(cards.nth(0).locator('select')).to_have_value('cafe')
         expect(cards.nth(1)).to_contain_text('✓ В ZenMoney')
+        expect(cards.nth(0).locator('strong').first).to_have_class('pending')
+        expect(cards.nth(1).locator('strong').first).to_have_class('good')
+        footer=bank.locator('#zenimport-status')
+        expect(footer).to_have_css('position','fixed')
+        expect(footer).to_have_css('text-align','center')
+        assert abs(footer.bounding_box()['y']+footer.bounding_box()['height']-bank.viewport_size['height'])<2
+        expect(cards.nth(0).locator('section')).to_have_css('background-color','rgba(0, 0, 0, 0)')
+        expect(bank.locator('tr[data-zenimport-row] > td').first).to_have_css('background-color','rgb(240, 245, 250)')
         cards.nth(0).get_by_role('button', name='Продукты', exact=True).click()
         expect(cards.nth(0).locator('select')).to_have_value('food')
         calls=worker.evaluate('inlineTest.calls')
@@ -1648,6 +1656,10 @@ def test_inline_bank_statuses_categories_and_account_boundary(browser,sync_failu
         assert len(imports)==1
         assert 'must-not-be-imported' not in imports[0]['body']
         context.unroute(endpoint)
+        worker.evaluate('inlineTest.state.review[0].creation_draft=null')
+        bank.reload()
+        expect(cards.nth(0).locator('strong').first).to_have_class('error')
+        expect(bank.locator('#zenimport-status')).to_contain_text('Данные ZenMoney получены')
         # Duplicate DOM identity must never attach the same editable operation twice.
         bank.evaluate("document.querySelector('tbody').append(document.querySelector('tbody tr').cloneNode(true))")
         expect(bank.locator('#zenimport-status')).to_contain_text('Опознано строк: 1 из 3')
