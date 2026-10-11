@@ -1432,7 +1432,8 @@ def test_new_operations_categories_and_scoped_creation_confirmation(browser):
             'raw':{},'state':'pending','mapped':True,'candidates':[],'linked':None,'reconciliation_status':'new','creation_job':None,
             'creation_draft':{'category_id':'food','title':'Еда','source':'auto','valid':True} if id=='known' else None,
             'creation_ranking':[{'id':'food','count':3},{'id':'toys','count':2}] if id=='mixed' else [{'id':'food','count':3}] if id=='known' else []})
-    state['review'][1]['raw']={'details':{'corresponsiveAccount':'VQR123','corresponsiveName':'Shop <img src=x>'}}
+    state['review'][0]['raw']={'date':'11/10/2026 19:19:33'}
+    state['review'][1]['raw']={'details':{'processDate':'11-10-2026 19:36:11','corresponsiveAccount':'VQR123','corresponsiveName':'Shop <img src=x>'}}
     state['day_review']=[{'bank_account':'ba','date':'2026-10-11','bank_ids':['known','mixed','unknown'],'zen_rows':[],
                          'bank_count':3,'zen_count':0,'equal':False,'resolved':False,'pairs':[],'preview_pairs':[]}]
     page=context.new_page();writes=[];saved=[];created=[]
@@ -1469,6 +1470,7 @@ def test_new_operations_categories_and_scoped_creation_confirmation(browser):
     expect(page.locator('.attention-day summary .beneficiary-account')).to_have_count(1)
     expect(page.locator('.attention-day summary .beneficiary-account')).to_have_text('Beneficiary account: VQR123 · Shop <img src=x>')
     expect(page.locator('.attention-day summary img')).to_have_count(0)
+    expect(page.locator('.attention-day summary .bank-time')).to_have_text(['Время банка: 19:19:33 · known','Время банка: 19:36:11 · mixed'])
     original_viewport=page.viewport_size
     for width in (1280,480):
         page.set_viewport_size({'width':width,'height':1000})

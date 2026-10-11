@@ -1,3 +1,4 @@
+import {bankTime} from './bank-time.js';
 import {beneficiaryLabel} from './beneficiary.js';
 import {dateLabel} from './date-format.js';
 import {newOperationPicker,localRecord} from './new-operations.js';
@@ -70,8 +71,9 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
       if(g.banks.length>1||g.zen.length>1)summary.append(el('small',`Банк: ${g.banks.length} · ZenMoney: ${g.zen.length}`));
       const description=g.zen[0]?.categories?.join(', ')||g.zen[0]?.category_draft?.title||g.banks[0]?.description||g.zen[0]?.payee||'Без категории';summary.append(el('p',description));
       for(const label of new Set(g.banks.map(beneficiaryLabel).filter(Boolean)))summary.append(el('p',label,'beneficiary-account'));
+      for(const b of g.banks)if(bankTime(b))summary.append(el('p',`Время банка: ${bankTime(b)}${g.banks.length>1?' · '+b.description:''}`,'bank-time'));
       row.append(summary);
-      for(const b of g.banks){row.append(el('p',`Банк: ${formatMoney(String(currency==='VND'?b.amount_minor:b.amount_minor/100),currency)} · ${b.description}${beneficiaryLabel(b)?' · '+beneficiaryLabel(b):''}`));if(b.linked&&!g.confirmed)row.append(el('small',`Связано с ZenMoney за ${dateLabel(b.linked.date)}`));}
+      for(const b of g.banks){row.append(el('p',`Банк: ${formatMoney(String(currency==='VND'?b.amount_minor:b.amount_minor/100),currency)} · ${b.description}${bankTime(b)?' · Время банка: '+bankTime(b):''}${beneficiaryLabel(b)?' · '+beneficiaryLabel(b):''}`));if(b.linked&&!g.confirmed)row.append(el('small',`Связано с ZenMoney за ${dateLabel(b.linked.date)}`));}
       for(const z of g.zen)row.append(el('p',`ZenMoney: ${formatMoney(String(currency==='VND'?Number(z.amount_minor):Number(z.amount_minor)/100),currency)} · ${z.payee||z.comment||'Без описания'} · ${z.categories.join(', ')|| (z.transfer?'Перевод':'Без категории')}`));
       if(g.pair?.order==='chronological'){
         row.append(el('p',`Время банка: ${g.banks[0].raw?.date||'не указано'} · Запись ZenMoney создана: ${new Date(g.zen[0].created*1000).toLocaleString('ru-RU')}`));
