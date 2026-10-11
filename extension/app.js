@@ -24,11 +24,15 @@ function controls() {
   $('save').disabled=busy; $('url').disabled=busy; $('token').disabled=busy;
   categoryControls();
   const creationRows=state&&bankWorkspace()?bankScope(state,selectedBank()).review.filter(r=>(!reviewAccount||r.bank_account===reviewAccount)&&(!$('review-start').value||r.date>=$('review-start').value)&&(!$('review-end').value||r.date<=$('review-end').value)):[];
-  const newRows=creationRows.filter(r=>r.state==='pending');
+  const newRows=creationRows.filter(r=>r.state==='pending'&&r.creation_draft?.valid);
+  const prepared=creationRows.filter(r=>r.creation_job?.state==='prepared');
+  $('creation-create').hidden=!state?.capabilities?.create||!bankWorkspace();
+  $('creation-create').textContent=`Создать локальные записи · ${newRows.length}`;
+  $('creation-create').disabled=busy||!connected||!newRows.length;
   $('creation-send').hidden=!state?.capabilities?.create||!bankWorkspace();
-  $('creation-send').textContent=`Создать операции в ZenMoney · ${newRows.length}`;
-  $('creation-send').disabled=busy||!connected||!newRows.length;
-  $('creation-verify').hidden=!state?.capabilities?.create||!creationRows.some(r=>r.creation_job&&r.creation_job.state!=='sent');
+  $('creation-send').textContent=`Отправить новые записи в ZenMoney · ${prepared.length}`;
+  $('creation-send').disabled=busy||!connected||!prepared.length;
+  $('creation-verify').hidden=!state?.capabilities?.create||!creationRows.some(r=>r.creation_job&&!['sent','prepared'].includes(r.creation_job.state));
 
   $('send').disabled=busy||!connected||!state?.capabilities?.write||!state?.outbox?.some(x=>['queued','uncertain'].includes(x.state));
   $('demo').disabled=busy||!connected||state?.mode!=='demo';
@@ -169,7 +173,7 @@ async function refresh() {
 }
 async function run(fn) {
   if(busy)return;busy=true;controls();feedback('Выполняется…');
-  try {const result=await fn();await refresh();feedback(result?.results?`Отправка завершена: ${result.results.filter(x=>x.state==='sent').length} успешно, ${result.results.filter(x=>x.state!=='sent').length} требуют внимания.`:'Данные обновлены.');}
+  try {const result=await fn();await refresh();feedback(result?.message|| (result?.results?`Отправка завершена: ${result.results.filter(x=>x.state==='sent').length} успешно, ${result.results.filter(x=>x.state!=='sent').length} требуют внимания.`:'Данные обновлены.'));}
   catch(error){connected=false;feedback(error.message,true);}
   finally{busy=false;controls();}
 }
@@ -207,6 +211,7 @@ $('history-prev').onclick=()=>run(async()=>{historyOffset=Math.max(0,historyOffs
 $('history-next').onclick=()=>run(async()=>{historyOffset+=100;});
 $('refresh').onclick=()=>run(async()=>{});
 $('category-send').onclick=()=>run(async()=>{const preview=await api('/api/category-updates/preview',{});const ids=categoryScopeIds();categorySendDialog(ids?preview.items.filter(i=>ids.has(i.zen_id)):preview.items,state,request=>run(()=>api(request.path,request.body)));});
+$('creation-create').onclick=()=>run(async()=>{const result=await api('/api/new-operations/create',creationScope());return {message:`Создано локальных записей: ${result.created.length}. Пропущено: ${result.skipped.length}.`};});
 $('creation-send').onclick=()=>run(async()=>{const scope=creationScope();const preview=await api('/api/new-operations/preview',scope);creationDialog(preview.items,scope,body=>run(()=>api('/api/new-operations/send',body)));});
 $('creation-verify').onclick=()=>run(()=>api('/api/new-operations/verify',{}));
 $('category-verify').onclick=()=>run(()=>api('/api/category-updates/verify',{}));

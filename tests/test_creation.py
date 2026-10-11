@@ -42,6 +42,7 @@ def draft(c,id,category='food'):
 
 
 def request(c):
+    assert c.post('/api/new-operations/create',json={'bank':'demo'}).status_code==200
     p=c.post('/api/new-operations/preview',json={'bank':'demo'})
     assert p.status_code==200,p.text
     return {'bank':'demo','items':[{'bank_id':i['bank_id'],'snapshot':i['snapshot']} for i in p.json()['items'] if not i['error']]}
@@ -83,19 +84,22 @@ def test_unknown_outcome_never_retried_and_survives_restart(tmp_path,behavior,ex
 @pytest.mark.parametrize('mutation',['category','mapping','amount','candidate','deleted_tag','missing_account','ignored','duplicate_id','other_bank'])
 def test_preflight_blocks_stale_or_unsafe_batch(tmp_path,mutation):
     c,path,remote,id=setup(tmp_path);draft(c,id);body=request(c)
-    if mutation=='category':draft(c,id,'toys')
+    if mutation=='category':
+        with transaction(path) as db:db.execute("UPDATE creation_drafts SET category_id='toys' WHERE bank_id=?",(id,))
     elif mutation=='mapping':remote.data['account'][0]['archive']=True
     elif mutation=='deleted_tag':remote.data['tag'][0]['deleted']=True
     elif mutation=='missing_account':remote.data['account']=[]
     elif mutation=='candidate':remote.data['transaction']=[{'id':'existing','date':'2026-10-01','income':0,'outcome':65000,'incomeAccount':DEMO_ACCOUNT,'outcomeAccount':DEMO_ACCOUNT,'tag':['food']}]
-    elif mutation=='ignored':assert c.put(f'/api/exclusions/bank/{id}',json={}).status_code==200
+    elif mutation=='ignored':
+        assert c.post(f'/api/new-operations/{id}/reopen',json={}).status_code==200
+        assert c.put(f'/api/exclusions/bank/{id}',json={}).status_code==200
     elif mutation=='duplicate_id':body['items']*=2
     elif mutation=='other_bank':body['bank']='other'
     else:
         with transaction(path) as db:db.execute('UPDATE bank_transactions SET amount_minor=-200 WHERE id=?',(id,))
     assert c.post('/api/new-operations/send',json=body).status_code in (409,422)
     assert not remote.writes
-    with transaction(path,read_only=True) as db:assert db.execute('SELECT count(*) FROM creation_jobs').fetchone()[0]==0
+    with transaction(path,read_only=True) as db:assert db.execute("SELECT count(*) FROM creation_jobs WHERE state!='prepared'").fetchone()[0]==0
 
 
 def historical(db,id,cat='food',recipient='123',direction=-1):
@@ -139,8 +143,9 @@ def test_exact_foreign_currency_income_and_expense(tmp_path,amount):
 def test_missing_category_does_not_default_to_adjustment(tmp_path):
     c,path,remote,id=setup(tmp_path)
     remote.data['tag'].append({'id':'adjust','title':'Корректировка'})
-    p=c.post('/api/new-operations/preview',json={'bank':'demo'}).json()['items']
-    assert len(p)==1 and p[0]['error']=='Выберите категорию'
+    p=c.post('/api/new-operations/create',json={'bank':'demo'}).json()
+    assert p['created']==[] and p['skipped'][0]['reason']=='Выберите категорию'
+    assert c.post('/api/new-operations/preview',json={'bank':'demo'}).json()['items']==[]
     assert not remote.writes
 
 
@@ -156,3 +161,36 @@ def test_partial_batch_and_incomplete_read_never_create_again(tmp_path):
     del remote.data['transaction']
     assert c.post('/api/new-operations/verify',json={}).status_code==502
     assert len(remote.writes)==1
+
+
+def test_local_creation_is_separate_persistent_scoped_and_reversible(tmp_path):
+    c,path,remote,id=setup(tmp_path);draft(c,id)
+    data=copy.deepcopy(IMPORT);data['transactions'][0].update(external_id='unknown',amount_minor=23456)
+    c.post('/api/imports',json=data)
+    assert c.post('/api/new-operations/create',json={'bank':'other'}).json()['created']==[]
+    # Local creation must work even while ZenMoney is unavailable.
+    remote.fail_read=True
+    result=c.post('/api/new-operations/create',json={'bank':'demo'}).json()
+    assert result['created']==[id] and len(result['skipped'])==1 and not remote.writes
+    with transaction(path,read_only=True) as db:
+        job=dict(db.execute('SELECT * FROM creation_jobs').fetchone())
+        assert job['state']=='prepared'
+        assert json.loads(job['payload'])['tag']==['food']
+    initialize(path,'live')
+    assert c.post('/api/new-operations/create',json={'bank':'demo'}).json()['created']==[]
+    remote.fail_read=False
+    assert c.post('/api/new-operations/verify',json={}).json()['results'][0]['state']=='prepared'
+    body=request(c)
+    assert len(body['items'])==1 and not remote.writes
+    assert c.post('/api/new-operations/send',json=body).json()['results'][0]['state']=='sent'
+    assert remote.writes[0][0]['id']==job['zen_id']
+    assert c.post(f'/api/new-operations/{id}/reopen',json={}).status_code==409
+
+
+def test_reopen_prepared_record_keeps_category_and_invalidates_preview(tmp_path):
+    c,path,remote,id=setup(tmp_path);draft(c,id);body=request(c)
+    assert c.post(f'/api/new-operations/{id}/reopen',json={}).status_code==200
+    assert c.post('/api/new-operations/send',json=body).status_code==409
+    draft(c,id,'toys');body=request(c)
+    assert c.post('/api/new-operations/send',json=body).json()['results'][0]['state']=='sent'
+    assert remote.writes[0][0]['tag']==['toys']

@@ -1,4 +1,4 @@
-import {newOperationPicker} from './new-operations.js';
+import {newOperationPicker,localRecord} from './new-operations.js';
 import {categoryPicker} from './category-picker.js';
 import {categoryNeedsWork,zenRowsById,bankNeedsCategory,linkedIds} from './category-state.js';
 import {reviewPairs} from './pairs-review-dialog.js';
@@ -109,7 +109,8 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
       }
       for(const b of g.banks){
         if(state.capabilities?.create&&b.state==='pending'&&!g.zen.length)item.append(newOperationPicker(b,state,onAction));
-        if(b.creation_job&&b.creation_job.state!=='sent')item.append(el('p',b.creation_job.error||'Создание ожидает проверки результата в ZenMoney.','notice'));
+        if(b.creation_job?.state==='prepared')item.append(localRecord(b,onAction));
+    if(b.creation_job&&!['sent','prepared'].includes(b.creation_job.state))item.append(el('p',b.creation_job.error||'Создание ожидает проверки результата в ZenMoney.','notice'));
       }
       section.append(item);
     }

@@ -171,6 +171,17 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
         with lock, transaction(path) as db:
             return save_category(db, identifier, data.category_id)
 
+    @app.post('/api/new-operations/create')
+    def create_local_new(data: NewOperationScope):
+        if mode != 'live': fail('Создание доступно в режиме LIVE',403)
+        from .creation import create_local
+        with lock, transaction(path) as db: return create_local(db,data)
+
+    @app.post('/api/new-operations/{identifier}/reopen')
+    def reopen_new(identifier: str):
+        from .creation import reopen
+        with lock, transaction(path) as db: return reopen(db,identifier)
+
     @app.post('/api/new-operations/preview')
     def preview_new(data: NewOperationScope):
         if mode != 'live': fail('Создание доступно в режиме LIVE',403)

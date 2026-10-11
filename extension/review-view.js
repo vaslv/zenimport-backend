@@ -1,4 +1,4 @@
-import {newOperationPicker} from './new-operations.js';
+import {newOperationPicker,localRecord} from './new-operations.js';
 import {categoryPicker,destroyCategoryPickers} from './category-picker.js';
 import {categoryNeedsWork,zenRowsById,bankNeedsCategory,linkedIds} from './category-state.js';
 import {reviewPairs} from './pairs-review-dialog.js';
@@ -117,7 +117,8 @@ export function renderReview(container,state,{account='',status='all',query='',s
       const zs=new Map((state.day_review||[]).flatMap(d=>d.zen_rows||[]).map(z=>[z.id,z]));
       for(const id of ids){const z=zs.get(id);if(z&&!z.excluded&&!z.transfer&&(!z.categories?.length||z.category_draft))detail.append(categoryPicker(z,state,onAction));}
     }
-    if(t.creation_job&&t.creation_job.state!=='sent')detail.append(node('p',t.creation_job.error||'Создание ожидает проверки результата.','notice'));
+    if(t.creation_job?.state==='prepared')detail.append(localRecord(t,onAction));
+    if(t.creation_job&&!['sent','prepared'].includes(t.creation_job.state))detail.append(node('p',t.creation_job.error||'Создание ожидает проверки результата.','notice'));
     if(t.state==='pending'){
       if(state.capabilities?.create&&!t.candidates.length)detail.append(newOperationPicker(t,state,onAction));
       const picker=node('select');picker.append(new Option('Без категории',''));
