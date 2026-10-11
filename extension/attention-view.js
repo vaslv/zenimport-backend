@@ -72,7 +72,7 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
       const description=g.zen[0]?.categories?.join(', ')||g.zen[0]?.category_draft?.title||g.banks[0]?.description||g.zen[0]?.payee||'Без категории';summary.append(el('p',description));
       for(const label of new Set(g.banks.map(beneficiaryLabel).filter(Boolean)))summary.append(el('p',label,'beneficiary-account'));
       for(const b of g.banks)summary.append(el('p',`${bankDateTime(b)}${g.banks.length>1?' · '+b.description:''}`,'bank-time'));
-      if(!g.banks.length)summary.append(el('p',dateLabel(sample.date),'operation-date'));
+      if(!g.banks.length)summary.append(el('p',dateLabel(sample.date,{weekday:true}),'operation-date'));
       row.append(summary);
       for(const b of g.banks){row.append(el('p',`Банк: ${formatMoney(String(currency==='VND'?b.amount_minor:b.amount_minor/100),currency)} · ${b.description} · ${bankDateTime(b)}${beneficiaryLabel(b)?' · '+beneficiaryLabel(b):''}`));if(b.linked&&!g.confirmed)row.append(el('small',`Связано с ZenMoney за ${dateLabel(b.linked.date)}`));}
       for(const z of g.zen)row.append(el('p',`ZenMoney: ${formatMoney(String(currency==='VND'?Number(z.amount_minor):Number(z.amount_minor)/100),currency)} · ${z.payee||z.comment||'Без описания'} · ${z.categories.join(', ')|| (z.transfer?'Перевод':'Без категории')}`));

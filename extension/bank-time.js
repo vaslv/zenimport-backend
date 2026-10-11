@@ -14,5 +14,5 @@ export function bankTime(row){
 
 export function bankDateTime(row){
   const time=bankTime(row);
-  return `${dateLabel(row.date)}${time?', '+time:''}`;
+  return `${dateLabel(row.date,{weekday:true})}${time?', '+time:''}`;
 }

@@ -196,8 +196,8 @@ $('capture').onclick=async()=>{
 };
 $('auto-cancel').onclick=async()=>{await chrome.runtime.sendMessage({type:'auto-cancel'});await renderAuto();};
 $('auto-export').onclick=async()=>{
-  const {autoJob,previousAutoJob}=await chrome.storage.local.get(['autoJob','previousAutoJob']);
-  const report={version:chrome.runtime.getManifest().version,current:publicJob(autoJob),previous:publicJob(previousAutoJob)};
+  const {autoJob,previousAutoJob,inlineDiagnostics}=await chrome.storage.local.get(['autoJob','previousAutoJob','inlineDiagnostics']);
+  const report={version:chrome.runtime.getManifest().version,current:publicJob(autoJob),previous:publicJob(previousAutoJob),inlineDiagnostics:inlineDiagnostics||[]};
   const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));
   const a=document.createElement('a');a.href=url;a.download='zenimport-actions.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
@@ -205,3 +205,11 @@ chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&changes
 renderAuto();
 
 setInterval(renderAuto,5000);
+
+$('inline-enable').onclick=async()=>{
+  try{
+    if(!await chrome.permissions.request({origins:['https://ipay.vietinbank.vn/*']}))throw Error('Нужен доступ к странице VietinBank.');
+    const r=await chrome.runtime.sendMessage({type:'inline-enable'});if(!r?.ok)throw Error(r?.error||'Не удалось включить');
+    $('inline-status').textContent='Включено. Обновите страницу банка: статусы появятся в истории операций.';
+  }catch(e){$('inline-status').textContent=e.message;}
+};

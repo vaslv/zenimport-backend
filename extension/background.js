@@ -1,3 +1,4 @@
+import './inline-background.js';
 import './auto-background.js';
 import {progress} from './capture-progress.js';
 import {parseVietinBankJson} from './vietinbank-json.js';

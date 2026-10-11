@@ -1,14 +1,16 @@
 // MAIN world: passively observe history responses from the exact history endpoint.
 // No requests are issued, no request bodies, headers or credentials are read.
 (() => {
-  window.__zenImportStopObserver?.();
-  const continuous=window.__zenImportAutoObserve===true;delete window.__zenImportAutoObserve;
+  const inline=window.__zenImportInlineObserve===true;delete window.__zenImportInlineObserve;
+  const stopKey=inline?'__zenImportStopInlineObserver':'__zenImportStopObserver';
+  window[stopKey]?.();
+  const continuous=inline||window.__zenImportAutoObserve===true;delete window.__zenImportAutoObserve;
   const endpoint='https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions';
   const keys=['currency','remark','amount','balance','trxId','processDate','dorC','refType','refId','tellerId','corresponsiveAccount','corresponsiveName','channel','serviceBranchId','serviceBranchName','pmtType','sendingBankId','sendingBranchId','sendingBranchName','receivingBankId','receivingBranchId','receivingBranchName'];
   const originalFetch=window.fetch, originalOpen=XMLHttpRequest.prototype.open, originalSend=XMLHttpRequest.prototype.send;
   const urls=new WeakMap(); let active=true;
   const matches=url=>{try {const u=new URL(url,location.href);return u.origin+u.pathname===endpoint;}catch{return false;}};
-  const emit=data=>{if(!active)return;window.postMessage({source:'zenimport-history',...data},location.origin);if(!continuous)stop();};
+  const emit=data=>{if(!active)return;window.postMessage({source:inline?'zenimport-inline-history':'zenimport-history',...data},location.origin);if(!continuous)stop();};
   const receive=(value,startedAt)=>{
     if(!active)return;
     try {
@@ -47,9 +49,9 @@
     return originalSend.apply(this,args);
   }
   const stopMessage=e=>{if(e.source===window&&e.origin===location.origin&&e.data?.source==='zenimport-stop-auto')stop();};
-  window.addEventListener('message',stopMessage);
+  if(!inline)window.addEventListener('message',stopMessage);
   function stop(){window.removeEventListener('message',stopMessage);active=false;clearTimeout(timer);if(window.fetch===wrappedFetch)window.fetch=originalFetch;if(XMLHttpRequest.prototype.open===wrappedOpen)XMLHttpRequest.prototype.open=originalOpen;if(XMLHttpRequest.prototype.send===wrappedSend)XMLHttpRequest.prototype.send=originalSend;}
-  const timer=setTimeout(()=>{emit({startedAt:Date.now(),error:'Время ожидания истекло. Начните захват заново.'});stop();},continuous?1200000:600000);
+  const timer=inline?null:setTimeout(()=>{emit({startedAt:Date.now(),error:'Время ожидания истекло. Начните захват заново.'});stop();},continuous?1200000:600000);
   window.fetch=wrappedFetch;XMLHttpRequest.prototype.open=wrappedOpen;XMLHttpRequest.prototype.send=wrappedSend;
-  window.__zenImportStopObserver=stop;
+  window[stopKey]=stop;
 })();

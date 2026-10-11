@@ -2,7 +2,7 @@
 (async () => {
   const collectAll = globalThis.__zenImportAllPages === true;
   delete globalThis.__zenImportAllPages;
-  const text = node => node?.textContent?.replace(/\s+/g, ' ').trim() || '';
+  const text = node => {if(!node)return '';const clean=node.cloneNode(true);clean.querySelectorAll?.('zenimport-operation').forEach(e=>e.remove());return clean.textContent?.replace(/\s+/g, ' ').trim()||'';};
   const fail = message => { throw new Error(message); };
   const day = value => {
     const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);

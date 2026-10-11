@@ -1470,7 +1470,7 @@ def test_new_operations_categories_and_scoped_creation_confirmation(browser):
     expect(page.locator('.attention-day summary .beneficiary-account')).to_have_count(1)
     expect(page.locator('.attention-day summary .beneficiary-account')).to_have_text('Beneficiary account: VQR123 · Shop <img src=x>')
     expect(page.locator('.attention-day summary img')).to_have_count(0)
-    expect(page.locator('.attention-day summary .bank-time')).to_have_text(['11 октября 2026, 19:19:33 · known','11 октября 2026, 19:36:11 · mixed','11 октября 2026 · unknown'])
+    expect(page.locator('.attention-day summary .bank-time')).to_have_text(['вс, 11 октября 2026, 19:19:33 · known','вс, 11 октября 2026, 19:36:11 · mixed','вс, 11 октября 2026 · unknown'])
     original_viewport=page.viewport_size
     for width in (1280,480):
         page.set_viewport_size({'width':width,'height':1000})
@@ -1538,3 +1538,87 @@ def test_new_operations_categories_and_scoped_creation_confirmation(browser):
     expect(page.locator('#status')).to_contain_text('1 успешно')
     assert len(writes)==1 and {i['bank_id'] for i in writes[0]['items']}=={'known','mixed','unknown'}
     page.close()
+
+
+def test_inline_bank_statuses_categories_and_account_boundary(browser):
+    context, identifier = browser
+    worker = context.service_workers[0]
+    # No live bank/ZenMoney traffic. Exercise the actual registered scripts and worker.
+    data = {
+        'bank_accounts': [{'id': 'inline-account', 'bank': 'vietinbank', 'account': '111122223333', 'zenmoney_account': 'zen-account'}],
+        'categories': [{'id': 'food', 'title': 'Продукты'}, {'id': 'cafe', 'title': 'Кафе'}],
+        'review': [
+            {'id': 'inline-new', 'bank_account': 'inline-account', 'state': 'pending', 'mapped': True, 'candidates': [],
+             'amount_minor': -65000, 'description': 'CT DI:TEST0001 Coffee', 'raw': {'date': '06/10/2026 12:01:00', 'balance': '935000'},
+             'creation_draft': {'valid': True, 'category_id': 'cafe'}, 'creation_ranking': [{'id': 'cafe', 'count': 5}, {'id': 'food', 'count': 2}]},
+            {'id': 'inline-linked', 'bank_account': 'inline-account', 'state': 'linked', 'mapped': True, 'linked': {'id': 'zen-linked'},
+             'linked_id': 'zen-linked', 'group': {'kind': 'single', 'zen_ids': ['zen-linked']}, 'candidates': [],
+             'amount_minor': 100000, 'description': 'CT DEN:TEST0002 Transfer', 'raw': {'date': '05/10/2026 10:30:00', 'balance': '1000000'}}],
+        'day_review': [{'bank_account': 'inline-account', 'zen_rows': [{'id': 'zen-linked', 'tag_ids': ['food'], 'categories': ['Продукты']}]}],
+        'category_sends': [], 'last_sync': 1,
+    }
+    worker.evaluate('''async state=>{
+      globalThis.inlineTest={state,calls:[]};globalThis.inlineOriginalFetch=fetch;
+      globalThis.fetch=async (url,options={})=>{
+        const path=new URL(url).pathname;inlineTest.calls.push({path,method:options.method,body:options.body});
+        if(path==='/api/new-operations/inline-new/category')inlineTest.state.review[0].creation_draft={valid:true,category_id:JSON.parse(options.body).category_id};
+        return new Response(JSON.stringify(path==='/api/state'?inlineTest.state:{}),{status:200,headers:{'Content-Type':'application/json'}});
+      };
+      await chrome.storage.local.set({baseUrl:'http://127.0.0.1:8000',token:'docker-test-token-not-for-real-data'});
+    }''', data)
+    bank = popup = None
+    url = 'https://ipay.vietinbank.vn/payment-history?accountNo=111122223333'
+    try:
+        context.route('https://ipay.vietinbank.vn/**', lambda route: route.fulfill(path='/app/tests/browser/fixtures/vietinbank.html', content_type='text/html'))
+        popup = context.new_page(); popup.goto(f'chrome-extension://{identifier}/popup.html')
+        popup.locator('#inline-enable').click()
+        expect(popup.locator('#inline-status')).to_contain_text('Включено')
+        bank = context.new_page(); bank.goto(url)
+        expect(bank.locator('#zenimport-status')).to_contain_text('Опознано строк: 2 из 2')
+        cards = bank.locator('tbody zenimport-operation')
+        expect(cards.nth(0).locator('select')).to_have_value('cafe')
+        expect(cards.nth(1)).to_contain_text('✓ В ZenMoney')
+        cards.nth(0).get_by_role('button', name='Продукты', exact=True).click()
+        expect(cards.nth(0).locator('select')).to_have_value('food')
+        calls=worker.evaluate('inlineTest.calls')
+        assert any(c['path']=='/api/new-operations/inline-new/category' for c in calls)
+        assert not any('/send' in c['path'] for c in calls)
+        cards.nth(0).get_by_role('searchbox').fill('Каф')
+        bank.wait_for_timeout(16000)  # The periodic local refresh must preserve active search.
+        expect(cards.nth(0).get_by_role('searchbox')).to_have_value('Каф')
+        endpoint='https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions'
+        response={'error':False,'accountNo':'111122223333','currentPage':0,'pageSize':100,'totalRecords':1,
+                  'sessionId':'must-not-be-imported','transactions':[{'currency':'VND','remark':'CT DI:TEST0001 Coffee',
+                  'amount':'65000','balance':'935000','trxId':'TEST0001','processDate':'06-10-2026 12:01:00','dorC':'D'}]}
+        context.route(endpoint,lambda route:route.fulfill(json=response,headers={'Access-Control-Allow-Origin':'*'}))
+        bank.evaluate('(url)=>fetch(url)',endpoint)
+        for _ in range(30):
+            imports=worker.evaluate("inlineTest.calls.filter(c=>c.path==='/api/imports')")
+            if imports: break
+            bank.wait_for_timeout(100)
+        assert len(imports)==1
+        assert 'must-not-be-imported' not in imports[0]['body']
+        context.unroute(endpoint)
+        with context.expect_page() as opened:
+            cards.nth(0).get_by_role('button',name='Открыть сверку в ZenImport').click()
+        review_page=opened.value
+        review_page.wait_for_url(f'chrome-extension://{identifier}/app.html#banks/vietinbank')
+        review_page.close()
+        # Duplicate DOM identity must never attach the same editable operation twice.
+        bank.evaluate("document.querySelector('tbody').append(document.querySelector('tbody tr').cloneNode(true))")
+        expect(bank.locator('#zenimport-status')).to_contain_text('Опознано строк: 1 из 3')
+        expect(bank.locator('tbody zenimport-operation').first).to_contain_text('Неоднозначная строка')
+        # Leaving history removes annotations and stops local polling.
+        bank.evaluate("history.pushState({},'', '/home')")
+        expect(bank.locator('#zenimport-status')).to_have_count(0)
+        expect(bank.locator('tbody zenimport-operation')).to_have_count(0)
+        # Extension pages cannot invoke bank-only mutation messages.
+        response=popup.evaluate("chrome.runtime.sendMessage({type:'inline-category',account:'111122223333',id:'inline-new',category:'food'})")
+        assert not response['ok']
+    finally:
+        if bank: bank.close()
+        if popup: popup.close()
+        context.unroute('https://ipay.vietinbank.vn/**')
+        worker.evaluate('''async()=>{globalThis.fetch=inlineOriginalFetch;delete globalThis.inlineOriginalFetch;delete globalThis.inlineTest;
+          await chrome.storage.local.set({inlineEnabled:false});
+          await chrome.scripting.unregisterContentScripts({ids:['inline-history-ui','inline-history-observer']});}''')
