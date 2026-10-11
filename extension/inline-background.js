@@ -38,7 +38,6 @@ async function handle(m,sender){
   const account=accountOf(sender.url),tab=await chrome.tabs.get(sender.tab.id);
   if(!account||account!==accountOf(tab.url)||account!==m.account)throw Error('Банковский счёт или страница изменились.');
   if(!(await chrome.storage.local.get('inlineEnabled')).inlineEnabled)throw Error('Включите работу на странице банка в меню ZenImport.');
-  if(m.type==='inline-open'){await chrome.tabs.create({url:chrome.runtime.getURL('app.html')+'#banks/vietinbank'});return {};}
   if(m.type==='inline-sync'){
     if(!syncing)syncing=api('/api/zenmoney/sync',{}).finally(()=>{syncing=null;});
     await syncing;
@@ -75,7 +74,7 @@ async function handle(m,sender){
 }
 chrome.tabs.onRemoved.addListener(id=>{for(const k of totals.keys())if(k.startsWith(id+':'))totals.delete(k);});
 chrome.runtime.onMessage.addListener((m,sender,reply)=>{
-  if(!['inline-enable','inline-sync','inline-state','inline-import','inline-category','inline-open'].includes(m?.type))return;
+  if(!['inline-enable','inline-sync','inline-state','inline-import','inline-category'].includes(m?.type))return;
   // Serialize imports and local edits; no content-script action can send to ZenMoney.
   const started=Date.now();
   const run=()=>handle(m,sender);

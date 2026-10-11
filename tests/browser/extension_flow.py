@@ -1561,6 +1561,7 @@ def test_inline_bank_statuses_categories_and_account_boundary(browser):
       globalThis.inlineTest={state,calls:[]};globalThis.inlineOriginalFetch=fetch;
       globalThis.fetch=async (url,options={})=>{
         const path=new URL(url).pathname;inlineTest.calls.push({path,method:options.method,body:options.body});
+        if(path==='/api/zenmoney/sync')await new Promise(resolve=>{inlineTest.releaseSync=resolve;});
         if(path==='/api/new-operations/inline-new/category')inlineTest.state.review[0].creation_draft={valid:true,category_id:JSON.parse(options.body).category_id};
         return new Response(JSON.stringify(path==='/api/state'?inlineTest.state:{}),{status:200,headers:{'Content-Type':'application/json'}});
       };
@@ -1574,6 +1575,11 @@ def test_inline_bank_statuses_categories_and_account_boundary(browser):
         popup.locator('#inline-enable').click()
         expect(popup.locator('#inline-status')).to_contain_text('Включено')
         bank = context.new_page(); bank.goto(url)
+        expect(bank.locator('tbody zenimport-operation')).to_have_count(2)
+        expect(bank.locator('tbody zenimport-operation').first).to_contain_text('Получаем данные ZenMoney')
+        assert worker.evaluate('typeof inlineTest.releaseSync')=='function'
+        worker.evaluate('inlineTest.releaseSync()')
+        bank.add_style_tag(content='table{width:100%;border-collapse:collapse}td{padding:12px}body{font-family:system-ui}')
         expect(bank.locator('#zenimport-status')).to_contain_text('Опознано строк: 2 из 2')
         cards = bank.locator('tbody zenimport-operation')
         expect(cards.nth(0).locator('select')).to_have_value('cafe')
@@ -1583,9 +1589,36 @@ def test_inline_bank_statuses_categories_and_account_boundary(browser):
         calls=worker.evaluate('inlineTest.calls')
         assert any(c['path']=='/api/new-operations/inline-new/category' for c in calls)
         assert not any('/send' in c['path'] for c in calls)
+        expect(cards.nth(0).get_by_role('searchbox')).not_to_be_visible()
+        expect(cards.nth(0)).not_to_contain_text('Изменения сохраняются локально')
+        expect(cards.nth(0)).not_to_contain_text('Открыть сверку')
+        widths=bank.evaluate("({table:document.querySelector('table').getBoundingClientRect().width,panel:document.querySelector('tbody zenimport-operation').getBoundingClientRect().width})")
+        assert abs(widths['table']-widths['panel'])<3
+        bank.screenshot(path='/results/inline-horizontal.png',full_page=True)
+        cards.nth(0).get_by_role('combobox').click()
         cards.nth(0).get_by_role('searchbox').fill('Каф')
         bank.wait_for_timeout(16000)  # The periodic local refresh must preserve active search.
         expect(cards.nth(0).get_by_role('searchbox')).to_have_value('Каф')
+        expect(cards.nth(0).get_by_role('option',name='Кафе',exact=True)).to_be_visible()
+        expect(cards.nth(0).get_by_role('option',name='Продукты',exact=True)).to_have_count(0)
+        bank.screenshot(path='/results/inline-category-menu.png',full_page=True)
+        bank.locator('thead').click()
+        expect(cards.nth(0).get_by_role('searchbox')).not_to_be_visible()
+        cards.nth(0).get_by_role('combobox').click()
+        cards.nth(1).get_by_role('combobox').focus()
+        cards.nth(1).get_by_role('combobox').click()
+        expect(cards.nth(0).get_by_role('searchbox')).not_to_be_visible()
+        expect(cards.nth(1).get_by_role('searchbox')).to_be_visible()
+        cards.nth(1).get_by_role('searchbox').press('Escape')
+        expect(cards.nth(1).get_by_role('searchbox')).not_to_be_visible()
+        cards.nth(0).get_by_role('combobox').click()
+        cards.nth(0).get_by_role('searchbox').press('ArrowDown')
+        bank.keyboard.press('Enter')
+        expect(cards.nth(0).locator('select')).to_have_value('cafe')
+        bank.set_viewport_size({'width':480,'height':800})
+        assert bank.evaluate("Math.abs(document.querySelector('tbody zenimport-operation').getBoundingClientRect().width-document.querySelector('table').getBoundingClientRect().width)<3")
+        bank.screenshot(path='/results/inline-horizontal-mobile.png',full_page=True)
+        bank.set_viewport_size({'width':1440,'height':1000})
         endpoint='https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions'
         response={'error':False,'accountNo':'111122223333','currentPage':0,'pageSize':100,'totalRecords':1,
                   'sessionId':'must-not-be-imported','transactions':[{'currency':'VND','remark':'CT DI:TEST0001 Coffee',
@@ -1599,11 +1632,6 @@ def test_inline_bank_statuses_categories_and_account_boundary(browser):
         assert len(imports)==1
         assert 'must-not-be-imported' not in imports[0]['body']
         context.unroute(endpoint)
-        with context.expect_page() as opened:
-            cards.nth(0).get_by_role('button',name='Открыть сверку в ZenImport').click()
-        review_page=opened.value
-        review_page.wait_for_url(f'chrome-extension://{identifier}/app.html#banks/vietinbank')
-        review_page.close()
         # Duplicate DOM identity must never attach the same editable operation twice.
         bank.evaluate("document.querySelector('tbody').append(document.querySelector('tbody tr').cloneNode(true))")
         expect(bank.locator('#zenimport-status')).to_contain_text('Опознано строк: 1 из 3')

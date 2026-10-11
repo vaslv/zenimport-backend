@@ -33,7 +33,7 @@
     if(tables.length!==1) fail('Неоднозначная таблица истории.');
     const table=tables[0], headers=[...table.querySelectorAll('thead th,thead td')].map(text);
     if(headers.join('|')!=='DATE|DESCRIPTION|AMOUNT|BALANCE') fail('Поддерживается проверенная английская версия истории DATE / DESCRIPTION / AMOUNT / BALANCE.');
-    const rows=[...table.querySelectorAll('tbody tr')].map(row=>[...row.querySelectorAll('td')].map(text));
+    const rows=[...table.querySelectorAll('tbody tr:not([data-zenimport-row])')].map(row=>[...row.querySelectorAll('td')].map(text));
     if(!rows.length || rows.some(r=>r.length!==4)) fail('Нет загруженных операций или формат строк изменился.');
     const range=text(document.querySelector('.table-pagination-total-range')).match(/^(\d+)-(\d+)$/);
     const totalText=text(document.querySelector('.table-pagination-total-total'));
