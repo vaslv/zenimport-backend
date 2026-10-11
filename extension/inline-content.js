@@ -2,20 +2,24 @@
 (() => {
   if(globalThis.__zenImportInlineUI)return;globalThis.__zenImportInlineUI=true;
   let account=null,generation=0,state=null,fresh=false,busy=false,signature='',timer,refreshAt=0;
-  const mounted=new Map();let banner,activeMenu,loadError='';
+  const mounted=new Map();let banner,activeMenu,loadError='',syncGeneration=0,pollGeneration=0,nextSyncAt=0,retryDelay=30000;
   const text=e=>e?.textContent?.replace(/\s+/g,' ').trim()||'';
   const norm=v=>String(v??'').replace(/\s+/g,' ').trim();
   const el=(tag,value)=>{const e=document.createElement(tag);if(value!==undefined)e.textContent=value;return e;};
-  const css=`:host{display:block;width:100%;color:#292735;font:14px/1.4 system-ui,sans-serif;text-align:left}*{box-sizing:border-box}[hidden]{display:none!important}section{padding:8px 12px;min-width:0}.operation{display:grid;grid-template-columns:minmax(180px,1fr) minmax(200px,1.5fr) minmax(220px,1.5fr);align-items:center;gap:16px;background:#f8f7fb;border-bottom:1px solid #e4e0ed}p{margin:0}strong{font-weight:500}button,input,select{font:inherit}button{cursor:pointer;border:0;background:transparent;color:#476fa7;padding:0;text-decoration:underline}button:disabled{cursor:wait;opacity:.6}.good{color:#258057}.error{color:#ae3737}.picker{min-width:0}.trigger{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;padding:8px 10px;border:1px solid #d8d3e0;border-radius:6px;background:white;color:#292735;text-decoration:none;text-align:left}.menu{position:fixed;z-index:2147483647;padding:6px;border:1px solid #d8d3e0;border-radius:6px;background:white;box-shadow:0 6px 20px #0002;max-height:320px;overflow:auto}.menu input{width:100%;padding:8px;border:1px solid #d8d3e0;border-radius:4px;position:sticky;top:0;background:white;color:#292735}.options{display:grid;padding-top:4px}.options button{text-align:left;color:#292735;text-decoration:none;padding:8px;border-radius:4px}.options button:hover,.options button:focus{background:#eeeaf5;outline:2px solid #b4a6cb}.options button[aria-selected=true]{background:#f3effa;font-weight:600}.hints{overflow-wrap:anywhere}.hints button{display:inline} @media(max-width:700px){.operation{grid-template-columns:1fr;gap:6px}.menu{max-height:240px}}`;
+  const css=`:host{display:block;width:100%;color:#292735;font:14px/1.4 system-ui,sans-serif;text-align:left}*{box-sizing:border-box}[hidden]{display:none!important}section{padding:8px 12px;min-width:0}.placeholder{min-height:56px;display:flex;align-items:center}.spinner{width:14px;height:14px;border:2px solid #e4e0ed;border-top-color:#8b829b;border-radius:50%;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.operation{min-height:56px;display:grid;grid-template-columns:minmax(180px,1fr) minmax(200px,1.5fr) minmax(220px,1.5fr);align-items:center;gap:16px;background:#f8f7fb;border-bottom:1px solid #e4e0ed}p{margin:0}strong{font-weight:500}button,input,select{font:inherit}button{cursor:pointer;border:0;background:transparent;color:#476fa7;padding:0;text-decoration:underline}button:disabled{cursor:wait;opacity:.6}.good{color:#258057}.error{color:#ae3737}.picker{min-width:0}.trigger{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;padding:8px 10px;border:1px solid #d8d3e0;border-radius:6px;background:white;color:#292735;text-decoration:none;text-align:left}.menu{position:fixed;z-index:2147483647;padding:6px;border:1px solid #d8d3e0;border-radius:6px;background:white;box-shadow:0 6px 20px #0002;max-height:320px;overflow:auto}.menu input{width:100%;padding:8px;border:1px solid #d8d3e0;border-radius:4px;position:sticky;top:0;background:white;color:#292735}.options{display:grid;padding-top:4px}.options button{text-align:left;color:#292735;text-decoration:none;padding:8px;border-radius:4px}.options button:hover,.options button:focus{background:#eeeaf5;outline:2px solid #b4a6cb}.options button[aria-selected=true]{background:#f3effa;font-weight:600}.hints{overflow-wrap:anywhere}.hints button{display:inline} @media(max-width:700px){.operation{grid-template-columns:1fr;gap:6px}.menu{max-height:240px}}`;
   function host(){const h=el('zenimport-operation');const root=h.attachShadow({mode:'open'});const style=el('style',css),box=el('section');root.append(style,box);return {h,box};}
   function clear(){activeMenu?.close();for(const panel of mounted.values())panel.container?.remove();document.querySelectorAll('tr[data-zenimport-row]').forEach(h=>h.remove());mounted.clear();signature='';}
-  function status(message,error=false){if(!document.body)return;if(!banner?.h.isConnected){banner=host();banner.h.id='zenimport-status';document.body.prepend(banner.h);}if(banner.message===message&&banner.error===error)return;banner.message=message;banner.error=error;banner.box.replaceChildren(el('strong','ZenImport · '),el('span',message));banner.box.setAttribute('role','status');banner.box.className=error?'error':'';if(error){const retry=el('button','Повторить получение');retry.onclick=e=>{if(e.isTrusted)start();};banner.box.append(document.createTextNode(' · '),retry);}}
+  function status(message,error=false){if(!document.body)return;if(!banner?.h.isConnected){banner=host();banner.h.id='zenimport-status';document.body.prepend(banner.h);}if(banner.message===message&&banner.error===error)return;banner.message=message;banner.error=error;banner.box.replaceChildren(el('strong','ZenImport · '),el('span',message));banner.box.setAttribute('role','status');banner.box.className=error?'error':'';}
   async function rpc(type,extra={}){const r=await chrome.runtime.sendMessage({type,account,...extra});if(!r?.ok)throw Error(r?.error||'Перезагрузите страницу после обновления расширения.');return r.data;}
   function current(){const u=new URL(location.href);if(u.pathname!=='/payment-history')return null;const a=u.searchParams.get('accountNo');return /^\d{6,30}$/.test(a||'')?a:null;}
   async function start(){
-    const g=++generation;fresh=false;loadError='';state=null;clear();status('Получаем актуальные данные ZenMoney…');render();
-    try{const result=await rpc('inline-sync');if(g!==generation||current()!==account)return;state=result;fresh=true;refreshAt=Date.now();signature='';render();}
-    catch(e){if(g===generation){loadError=e.message;signature='';render();status(e.message,true);}}
+    const g=++generation;syncGeneration=g;fresh=false;loadError='';nextSyncAt=0;signature='';status('Обновляем данные…');render();
+    // Read the persisted mirror before the remote sync can take the backend DB lock.
+    try{const local=await rpc('inline-state');if(g!==generation||current()!==account)return;state=local;refreshAt=Date.now();signature='';render();}catch{}
+    if(g!==generation)return;
+    try{const result=await rpc('inline-sync');if(g!==generation||current()!==account)return;state=result;fresh=true;loadError='';retryDelay=30000;refreshAt=Date.now();}
+    catch(e){if(g===generation){loadError='Не удалось обновить ZenMoney; повторим автоматически.';nextSyncAt=Date.now()+retryDelay;retryDelay=Math.min(retryDelay*2,300000);}}
+    finally{if(g===generation){syncGeneration=0;signature='';render();if(loadError)status(loadError,true);}}
   }
   const number=v=>{const s=norm(v).replace(/ VND$/,'').replaceAll(',','');return /^[+-]?\d+$/.test(s)&&Number.isSafeInteger(Number(s))?Number(s):null;};
   function matches(cells,row){
@@ -44,7 +48,7 @@
       selected:row.creation_draft?.valid?row.creation_draft.category_id:'',ranking:row.creation_ranking||[]};
   }
   function card(row){
-    const panel=host(),v=view(row),heading=el('strong',v.label);panel.box.className='operation';if(v.good)heading.className='good';panel.box.append(heading);
+    const panel=host(),v=view(row),heading=el('strong',!fresh&&v.good?v.label.replace('✓ В ZenMoney','В ZenMoney по сохранённым данным'):v.label);panel.box.className='operation';if(v.good&&fresh)heading.className='good';panel.box.append(heading);
     if(v.editable){
       const categories=[...state.categories].sort((a,b)=>a.title.localeCompare(b.title,'ru'));
       const ranked=(v.ranking||[]).filter(r=>categories.some(c=>c.id===r.id)).sort((a,b)=>b.count-a.count);
@@ -82,25 +86,31 @@
     const tables=[...document.querySelectorAll('table.cms-table')];
     if(tables.length!==1||[...tables[0].querySelectorAll('thead th,thead td')].map(text).join('|')!=='DATE|DESCRIPTION|AMOUNT|BALANCE'){clear();status('Ожидаем таблицу истории DATE / DESCRIPTION / AMOUNT / BALANCE…');return;}
     const rows=[...tables[0].querySelectorAll('tbody tr:not([data-zenimport-row])')].map(tr=>({tr,cells:[...tr.children].filter(n=>n.tagName==='TD').map(td=>{const clone=td.cloneNode(true);clone.querySelectorAll('zenimport-operation').forEach(e=>e.remove());return text(clone);})}));
-    const key=JSON.stringify([fresh,loadError,rows.map(r=>r.cells)]);if(key===signature&&[...mounted].every(([tr,panel])=>tr.isConnected&&panel.container?.isConnected&&panel.container.previousElementSibling===tr))return;clear();signature=key;
+    const key=JSON.stringify([fresh,loadError,!!state,syncGeneration===generation,pollGeneration===generation,rows.map(r=>r.cells)]);if(key===signature&&[...mounted].every(([tr,panel])=>tr.isConnected&&panel.container?.isConnected&&panel.container.previousElementSibling===tr))return;clear();signature=key;
     let found=0;
-    for(const {tr,cells} of rows){if(cells.length!==4)continue;const matchesRows=fresh&&state?state.rows.filter(r=>matches(cells,r)):[];let panel;
+    for(const {tr,cells} of rows){if(cells.length!==4)continue;const matchesRows=state?state.rows.filter(r=>matches(cells,r)):[];let panel;
       if(matchesRows.length===1&&rows.filter(r=>JSON.stringify(r.cells)===JSON.stringify(cells)).length===1){panel=card(matchesRows[0]);found++;}
-      else{panel=host();panel.box.append(el('strong',!fresh?(loadError?'Данные недоступны · повторите получение':'Получаем данные ZenMoney…'):matchesRows.length?'Неоднозначная строка · нужна сверка':'Ожидаем данные операции из ответа банка'));}
+      else{panel=host();panel.box.className='placeholder';if(matchesRows.length)panel.box.append(el('strong','Неоднозначная строка · нужна сверка'));else if(syncGeneration===generation||pollGeneration===generation){const spinner=el('span');spinner.className='spinner';spinner.setAttribute('role','status');spinner.setAttribute('aria-label','Загрузка данных операции');panel.box.append(spinner);}}
       const container=el('tr'),cell=el('td');container.dataset.zenimportRow='';cell.colSpan=4;cell.style.cssText='padding:0!important;border:0!important;';container.append(cell);cell.append(panel.h);tr.after(container);panel.container=container;mounted.set(tr,panel);
     }
-    if(fresh)status(`Данные ZenMoney получены. Опознано строк: ${found} из ${rows.length}.`);
+    if(fresh)status(`Данные ZenMoney получены. Опознано строк: ${found} из ${rows.length}.`);else if(loadError)status(loadError,true);else status('Обновляем ZenMoney… Показываем сохранённые данные.');
   }
   window.addEventListener('message',async e=>{
     if(e.source!==window||e.origin!==location.origin||e.data?.source!=='zenimport-inline-history'||!account)return;
     const g=generation;
     if(e.data.error){status('Не удалось прочитать ответ банка. Повторите Search.',true);return;}
     try{const result=await rpc('inline-import',{data:e.data.data});if(g!==generation)return;state=result;signature='';render();}
-    catch(error){if(g===generation){fresh=false;loadError=error.message;signature='';render();status(error.message,true);}}
+    catch(error){if(g===generation){status(error.message,true);}}
   });
   function tick(){
-    const next=current();if(next!==account){account=next;generation++;fresh=false;state=null;clear();banner?.h.remove();banner=null;if(account)start();}
-    if(account){if(!fresh&&!banner)status('Получаем актуальные данные ZenMoney…');render();if(fresh&&!busy&&Date.now()-refreshAt>15000){refreshAt=Date.now();const g=generation;rpc('inline-state').then(s=>{if(g===generation){const changed=JSON.stringify(state)!==JSON.stringify(s);state=s;if(changed){signature='';render();}}},e=>{if(g===generation){fresh=false;loadError=e.message;signature='';render();status(e.message,true);}});}}
+    const next=current();if(next!==account){account=next;generation++;syncGeneration=pollGeneration=0;nextSyncAt=0;retryDelay=30000;fresh=false;state=null;clear();banner?.h.remove();banner=null;if(account)start();}
+    if(!account)return;
+    render();
+    if(nextSyncAt&&Date.now()>=nextSyncAt&&!busy&&syncGeneration!==generation){start();return;}
+    if(!busy&&syncGeneration!==generation&&pollGeneration!==generation&&Date.now()-refreshAt>15000){
+      refreshAt=Date.now();const g=generation;pollGeneration=g;
+      rpc('inline-state').then(s=>{if(g===generation){const changed=JSON.stringify(state)!==JSON.stringify(s);state=s;if(changed)signature='';}},()=>{if(g===generation)status('Нет связи с локальным сервером. Повторим автоматически.',true);}).finally(()=>{if(g===generation){pollGeneration=0;render();}});
+    }
   }
   document.addEventListener('pointerdown',e=>{if(activeMenu&&!e.composedPath().includes(activeMenu.h))activeMenu.close();},true);
   document.addEventListener('focusin',e=>{if(activeMenu&&!e.composedPath().includes(activeMenu.h))activeMenu.close();},true);

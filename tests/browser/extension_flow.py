@@ -1540,7 +1540,8 @@ def test_new_operations_categories_and_scoped_creation_confirmation(browser):
     page.close()
 
 
-def test_inline_bank_statuses_categories_and_account_boundary(browser):
+@pytest.mark.parametrize('sync_failure',[False,True])
+def test_inline_bank_statuses_categories_and_account_boundary(browser,sync_failure):
     context, identifier = browser
     worker = context.service_workers[0]
     # No live bank/ZenMoney traffic. Exercise the actual registered scripts and worker.
@@ -1558,15 +1559,16 @@ def test_inline_bank_statuses_categories_and_account_boundary(browser):
         'category_sends': [], 'last_sync': 1,
     }
     worker.evaluate('''async state=>{
-      globalThis.inlineTest={state,calls:[]};globalThis.inlineOriginalFetch=fetch;
+      globalThis.inlineTest={state,calls:[],syncs:0};globalThis.inlineOriginalFetch=fetch;
       globalThis.fetch=async (url,options={})=>{
         const path=new URL(url).pathname;inlineTest.calls.push({path,method:options.method,body:options.body});
-        if(path==='/api/zenmoney/sync')await new Promise(resolve=>{inlineTest.releaseSync=resolve;});
+        if(path==='/api/zenmoney/sync'&&++inlineTest.syncs===1){await new Promise(resolve=>{inlineTest.releaseSync=resolve;});if(inlineTest.failSync)return new Response(JSON.stringify({detail:'Synthetic sync failure'}),{status:502});}
         if(path==='/api/new-operations/inline-new/category')inlineTest.state.review[0].creation_draft={valid:true,category_id:JSON.parse(options.body).category_id};
         return new Response(JSON.stringify(path==='/api/state'?inlineTest.state:{}),{status:200,headers:{'Content-Type':'application/json'}});
       };
       await chrome.storage.local.set({baseUrl:'http://127.0.0.1:8000',token:'docker-test-token-not-for-real-data'});
     }''', data)
+    worker.evaluate('(fail)=>{inlineTest.failSync=fail}',sync_failure)
     bank = popup = None
     url = 'https://ipay.vietinbank.vn/payment-history?accountNo=111122223333'
     try:
@@ -1576,9 +1578,23 @@ def test_inline_bank_statuses_categories_and_account_boundary(browser):
         expect(popup.locator('#inline-status')).to_contain_text('Включено')
         bank = context.new_page(); bank.goto(url)
         expect(bank.locator('tbody zenimport-operation')).to_have_count(2)
-        expect(bank.locator('tbody zenimport-operation').first).to_contain_text('Получаем данные ZenMoney')
+        expect(bank.locator('tbody zenimport-operation').first.locator('select')).to_have_value('cafe')
+        expect(bank.locator('tbody zenimport-operation').nth(1)).to_contain_text('по сохранённым данным')
+        expect(bank.locator('tbody')).not_to_contain_text('Данные недоступны')
         assert worker.evaluate('typeof inlineTest.releaseSync')=='function'
+        if sync_failure:
+            bank.evaluate("const tr=document.querySelector('tbody tr').cloneNode(true);tr.id='unknown-row';tr.children[1].textContent='Unknown operation';document.querySelector('tbody').append(tr)")
+            expect(bank.locator('#unknown-row + tr .spinner')).to_be_visible()
         worker.evaluate('inlineTest.releaseSync()')
+        if sync_failure:
+            expect(bank.locator('#zenimport-status')).to_contain_text('повторим автоматически')
+            expect(bank.locator('tbody zenimport-operation').first.locator('select')).to_have_value('cafe')
+            expect(bank.locator('#unknown-row + tr .spinner')).to_have_count(0)
+            expect(bank.locator('#unknown-row + tr zenimport-operation section')).to_have_text('')
+            assert bank.locator('#unknown-row + tr').bounding_box()['height']>=56
+            bank.evaluate("document.querySelector('#unknown-row').remove()")
+            expect(bank.locator('#zenimport-status')).to_contain_text('Данные ZenMoney получены',timeout=40000)
+            assert worker.evaluate('inlineTest.syncs')==2
         bank.add_style_tag(content='table{width:100%;border-collapse:collapse}td{padding:12px}body{font-family:system-ui}')
         expect(bank.locator('#zenimport-status')).to_contain_text('Опознано строк: 2 из 2')
         cards = bank.locator('tbody zenimport-operation')
