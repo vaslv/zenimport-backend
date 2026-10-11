@@ -77,3 +77,24 @@ def test_category_transport_cannot_change_amount_or_identity():
     for bad in [{**payload,'outcome':43},{**payload,'id':'new'},{**payload,'tag':[]}]:
         with pytest.raises(ValueError):client.update_categories([(before,bad)],1)
     assert len(seen)==1
+
+
+def test_create_transactions_transport_and_guardrails():
+    import uuid
+    import copy
+    payload={'id':str(uuid.uuid4()),'user':1,'created':100,'changed':100,'deleted':False,'hold':False,
+             'date':'2026-10-11','incomeAccount':'account','outcomeAccount':'account','incomeInstrument':1,'outcomeInstrument':1,
+             'income':0,'outcome':12.34,'tag':['food'],'payee':'Shop','comment':'Payment'}
+    requests=[]
+    def handle(request):
+        requests.append(json.loads(request.content))
+        assert str(request.url)=='https://api.zenmoney.ru/v8/diff/'
+        return httpx.Response(200,json={'serverTimestamp':20})
+    client=Client('private-secret',transport=httpx.MockTransport(handle),clock=lambda:200)
+    client.create_transactions([payload],10)
+    assert requests==[{'serverTimestamp':10,'currentClientTimestamp':200,'transaction':[payload]}]
+    for key,value in [('deleted',True),('hold',True),('income',2),('outcome',-1),('outcome',float('nan')),('tag',[]),('incomeAccount','other'),('id','existing'),('user',0)]:
+        invalid=copy.deepcopy(payload);invalid[key]=value
+        with pytest.raises(ValueError):client.create_transactions([invalid],10)
+    with pytest.raises(ValueError):client.create_transactions([payload,payload],10)
+    assert len(requests)==1

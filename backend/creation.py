@@ -1,0 +1,187 @@
+"""Local new-operation drafts and explicit, at-most-once remote creation attempts."""
+import json
+import time
+import uuid
+from decimal import Decimal
+from fastapi import HTTPException
+from .db import transaction, entities
+from .service import review, get_row, get_entity, mapped_account, fail, audit, SCALES
+from .reconciliation import recipient, recipient_profiles
+from .category_send import fingerprint
+from .zenmoney import apply_diff
+
+
+def selected(row, accounts, scope):
+    return (accounts[row['bank_account']]['bank'] == scope.bank and
+            (not scope.account or row['bank_account'] == scope.account) and
+            (not scope.start or row['date'] >= str(scope.start)) and
+            (not scope.end or row['date'] <= str(scope.end)))
+
+
+def profiles(db, rows):
+    txs = entities(db, 'transaction')
+    result = recipient_profiles(rows, {}, txs, entities(db, 'tag'))
+    return {(p['bank_account'], p['key'], p['direction']):p['categories'] for p in result}
+
+
+def ranking(row, learned):
+    key, _ = recipient(row)
+    return learned.get((row['bank_account'], key, 'income' if row['amount_minor'] > 0 else 'expense'), [])
+
+
+def prepare(db, scope):
+    if scope.start and scope.end and scope.start > scope.end: fail('Начало периода позже конца', 422)
+    rows = review(db); learned = profiles(db, rows)
+    historical_txs = {t['id']:t for t in entities(db, 'transaction')}
+    accounts = {a['id']:dict(a) for a in db.execute('SELECT * FROM bank_accounts')}
+    for row in rows:
+        if row['state'] != 'pending' or not selected(row, accounts, scope): continue
+        old = db.execute('SELECT * FROM creation_drafts WHERE bank_id=?', (row['id'],)).fetchone()
+        if old and old['source'] == 'manual': continue
+        choices = ranking(row, learned); key, _ = recipient(row)
+        category = choices[0]['id'] if key and not key.startswith('description:') and len(choices) == 1 and choices[0]['count'] >= 2 else None
+        # Split/uncategorized confirmed payments are not evidence of one unambiguous category.
+        if category and any(other['bank_account']==row['bank_account'] and recipient(other)[0]==key
+                            and (other['amount_minor']>0)==(row['amount_minor']>0)
+                            and other.get('reconciliation_status')=='synced'
+                            and (other.get('split_ids') or historical_txs.get(other.get('linked_id'),{}).get('tag') != [category]) for other in rows):
+            category = None
+        if not old or old['category_id'] != category:
+            db.execute('INSERT OR REPLACE INTO creation_drafts VALUES (?,?,?,?)', (row['id'], category, 'auto', int(time.time())))
+            audit(db, 'creation_category_auto', {'bank_id':row['id'], 'category_id':category, 'evidence':choices})
+    return {'status':'prepared'}
+
+
+def save_category(db, identifier, category):
+    row = get_row(db, 'bank_transactions', identifier)
+    if row['state'] != 'pending' or db.execute('SELECT 1 FROM creation_jobs WHERE bank_id=?',(identifier,)).fetchone():
+        fail('Операция уже связана, исключена или отправлялась')
+    if category and get_entity(db, 'tag', category).get('deleted'): fail('Категория удалена')
+    db.execute('INSERT OR REPLACE INTO creation_drafts VALUES (?,?,?,?)', (identifier, category, 'manual', int(time.time())))
+    audit(db, 'creation_category_manual', {'bank_id':identifier, 'category_id':category})
+    return {'category_id':category}
+
+
+def decorate(db, rows):
+    drafts = {r['bank_id']:dict(r) for r in db.execute('SELECT * FROM creation_drafts')}
+    jobs = {r['bank_id']:dict(r) for r in db.execute('SELECT * FROM creation_jobs')}
+    tags = {t['id']:t for t in entities(db, 'tag') if not t.get('deleted')}
+    learned = profiles(db, rows)
+    for row in rows:
+        draft = drafts.get(row['id'])
+        row['creation_draft'] = {**draft, 'title':tags.get(draft['category_id'],{}).get('title'),
+                                 'valid':draft['category_id'] in tags} if draft else None
+        row['creation_ranking'] = ranking(row, learned)
+        job = jobs.get(row['id'])
+        row['creation_job'] = {k:job[k] for k in ('zen_id','state','error')} if job else None
+
+
+def preview(db, scope):
+    from .day_review import proposals
+    prepare(db, scope)
+    rows = review(db); days = proposals(db, rows)
+    split_ids = {c['bank_id'] for d in days for c in d.get('split_candidates', [])}
+    accounts = {a['id']:dict(a) for a in db.execute('SELECT * FROM bank_accounts')}
+    drafts = {r['bank_id']:dict(r) for r in db.execute('SELECT * FROM creation_drafts')}
+    fresh_row = db.execute("SELECT value FROM meta WHERE key='creation_fresh'").fetchone()
+    fresh = json.loads(fresh_row[0]) if fresh_row else {}
+    items = []
+    for row in rows:
+        if not selected(row, accounts, scope) or row['state'] != 'pending': continue
+        draft = drafts.get(row['id']);target = {}; tag = {}; error = None
+        try:
+            target = mapped_account(db, accounts[row['bank_account']])
+            if row['candidates'] or row['id'] in split_ids: fail('Сначала разберите возможное совпадение с ZenMoney')
+            if not row['amount_minor']: fail('Нулевая сумма: создание недоступно')
+            if not draft or not draft['category_id']: fail('Выберите категорию')
+            tag = get_entity(db, 'tag', draft['category_id'])
+            if tag.get('deleted'): fail('Категория удалена')
+            if str(target['id']) not in fresh.get('account',[]) or str(target['instrument']) not in fresh.get('instrument',[]) or tag['id'] not in fresh.get('tag',[]):
+                fail('Счёт, валюта или категория отсутствуют в свежем ответе ZenMoney')
+            if target.get('type') == 'debt': fail('Долговой счёт требует отдельного оформления')
+            if db.execute('SELECT 1 FROM creation_jobs WHERE bank_id=?',(row['id'],)).fetchone(): fail('Создание уже запускалось; проверьте результат')
+        except HTTPException as exc: error = exc.detail
+        target_fields = {k:target.get(k) for k in ('id','user','instrument','archive','deleted','type','title')}
+        items.append({'bank_id':row['id'], 'date':row['date'], 'amount_minor':row['amount_minor'], 'currency':row['currency'],
+                      'description':row['description'], 'account':target.get('title','Счёт не привязан'),
+                      'category':tag.get('title'), 'source':draft['source'] if draft else None, 'error':error,
+                      'snapshot':fingerprint([get_row(db,'bank_transactions',row['id']),draft,target_fields,tag.get('id'),tag.get('title')])})
+    return items
+
+
+def payload_for(db, row, category):
+    account = get_row(db,'bank_accounts',row['bank_account']);target = mapped_account(db,account)
+    amount = Decimal(abs(row['amount_minor'])) / SCALES[account['currency']]
+    if Decimal(str(float(amount))) != amount: fail('Сумма не может быть точно представлена для API')
+    raw = json.loads(row['raw']);payee = (raw.get('details') or {}).get('corresponsiveName') or None
+    now = int(time.time())
+    return {'id':str(uuid.uuid4()),'user':target['user'],'created':now,'changed':now,'deleted':False,'hold':False,
+            'date':row['date'],'incomeAccount':target['id'],'outcomeAccount':target['id'],
+            'incomeInstrument':target['instrument'],'outcomeInstrument':target['instrument'],
+            'income':float(amount) if row['amount_minor']>0 else 0,'outcome':float(amount) if row['amount_minor']<0 else 0,
+            'tag':[category],'payee':payee,'comment':row['description']}
+
+
+def matches(expected, actual):
+    # Compare every field we authored except server-adjusted timestamps; server may add defaults.
+    return all(actual.get(k) == value for k,value in expected.items() if k not in ('created','changed'))
+
+
+def refresh(path, client):
+    with transaction(path) as db:
+        cursor = db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()
+        cursor = int(cursor[0]) if cursor else 0
+        try:
+            result = client.diff({'serverTimestamp':cursor,'currentClientTimestamp':int(time.time()),
+                                  'forceFetch':['transaction','account','tag','instrument']})
+            if any(k not in result for k in ('transaction','account','tag','instrument')):
+                raise ValueError('Incomplete authoritative response')
+            apply_diff(db,result,cursor)
+        except Exception: fail('Не удалось получить свежие данные ZenMoney. Создание не подтверждено.',502)
+        remote = {t['id']:t for t in result['transaction']}
+        for job in db.execute("SELECT * FROM creation_jobs WHERE state!='sent'").fetchall():
+            actual = remote.get(job['zen_id'])
+            state = 'sent' if actual and matches(json.loads(job['payload']),actual) else 'conflict' if actual else 'uncertain'
+            error = None if state=='sent' else 'Данные записи отличаются от отправленных' if actual else 'Запись пока не подтверждена. Повторите проверку; новая отправка заблокирована.'
+            if state=='sent':
+                from .link_groups import insert
+                insert(db,[job['bank_id']],[job['zen_id']],'single','creation',state='sent')
+                db.execute('DELETE FROM creation_drafts WHERE bank_id=?',(job['bank_id'],))
+                audit(db,'creation_verified',{'bank_id':job['bank_id'],'zen_id':job['zen_id']})
+            db.execute('UPDATE creation_jobs SET state=?,error=? WHERE bank_id=?',(state,error,job['bank_id']))
+        db.execute("INSERT OR REPLACE INTO meta VALUES ('creation_fresh',?)", (json.dumps({k:[str(t['id']) for t in result[k]] for k in ('account','tag','instrument')}),))
+    return results(path)
+
+
+def results(path):
+    with transaction(path,read_only=True) as db:
+        return {'results':[dict(r) for r in db.execute('SELECT bank_id,zen_id,state,error FROM creation_jobs')]}
+
+
+def send(path, client, scope):
+    ids = [i.bank_id for i in scope.items]
+    if len(set(ids)) != len(ids): fail('Повтор операции в запросе',422)
+    refresh(path,client)
+    with transaction(path) as db:
+        current = {r['bank_id']:r for r in preview(db,scope)}
+        for item in scope.items:
+            row = current.get(item.bank_id)
+            if not row or row['error'] or row['snapshot'] != item.snapshot:
+                fail('Данные изменились или есть препятствия для создания. Откройте просмотр заново.')
+        payloads = []
+        for identifier in ids:
+            row = get_row(db,'bank_transactions',identifier)
+            draft = db.execute('SELECT category_id FROM creation_drafts WHERE bank_id=?',(identifier,)).fetchone()
+            payload = payload_for(db,row,draft[0]);payloads.append(payload)
+            if db.execute("SELECT 1 FROM zen_entities WHERE kind='transaction' AND id=?",(payload['id'],)).fetchone(): fail('Конфликт идентификатора')
+            db.execute('INSERT INTO creation_jobs VALUES (?,?,?,?,NULL)',(identifier,payload['id'],json.dumps(payload),'uncertain'))
+            db.execute("UPDATE bank_transactions SET state='queued',linked_id=? WHERE id=?",(payload['id'],identifier))
+            audit(db,'creation_intent',{'bank_id':identifier,'payload':payload})
+        cursor = int(db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()[0])
+    try:
+        client.create_transactions(payloads,cursor)
+    except Exception:
+        pass  # Durable intent prevents any blind resend, including after a timeout/restart.
+    try: refresh(path,client)
+    except HTTPException: pass
+    return {'results':[r for r in results(path)['results'] if r['bank_id'] in ids]}

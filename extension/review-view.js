@@ -1,3 +1,4 @@
+import {newOperationPicker} from './new-operations.js';
 import {categoryPicker,destroyCategoryPickers} from './category-picker.js';
 import {categoryNeedsWork,zenRowsById,bankNeedsCategory,linkedIds} from './category-state.js';
 import {reviewPairs} from './pairs-review-dialog.js';
@@ -106,7 +107,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
     if(suggestion)content.append(node('span',`${suggestion.conflict?'Категория неоднозначна':'Уверенная подсказка'} · ${suggestion.count} примера · требуется подтверждение`,'suggestion-label '+(suggestion.conflict?'confidence-low':'confidence-high')));
     const sum=node('span',money(t),'ledger-amount'+(t.amount_minor>0?' income':''));summary.append(symbol,content,sum);item.append(summary);
     const detail=node('div',undefined,'ledger-detail');detail.append(node('p',t.description));
-    if(!t.mapped)detail.append(node('p','Сопоставьте банковский счёт со счётом ZenMoney в разделе «Счета банка».','notice'));
+    if(!t.mapped)detail.append(node('p','Сопоставьте банковский счёт со счётом ZenMoney в разделе «Банки» → «Привязка счетов».','notice'));
     if(s==='conflict')detail.append(node('p','Связанная запись отсутствует или больше не совпадает по счёту, сумме и дате. Проверьте историю и отмените связь при необходимости.','notice'));
     if(linked)detail.append(node('p',`ZenMoney: ${linked.date} · ${linked.payee||linked.comment||'Без описания'} · ${linked.categories?.join(', ')||'Без категории'}`));
     if(t.state==='linked'&&state.capabilities?.local_review)detail.append(button(t.group?.kind==='settlement'?'Отменить весь взаиморасчёт':'Отменить связь',()=>({path:`/api/review/${t.id}/link`,body:{},method:'DELETE'})));
@@ -116,7 +117,9 @@ export function renderReview(container,state,{account='',status='all',query='',s
       const zs=new Map((state.day_review||[]).flatMap(d=>d.zen_rows||[]).map(z=>[z.id,z]));
       for(const id of ids){const z=zs.get(id);if(z&&!z.excluded&&!z.transfer&&(!z.categories?.length||z.category_draft))detail.append(categoryPicker(z,state,onAction));}
     }
+    if(t.creation_job&&t.creation_job.state!=='sent')detail.append(node('p',t.creation_job.error||'Создание ожидает проверки результата.','notice'));
     if(t.state==='pending'){
+      if(state.capabilities?.create&&!t.candidates.length)detail.append(newOperationPicker(t,state,onAction));
       const picker=node('select');picker.append(new Option('Без категории',''));
       for(const c of state.categories||[])if(!c.deleted)picker.append(new Option(c.title,c.id));
       if(state.capabilities?.write)detail.append(picker);
@@ -131,8 +134,8 @@ export function renderReview(container,state,{account='',status='all',query='',s
         suggestion.distribution.forEach(c=>why.append(node('p',`${c.title}: ${c.count}`)));
         suggestion.examples.forEach(e=>why.append(node('small',`${e.date} · ${e.payee||'Подтверждённая связь'} · ${e.title}`)));detail.append(why);
       }else if(!t.candidates.length)detail.append(node('p','Пока недостаточно повторений для уверенного выбора категории. Доступные примеры показаны в списке.','muted'));
-      if(!state.capabilities?.write)detail.append(node('p','Запись отключена: новые операции пока не отправляются в ZenMoney.','muted'));
-      else if(t.mapped){
+      if(!state.capabilities?.write&&!state.capabilities?.create)detail.append(node('p','Запись отключена: новые операции пока не отправляются в ZenMoney.','muted'));
+      else if(state.capabilities?.write&&t.mapped){
 
         detail.append(button('Подтвердить создание',()=>{if(t.candidates.length&&!confirm('Есть похожие операции. Создать отдельную?'))return null;return {path:`/api/review/${t.id}/confirm`,body:{action:'create',category:picker.value||null,reviewed_candidates:t.candidates.map(c=>c.id)}};}));
       }

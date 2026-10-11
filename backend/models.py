@@ -131,3 +131,22 @@ class CategorySendItem(StrictModel):
 
 class CategorySend(StrictModel):
     items: list[CategorySendItem] = Field(min_length=1, max_length=20)
+
+
+class NewOperationScope(StrictModel):
+    bank: str = Field(pattern=r'^[a-z0-9_-]{1,40}$')
+    account: str | None = None
+    start: date | None = None
+    end: date | None = None
+
+
+class NewOperationCategory(StrictModel):
+    category_id: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class NewOperationItem(DayDecision):
+    bank_id: str = Field(min_length=1, max_length=200)
+
+
+class NewOperationSend(NewOperationScope):
+    items: list[NewOperationItem] = Field(min_length=1, max_length=20)

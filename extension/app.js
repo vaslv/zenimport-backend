@@ -1,3 +1,4 @@
+import {creationDialog} from './new-operations.js';
 import {bankScope,bankTitle} from './bank-scope.js';
 import {categorySendDialog} from './category-send-dialog.js';
 import {renderReview} from './review-view.js';
@@ -22,6 +23,13 @@ function controls() {
   $('show-archived').disabled=busy;
   $('save').disabled=busy; $('url').disabled=busy; $('token').disabled=busy;
   categoryControls();
+  const creationRows=state&&bankWorkspace()?bankScope(state,selectedBank()).review.filter(r=>(!reviewAccount||r.bank_account===reviewAccount)&&(!$('review-start').value||r.date>=$('review-start').value)&&(!$('review-end').value||r.date<=$('review-end').value)):[];
+  const newRows=creationRows.filter(r=>r.state==='pending');
+  $('creation-send').hidden=!state?.capabilities?.create||!bankWorkspace();
+  $('creation-send').textContent=`Создать операции в ZenMoney · ${newRows.length}`;
+  $('creation-send').disabled=busy||!connected||!newRows.length;
+  $('creation-verify').hidden=!state?.capabilities?.create||!creationRows.some(r=>r.creation_job&&r.creation_job.state!=='sent');
+
   $('send').disabled=busy||!connected||!state?.capabilities?.write||!state?.outbox?.some(x=>['queued','uncertain'].includes(x.state));
   $('demo').disabled=busy||!connected||state?.mode!=='demo';
   $('connection').textContent=busy?'Обновление…':connected?'Сервер подключён':'Нет подключения';
@@ -31,6 +39,7 @@ function selectedBank(){
   const [route,id]=location.hash.slice(1).split('/');
   return ['banks','bank-settings'].includes(route)&&id?decodeURIComponent(id):'';
 }
+function creationScope(){return {bank:selectedBank(),account:reviewAccount||null,start:$('review-start').value||null,end:$('review-end').value||null};}
 function bankWorkspace(){return location.hash.startsWith('#banks/')&&!!selectedBank();}
 function categoryScopeIds(){
   if(!bankWorkspace())return null;
@@ -62,7 +71,7 @@ function navigate() {
   $('review-search').closest('label').hidden=attention;
   document.querySelector('.status-filters').hidden=attention;
   $('queue-panel').hidden=attention||(!state?.capabilities?.write&&!state?.outbox?.length);
-  if(state){render();controls();}
+  if(state){render();controls();if(bankWorkspace()&&state.capabilities?.create&&connected&&!busy)run(async()=>{});}
   if(name==='zenmoney')setZenTab(location.hash.split('/')[1]||zenTab);
 }
 function render() {
@@ -122,7 +131,7 @@ function render() {
   $('history-coverage').textContent=coverage?.first_date?`В базе: ${coverage.first_date} — ${coverage.last_date}. Полнота периода ещё не подтверждена.`:'История ещё не загружена.';
   $('history-page').textContent=historyPage?`Найдено: ${historyPage.total}. Показано: ${historyPage.items.length?historyOffset+1:0}–${historyOffset+historyPage.items.length}.`:'';
   renderHistory($('zen'),state.zenmoney_transactions,state,historyAccount,fn=>run(async()=>{const request=fn();if(request)await api(request.path,request.body,request.method);}));
-  $('write-note').textContent=state.mode==='demo'?'DEMO: подтверждение и отправка работают только с учебными данными.':'Связь с существующей операцией подтверждается локально. Новые операции в ZenMoney пока не отправляются.';
+  $('write-note').textContent=state.mode==='demo'?'DEMO: подтверждение и отправка работают только с учебными данными.':'Связи и категории сохраняются локально. Новые записи создаются отдельно после просмотра и подтверждения.';
   controls();
 }
 let reviewAccount='',reviewFilter='all',reviewLimit=100;
@@ -148,6 +157,7 @@ $('review-account').onchange=()=>{reviewAccount=$('review-account').value;review
 for(const id of ['review-search','review-start','review-end'])$(id).oninput=()=>{reviewLimit=100;renderLedger();controls();};
 document.querySelectorAll('[data-review-status]').forEach(b=>b.onclick=()=>{reviewFilter=b.dataset.reviewStatus;reviewLimit=100;renderLedger();controls();});
 async function refresh() {
+  if(bankWorkspace())await api('/api/new-operations/prepare',creationScope());
   const result=await api('/api/state');
   if(!['demo','live'].includes(result.mode)||!['bank_accounts','zenmoney_accounts','categories','review','outbox','zenmoney_transactions'].every(k=>Array.isArray(result[k])))throw new Error('Сервер вернул несовместимый формат данных.');
   const params=new URLSearchParams({limit:'100',offset:String(historyOffset)});
@@ -197,6 +207,8 @@ $('history-prev').onclick=()=>run(async()=>{historyOffset=Math.max(0,historyOffs
 $('history-next').onclick=()=>run(async()=>{historyOffset+=100;});
 $('refresh').onclick=()=>run(async()=>{});
 $('category-send').onclick=()=>run(async()=>{const preview=await api('/api/category-updates/preview',{});const ids=categoryScopeIds();categorySendDialog(ids?preview.items.filter(i=>ids.has(i.zen_id)):preview.items,state,request=>run(()=>api(request.path,request.body)));});
+$('creation-send').onclick=()=>run(async()=>{const scope=creationScope();const preview=await api('/api/new-operations/preview',scope);creationDialog(preview.items,scope,body=>run(()=>api('/api/new-operations/send',body)));});
+$('creation-verify').onclick=()=>run(()=>api('/api/new-operations/verify',{}));
 $('category-verify').onclick=()=>run(()=>api('/api/category-updates/verify',{}));
 $('sync').onclick=()=>run(()=>api('/api/zenmoney/sync',{}));
 $('demo').onclick=async()=>{const config=await settings();chrome.tabs.create({url:config.baseUrl+'/demo-bank'});};

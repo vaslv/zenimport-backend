@@ -1,6 +1,9 @@
 """Fixed-endpoint transport with separate reads and category updates."""
 import json
 import time
+import math
+import uuid
+from datetime import date
 from collections.abc import Callable, Sequence
 import httpx
 
@@ -122,6 +125,30 @@ class Client:
         if len({t['id'] for t in transactions}) != len(transactions):
             raise ValueError('Duplicate transaction')
         return self._exchange({'currentClientTimestamp': int(self._clock()), 'serverTimestamp': server_timestamp, 'transaction': transactions})
+
+    def create_transactions(self, transactions, server_timestamp=0):
+        if type(server_timestamp) is not int or server_timestamp < 0 or not 1 <= len(transactions) <= 20:
+            raise ValueError('Invalid creation request')
+        allowed = {'id','user','created','changed','deleted','hold','date','incomeAccount','outcomeAccount',
+                   'incomeInstrument','outcomeInstrument','income','outcome','tag','payee','comment'}
+        for tx in transactions:
+            if set(tx) != allowed or uuid.UUID(tx['id']).version != 4:
+                raise ValueError('Expected a new UUID and supported creation fields')
+            date.fromisoformat(tx['date'])
+            if any(type(tx[k]) is not int or tx[k] <= 0 for k in ('user','created','changed','incomeInstrument','outcomeInstrument')):
+                raise ValueError('Invalid identity or timestamps')
+            if tx['deleted'] is not False or tx['hold'] is not False:
+                raise ValueError('Only posted transactions may be created')
+            if not tx['incomeAccount'] or tx['incomeAccount'] != tx['outcomeAccount'] or tx['incomeInstrument'] != tx['outcomeInstrument']:
+                raise ValueError('Only single-account income or expense is supported')
+            if any(type(tx[k]) not in (int,float) or not math.isfinite(tx[k]) or tx[k]<0 for k in ('income','outcome')) or (tx['income']>0)==(tx['outcome']>0):
+                raise ValueError('Expected one positive amount')
+            if not isinstance(tx['tag'],list) or len(tx['tag'])!=1 or not isinstance(tx['tag'][0],str) or not tx['tag'][0]:
+                raise ValueError('Expected one category')
+            if not isinstance(tx['comment'],str) or (tx['payee'] is not None and not isinstance(tx['payee'],str)):
+                raise ValueError('Invalid description')
+        if len({t['id'] for t in transactions}) != len(transactions): raise ValueError('Duplicate UUID')
+        return self._exchange({'currentClientTimestamp':int(self._clock()),'serverTimestamp':server_timestamp,'transaction':transactions})
 
     def _exchange(self, payload):
         server_timestamp = payload['serverTimestamp']

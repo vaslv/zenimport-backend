@@ -24,6 +24,10 @@ class ZenMoney:
             raise ValueError('Live client supports read-only synchronization')
         return Client(self.token).read_diff(payload['serverTimestamp'], force_fetch=payload.get('forceFetch'))
 
+    def create_transactions(self, transactions, server_timestamp):
+        if self.mode != 'live': raise ValueError('Creation endpoint requires live mode')
+        return Client(self.token).create_transactions(transactions, server_timestamp)
+
     def update_categories(self, changes, server_timestamp):
         if self.mode == 'demo':
             raise ValueError('Category sending is enabled only for live integration')

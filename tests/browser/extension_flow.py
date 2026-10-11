@@ -1417,3 +1417,65 @@ def test_bank_workspace_scopes_whole_days_and_keeps_drafts_until_sent(browser):
     expect(page.locator('#review')).to_contain_text('foreign-draft')
     expect(page.locator('#review')).not_to_contain_text('same-day-complete')
     page.close()
+
+
+def test_new_operations_categories_and_scoped_creation_confirmation(browser):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True,'category_write':True,'create':True},
+                 review=[],day_review=[],outbox=[],recipient_profiles=[],category_sends=[],category_draft_count=0)
+    state['bank_accounts']=[{'id':'ba','bank':'vietinbank','account':'1234','currency':'VND','zenmoney_account':'za'}]
+    state['zenmoney_accounts']=[{'id':'za','title':'VietinBank account','instrument':1}]
+    state['categories']=[{'id':'food','title':'Еда'},{'id':'toys','title':'Игрушки'},{'id':'adjust','title':'Корректировка'}]
+    for id in ['known','mixed','unknown']:
+        state['review'].append({'id':id,'bank_account':'ba','date':'2026-10-11','amount_minor':-100,'currency':'VND','description':id,
+            'raw':{},'state':'pending','mapped':True,'candidates':[],'linked':None,'reconciliation_status':'new','creation_job':None,
+            'creation_draft':{'category_id':'food','title':'Еда','source':'auto','valid':True} if id=='known' else None,
+            'creation_ranking':[{'id':'food','count':3},{'id':'toys','count':2}] if id=='mixed' else [{'id':'food','count':3}] if id=='known' else []})
+    state['day_review']=[{'bank_account':'ba','date':'2026-10-11','bank_ids':['known','mixed','unknown'],'zen_rows':[],
+                         'bank_count':3,'zen_count':0,'equal':False,'resolved':False,'pairs':[],'preview_pairs':[]}]
+    page=context.new_page();writes=[];saved=[]
+    page.route('**/api/state',lambda route:route.fulfill(json=state))
+    page.route('**/api/new-operations/prepare',lambda route:route.fulfill(json={'status':'prepared'}))
+    def save(route):
+        id=route.request.url.split('/')[-2];body=json.loads(route.request.post_data);saved.append((id,body))
+        row=next(r for r in state['review'] if r['id']==id)
+        category=body['category_id'];row['creation_draft']={'category_id':category,'title':'Игрушки','valid':True,'source':'manual'}
+        route.fulfill(json=body)
+    page.route('**/api/new-operations/*/category',save)
+    def preview(route):
+        assert json.loads(route.request.post_data)['bank']=='vietinbank'
+        route.fulfill(json={'items':[{'bank_id':r['id'],'date':r['date'],'amount_minor':r['amount_minor'],'currency':'VND','description':r['description'],
+            'account':'VietinBank account','category':(r['creation_draft'] or {}).get('title'),'source':(r['creation_draft'] or {}).get('source'),
+            'error':None if r['creation_draft'] else 'Выберите категорию','snapshot':'a'*64} for r in state['review']]})
+    page.route('**/api/new-operations/preview',preview)
+    def send(route):
+        writes.append(json.loads(route.request.post_data));route.fulfill(json={'results':[{'state':'sent'}]})
+    page.route('**/api/new-operations/send',send)
+    page.goto(f'chrome-extension://{identifier}/app.html#banks/vietinbank')
+    connect(page);page.goto(f'chrome-extension://{identifier}/app.html#banks/vietinbank')
+    expect(page.locator('#creation-send')).to_be_enabled()
+    expect(page.locator('.category-picker')).to_have_count(3)
+    known=page.locator('[data-zen-id="known"]')
+    expect(known.locator('.ts-control .item')).to_have_text('Еда')
+    expect(known).to_contain_text('Назначена автоматически')
+    unknown=page.locator('[data-zen-id="unknown"]')
+    expect(unknown.locator('.ts-control .item')).to_have_count(0)
+    page.locator('#creation-send').click()
+    expect(page.get_by_role('dialog',name='Создание новых операций')).to_be_visible()
+    expect(page.get_by_role('button',name='Создать в ZenMoney · 1',exact=True)).to_be_enabled()
+    expect(page.locator('.creation-item input:disabled')).to_have_count(2)
+    page.get_by_role('button',name='Отмена',exact=True).click();assert not writes
+    for id in ['mixed','unknown']:
+        picker=page.locator(f'[data-zen-id="{id}"]');picker.locator('.ts-control').click()
+        if id=='mixed':expect(picker.locator('.category-option strong')).to_have_count(2)
+        picker.locator('[data-category-id="toys"]').click()
+        with page.expect_response(lambda r:'/category' in r.url and '/new-operations/' in r.url):
+            picker.get_by_role('button',name='Сохранить категорию',exact=True).click()
+        expect(page.locator('#creation-send')).to_be_enabled()
+    assert len(saved)==2 and not writes
+    page.locator('#creation-send').click()
+    page.get_by_role('button',name='Создать в ZenMoney · 3',exact=True).click()
+    expect(page.locator('#status')).to_contain_text('1 успешно')
+    assert len(writes)==1 and {i['bank_id'] for i in writes[0]['items']}=={'known','mixed','unknown'}
+    page.close()

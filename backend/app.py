@@ -8,7 +8,7 @@ from datetime import date
 from .zenstore import history, summary
 from fastapi.responses import FileResponse, JSONResponse
 from .db import initialize, transaction, entities
-from .models import BankImport, Mapping, Decision, DayDecision, BulkDayDecision, SplitDecision, SettlementDecision, CategoryDraft, CategorySend
+from .models import BankImport, Mapping, Decision, DayDecision, BulkDayDecision, SplitDecision, SettlementDecision, CategoryDraft, CategorySend, NewOperationScope, NewOperationCategory, NewOperationSend
 from .service import (audit, candidates, confirm, fail, get_row, import_bank,
                       mapped_account, review, same_transaction)
 from .zenmoney import ZenMoney, request_diff
@@ -70,9 +70,11 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
             rows = review(db)
             from .day_review import proposals
             days = proposals(db, rows)
+            from .creation import decorate as decorate_creation
+            decorate_creation(db, rows)
             from .reconciliation import recipient_profiles
             profiles = recipient_profiles(rows, {}, entities(db, 'transaction'), entities(db, 'tag'))
-            return {'mode': mode, 'capabilities': {'write': mode == 'demo', 'local_review': True, 'category_write': mode == 'live'}, 'last_sync': int(cursor['value']) if cursor else None,
+            return {'mode': mode, 'capabilities': {'write': mode == 'demo', 'local_review': True, 'category_write': mode == 'live', 'create': mode == 'live'}, 'last_sync': int(cursor['value']) if cursor else None,
                     'bank_accounts': [dict(r) for r in db.execute('SELECT * FROM bank_accounts')],
                     'bank_imports': [{'id': r['id'], 'received_at': r['received_at'], 'bank_account': r['bank_account'],
                                       'capture': json.loads(r['payload']).get('capture')}
@@ -156,6 +158,39 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
             fail('Здесь доступно только подтверждение существующей связи', 422)
         with lock, transaction(path) as db:
             return confirm(db, identifier, data)
+
+    @app.post('/api/new-operations/prepare')
+    def prepare_new(data: NewOperationScope):
+        from .creation import prepare
+        with lock, transaction(path) as db:
+            return prepare(db, data)
+
+    @app.put('/api/new-operations/{identifier}/category')
+    def new_category(identifier: str, data: NewOperationCategory):
+        from .creation import save_category
+        with lock, transaction(path) as db:
+            return save_category(db, identifier, data.category_id)
+
+    @app.post('/api/new-operations/preview')
+    def preview_new(data: NewOperationScope):
+        if mode != 'live': fail('Создание доступно в режиме LIVE',403)
+        from .creation import refresh, preview
+        with lock:
+            refresh(path,client)
+            with transaction(path) as db:
+                return {'items':preview(db,data)}
+
+    @app.post('/api/new-operations/send')
+    def send_new(data: NewOperationSend):
+        if mode != 'live': fail('Создание доступно в режиме LIVE',403)
+        from .creation import send
+        with lock: return send(path,client,data)
+
+    @app.post('/api/new-operations/verify')
+    def verify_new():
+        if mode != 'live': fail('Проверка создания доступна в режиме LIVE',403)
+        from .creation import refresh
+        with lock: return refresh(path,client)
 
     @app.post('/api/category-updates/preview')
     def preview_categories():

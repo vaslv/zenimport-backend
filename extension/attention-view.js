@@ -1,3 +1,4 @@
+import {newOperationPicker} from './new-operations.js';
 import {categoryPicker} from './category-picker.js';
 import {categoryNeedsWork,zenRowsById,bankNeedsCategory,linkedIds} from './category-state.js';
 import {reviewPairs} from './pairs-review-dialog.js';
@@ -105,6 +106,10 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
         const picker=categoryPicker(z,state,onAction);picker.classList.add('inline-category-picker');
         if(g.zen.length>1)picker.querySelector('h3').textContent=`Категория ZenMoney · ${z.amount_minor} ${currency} · ${z.payee||z.comment||z.id}`;
         item.append(picker);
+      }
+      for(const b of g.banks){
+        if(state.capabilities?.create&&b.state==='pending'&&!g.zen.length)item.append(newOperationPicker(b,state,onAction));
+        if(b.creation_job&&b.creation_job.state!=='sent')item.append(el('p',b.creation_job.error||'Создание ожидает проверки результата в ZenMoney.','notice'));
       }
       section.append(item);
     }
