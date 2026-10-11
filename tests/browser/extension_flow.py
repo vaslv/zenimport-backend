@@ -1698,3 +1698,40 @@ def test_inline_bank_statuses_categories_and_account_boundary(browser,sync_failu
         worker.evaluate('''async()=>{globalThis.fetch=inlineOriginalFetch;delete globalThis.inlineOriginalFetch;delete globalThis.inlineTest;
           await chrome.storage.local.set({inlineEnabled:false});
           await chrome.scripting.unregisterContentScripts({ids:['inline-history-ui','inline-history-observer']});}''')
+
+
+def test_mixed_batch_preview_confirmation_and_verification(browser):
+    context,identifier=browser
+    worker=context.service_workers[0]
+    worker.evaluate("chrome.storage.local.set({baseUrl:'http://127.0.0.1:8000',token:'docker-test-token-not-for-real-data'})")
+    page=context.new_page();writes=[];verifications=[]
+    items=[{'kind':'creation','id':'new','date':'2026-10-11','account':'Test bank','amount_minor':-65000,'currency':'VND','description':'Coffee','category':'Food','snapshot':'a'*64,'error':None},
+           {'kind':'category','id':'old','date':'2026-10-10','account':'Test bank','income':0,'outcome':100,'currency':'VND','payee':'Shop','before_categories':[],'category':'Food','snapshot':'b'*64,'error':None},
+           {'kind':'creation','id':'blocked','date':'2026-10-11','account':'Test bank','amount_minor':-1,'currency':'VND','description':'Conflict','category':'Food','snapshot':'c'*64,'error':'Нужна сверка'}]
+    def route(request):
+        path=request.request.url
+        body=request.request.post_data_json
+        assert body['bank']=='vietinbank' and body['account']=='test-account'
+        if path.endswith('/preview'):data={'items':items}
+        elif path.endswith('/send'):
+            writes.append(body);data={'results':[{'kind':'creation','id':'new','state':'sent','error':None},{'kind':'category','id':'old','state':'uncertain','error':None}]}
+        else:
+            verifications.append(body);data={'results':[{'kind':'creation','id':'new','state':'sent','error':None},{'kind':'category','id':'old','state':'sent','error':None}]}
+        request.fulfill(json=data)
+    page.route('http://127.0.0.1:8000/api/batch/**',route)
+    page.goto(f'chrome-extension://{identifier}/batch.html?bank=vietinbank&account=test-account')
+    dialog=page.get_by_role('dialog',name='Общая отправка в ZenMoney')
+    expect(dialog).to_be_visible();expect(dialog.locator('input:disabled')).to_have_count(1)
+    expect(dialog).to_contain_text('Изменить категорию');expect(dialog).to_contain_text('Создать')
+    page.screenshot(path='/results/batch-preview.png',full_page=True)
+    assert not writes
+    dialog.get_by_role('button',name='Отмена').click();assert not writes
+    page.get_by_role('button',name='Просмотреть обновления').click()
+    dialog.get_by_role('button',name='Отправить в ZenMoney · 2').click()
+    expect(page.locator('#batch-status')).to_have_text('Подтверждено: 1 из 2.')
+    assert len(writes)==1 and [(i['kind'],i['id']) for i in writes[0]['items']]==[('creation','new'),('category','old')]
+    expect(page.locator('#results')).to_contain_text('Результат не подтверждён')
+    page.get_by_role('button',name='Проверить результат отправки').click()
+    expect(page.locator('#batch-status')).to_have_text('Подтверждено: 2 из 2.')
+    assert len(writes)==1 and len(verifications)==1
+    page.close()

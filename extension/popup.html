@@ -10,6 +10,7 @@
 <p id="capture-age" class="muted" hidden></p>
 <details id="capture-progress" hidden><summary>Что выполнено</summary><ol id="capture-steps"></ol></details>
 <button id="import" hidden>Сохранить для проверки</button>
+<button id="batch-open">Отправить обновления в ZenMoney</button><p id="batch-count" class="muted" role="status"></p>
 <button id="open" class="secondary">Проверить операции</button>
 <p class="muted">Сначала история сохраняется локально. Отправка в ZenMoney — только отдельным действием после проверки.</p>
 <details id="diagnostics"><summary>Если загрузка не работает</summary>
@@ -24,4 +25,4 @@
 <p>Резервный способ без подробностей JSON. Для всех страниц: страница 1, Filter открыт, Search применён. Держите окно расширения открытым.</p>
 <button id="extract" class="secondary">Считать текущую страницу</button><button id="collect" class="secondary">Собрать страницы таблицы</button>
 </details></details>
-<script type="module" src="popup.js"></script></body></html>
+<script type="module" src="popup-batch.js"></script><script type="module" src="popup.js"></script></body></html>

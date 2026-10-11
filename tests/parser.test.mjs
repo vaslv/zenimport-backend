@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 const source = readFileSync(new URL('../extension/extract.js', import.meta.url), 'utf8');
 function extract(host = 'localhost', amount = '-65,000') {
-  const table = {dataset: {account: 'test'}, querySelectorAll: () => [{querySelectorAll: () => ['id-1','2026-10-01',amount,'<img onerror=alert(1)>'].map(textContent => ({textContent}))}]};
+  const table = {dataset: {account: 'test'}, querySelectorAll: () => [{querySelectorAll: () => ['id-1','2026-10-01',amount,'<img onerror=alert(1)>'].map(textContent => ({textContent,cloneNode(){return {textContent,querySelectorAll:()=>[]};}}))}]};
   return vm.runInNewContext(source, {location: {hostname: host, pathname: '/demo-bank'}, document: {querySelector: () => table}});
 }
 test('normalizes explicit VND format; preserves raw fields without HTML', async () => {
@@ -167,4 +167,32 @@ test('local category decisions resolve review work without pretending to sync',a
   assert.equal(bankNeedsCategory(b,new Map([['z',z],['part',part]])),true);
   part.category_draft={id:'other',valid:true};
   assert.equal(bankNeedsCategory(b,new Map([['z',z],['part',part]])),false);
+});
+
+function sessionHarness(){
+  let now=0,tick,requests=0,fail=false,focused=true;const messages=[],events={};
+  const state={auth:{credentials:{isAuthenticated:true}},meta:{sessionExpiration:300}};
+  const modules={Q2AE:{default:{getState:()=>state}},tjvR:{profile:async()=>{requests++;if(fail)throw Error();return {data:{error:false,secret:'never-expose'}};}},VL96:{cacheKeys:{profile:'profile'},clearByKeys:()=>{}}};
+  const require=id=>modules[id];require.m={Q2AE:true,tjvR:true,VL96:true};require.c={};
+  const chunks=[];chunks.push=function(chunk){for(const f of Object.values(chunk[1]))f({}, {},require);};
+  const document={visibilityState:'visible',hasFocus:()=>focused,addEventListener:(key,fn)=>events[key]=fn,removeEventListener:()=>{}};
+  const location={origin:'https://ipay.vietinbank.vn',pathname:'/payment-history',search:'?accountNo=111122223333'};
+  const window={webpackJsonp:chunks,postMessage:m=>messages.push(m),addEventListener:()=>{}};
+  vm.runInNewContext(readFileSync(new URL('../extension/bank-session.js',import.meta.url),'utf8'),{window,document,location,URLSearchParams,crypto:{randomUUID:()=> 'fixture'},Date:{now:()=>now},setInterval:fn=>{tick=fn;},clearInterval:()=>{}});
+  return {state,document,location,messages,get requests(){return requests;},advance:async ms=>{now+=ms;await tick();},activity:()=>events.pointerdown({isTrusted:true}),synthetic:()=>events.pointerdown({isTrusted:false}),fail:()=>{fail=true;},blur:()=>{focused=false;}};
+}
+test('bank session extends through profile only while visible and active; never exports profile',async()=>{
+  const h=sessionHarness();await h.advance(120000);assert.equal(h.requests,1);assert.equal(h.messages.at(-1).status,'extended');
+  assert.equal(JSON.stringify(h.messages).includes('never-expose'),false);
+  await h.advance(190000);assert.equal(h.requests,1);assert.equal(h.messages.at(-1).status,'paused');
+  h.synthetic();await h.advance(1000);assert.equal(h.requests,1);
+  h.activity();await h.advance(1000);assert.equal(h.requests,2);
+  h.document.visibilityState='hidden';await h.advance(120000);assert.equal(h.requests,2);
+  h.document.visibilityState='visible';h.activity();h.blur();await h.advance(1000);assert.equal(h.requests,2);
+});
+test('bank session stops on profile failure, logout, unsupported expiration and leaving history',async()=>{
+  const h=sessionHarness();h.fail();await h.advance(120000);assert.equal(h.requests,1);assert.equal(h.messages.at(-1).status,'error');h.activity();await h.advance(120000);assert.equal(h.requests,1);
+  const other=sessionHarness();other.state.auth.credentials.isAuthenticated=false;await other.advance(120000);assert.equal(other.requests,0);assert.equal(other.messages.at(-1).status,'signed-out');
+  other.state.auth.credentials.isAuthenticated=true;other.state.meta.sessionExpiration=0;await other.advance(1000);assert.equal(other.messages.at(-1).status,'unsupported');
+  other.location.pathname='/home';await other.advance(1000);assert.equal(other.messages.at(-1).status,'inactive');assert.equal(other.requests,0);
 });

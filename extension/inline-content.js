@@ -2,7 +2,8 @@
 (() => {
   if(globalThis.__zenImportInlineUI)return;globalThis.__zenImportInlineUI=true;
   let account=null,generation=0,state=null,fresh=false,busy=false,signature='',timer,refreshAt=0;
-  let navigationPage='',lastCategoryIndex=-1;
+  let sessionStatus='',navigationPage='',lastCategoryIndex=-1;
+  const sessionLabels={active:'Сессия поддерживается при активности',extended:'Сессия продлена',refreshing:'Продлеваем сессию…',paused:'Продление сессии приостановлено',unsupported:'Продление сессии недоступно: версия банка изменилась',error:'Не удалось продлить сессию', 'signed-out':'Требуется вход в банк'};
   const mounted=new Map();let banner,activeMenu,loadError='',syncGeneration=0,pollGeneration=0,nextSyncAt=0,retryDelay=30000;
   const text=e=>e?.textContent?.replace(/\s+/g,' ').trim()||'';
   const norm=v=>String(v??'').replace(/\s+/g,' ').trim();
@@ -23,13 +24,14 @@
     if(!document.body)return;
     if(!banner?.h.isConnected){banner=host();banner.h.id='zenimport-status';banner.spacer=el('div');banner.spacer.setAttribute('aria-hidden','true');document.body.append(banner.spacer,banner.h);}
     const targets=categoryTargets(),targetKey=targets.map(p=>p.h.id).join('|');
-    if(banner.message===message&&banner.error===error&&banner.targetKey===targetKey)return;
-    banner.message=message;banner.error=error;banner.targetKey=targetKey;
+    if(banner.message===message&&banner.error===error&&banner.targetKey===targetKey&&banner.sessionStatus===sessionStatus)return;
+    banner.message=message;banner.error=error;banner.targetKey=targetKey;banner.sessionStatus=sessionStatus;
     banner.box.replaceChildren(el('strong','ZenImport · '),el('span',message));
     if(state&&mounted.size){
       banner.box.append(el('span',` · Без категории на странице: ${targets.length}.`));
       if(targets.length){const link=el('a','Следующая без категории');link.href='#'+targets[0].h.id;link.onclick=nextCategory;banner.box.append(document.createTextNode(' '),link);}
     }
+    if(sessionLabels[sessionStatus])banner.box.append(el('span',' · '+sessionLabels[sessionStatus]));
     banner.box.setAttribute('role','status');banner.box.className=error?'error':'';banner.spacer.style.height=banner.h.getBoundingClientRect().height+'px';
   }
   async function rpc(type,extra={}){const r=await chrome.runtime.sendMessage({type,account,...extra});if(!r?.ok)throw Error(r?.error||'Перезагрузите страницу после обновления расширения.');return r.data;}
@@ -120,14 +122,16 @@
     if(fresh)status(`Данные ZenMoney получены. Опознано строк: ${found} из ${rows.length}.`);else if(loadError)status(loadError,true);else status('Обновляем ZenMoney… Показываем сохранённые данные.');
   }
   window.addEventListener('message',async e=>{
-    if(e.source!==window||e.origin!==location.origin||e.data?.source!=='zenimport-inline-history'||!account)return;
+    if(e.source!==window||e.origin!==location.origin||!account)return;
+    if(e.data?.source==='zenimport-session'){if(Object.hasOwn(sessionLabels,e.data.status)){sessionStatus=e.data.status;if(banner)status(banner.message,banner.error);rpc('inline-session-status',{status:sessionStatus}).catch(()=>{});}return;}
+    if(e.data?.source!=='zenimport-inline-history')return;
     const g=generation;
     if(e.data.error){status('Не удалось прочитать ответ банка. Повторите Search.',true);return;}
     try{const result=await rpc('inline-import',{data:e.data.data});if(g!==generation)return;state=result;signature='';render();}
     catch(error){if(g===generation){status(error.message,true);}}
   });
   function tick(){
-    const next=current();if(next!==account){account=next;generation++;syncGeneration=pollGeneration=0;nextSyncAt=0;retryDelay=30000;fresh=false;state=null;clear();banner?.h.remove();banner?.spacer.remove();banner=null;if(account)start();}
+    const next=current();if(next!==account){account=next;sessionStatus='';generation++;syncGeneration=pollGeneration=0;nextSyncAt=0;retryDelay=30000;fresh=false;state=null;clear();banner?.h.remove();banner?.spacer.remove();banner=null;if(account)start();}
     if(!account)return;
     render();
     if(nextSyncAt&&Date.now()>=nextSyncAt&&!busy&&syncGeneration!==generation){start();return;}

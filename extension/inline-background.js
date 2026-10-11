@@ -12,8 +12,8 @@ async function register(){
   const allowed=await chrome.permissions.contains({origins:[origin+'/*']});
   const existing=await chrome.scripting.getRegisteredContentScripts({ids});
   if(!inlineEnabled||!allowed){if(existing.length)await chrome.scripting.unregisterContentScripts({ids:existing.map(s=>s.id)});return;}
-  const scripts=[{id:ids[0],js:['inline-content.js'],world:'ISOLATED'}, {id:ids[1],js:['inline-observer-init.js','bank-observer.js'],world:'MAIN'}];
-  for(const s of scripts)if(!existing.some(e=>e.id===s.id))await chrome.scripting.registerContentScripts([{...s,matches:[origin+'/*'],runAt:'document_start',persistAcrossSessions:true}]);
+  const scripts=[{id:ids[0],js:['inline-content.js'],world:'ISOLATED'}, {id:ids[1],js:['inline-observer-init.js','bank-observer.js','bank-session.js'],world:'MAIN'}];
+  for(const s of scripts){const spec={...s,matches:[origin+'/*'],runAt:'document_start',persistAcrossSessions:true};if(existing.some(e=>e.id===s.id))await chrome.scripting.updateContentScripts([spec]);else await chrome.scripting.registerContentScripts([spec]);}
 }
 function install(){registration=registration.then(register).catch(()=>{});}
 chrome.runtime.onInstalled.addListener(install);chrome.runtime.onStartup.addListener(install);
@@ -38,6 +38,10 @@ async function handle(m,sender){
   const account=accountOf(sender.url),tab=await chrome.tabs.get(sender.tab.id);
   if(!account||account!==accountOf(tab.url)||account!==m.account)throw Error('Банковский счёт или страница изменились.');
   if(!(await chrome.storage.local.get('inlineEnabled')).inlineEnabled)throw Error('Включите работу на странице банка в меню ZenImport.');
+  if(m.type==='inline-session-status'){
+    if(!['active','paused','waiting','unsupported','signed-out','refreshing','extended','error','inactive'].includes(m.status))throw Error('Неизвестный статус');
+    await log('session-'+m.status,m.status!=='error',0);return {};
+  }
   if(m.type==='inline-sync'){
     if(!syncing)syncing=api('/api/zenmoney/sync',{}).finally(()=>{syncing=null;});
     await syncing;
@@ -74,7 +78,7 @@ async function handle(m,sender){
 }
 chrome.tabs.onRemoved.addListener(id=>{for(const k of totals.keys())if(k.startsWith(id+':'))totals.delete(k);});
 chrome.runtime.onMessage.addListener((m,sender,reply)=>{
-  if(!['inline-enable','inline-sync','inline-state','inline-import','inline-category'].includes(m?.type))return;
+  if(!['inline-enable','inline-sync','inline-state','inline-import','inline-category','inline-session-status'].includes(m?.type))return;
   // Serialize imports and local edits; no content-script action can send to ZenMoney.
   const started=Date.now();
   const run=()=>handle(m,sender);
