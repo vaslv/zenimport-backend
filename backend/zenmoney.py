@@ -28,6 +28,10 @@ class ZenMoney:
         if self.mode != 'live': raise ValueError('Creation endpoint requires live mode')
         return Client(self.token).create_transactions(transactions, server_timestamp)
 
+    def write_transactions(self, creations, changes, server_timestamp):
+        if self.mode != 'live': raise ValueError('Batch sending requires live mode')
+        return Client(self.token).write_transactions(creations, changes, server_timestamp)
+
     def update_categories(self, changes, server_timestamp):
         if self.mode == 'demo':
             raise ValueError('Category sending is enabled only for live integration')

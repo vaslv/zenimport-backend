@@ -151,3 +151,16 @@ class NewOperationItem(DayDecision):
 
 class NewOperationSend(NewOperationScope):
     items: list[NewOperationItem] = Field(min_length=1, max_length=20)
+
+
+class BatchScope(NewOperationScope):
+    account: str = Field(min_length=1, max_length=200)
+
+
+class BatchItem(DayDecision):
+    kind: Literal['creation', 'category']
+    id: str = Field(min_length=1, max_length=200)
+
+
+class BatchSend(BatchScope):
+    items: list[BatchItem] = Field(min_length=1, max_length=20)

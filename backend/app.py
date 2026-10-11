@@ -8,7 +8,7 @@ from datetime import date
 from .zenstore import history, summary
 from fastapi.responses import FileResponse, JSONResponse
 from .db import initialize, transaction, entities
-from .models import BankImport, Mapping, Decision, DayDecision, BulkDayDecision, SplitDecision, SettlementDecision, CategoryDraft, CategorySend, NewOperationScope, NewOperationCategory, NewOperationSend
+from .models import BatchScope, BatchSend, BankImport, Mapping, Decision, DayDecision, BulkDayDecision, SplitDecision, SettlementDecision, CategoryDraft, CategorySend, NewOperationScope, NewOperationCategory, NewOperationSend
 from .service import (audit, candidates, confirm, fail, get_row, import_bank,
                       mapped_account, review, same_transaction)
 from .zenmoney import ZenMoney, request_diff
@@ -158,6 +158,32 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
             fail('Здесь доступно только подтверждение существующей связи', 422)
         with lock, transaction(path) as db:
             return confirm(db, identifier, data)
+
+    @app.post('/api/batch/preview')
+    def batch_preview(data: BatchScope):
+        if mode != 'live': fail('Отправка доступна в режиме LIVE',403)
+        from . import batch_send, creation
+        with lock:
+            with transaction(path,read_only=True) as db: batch_send.target(db,data)
+            batch_send.refresh(path,client)
+            with transaction(path) as db:
+                creation.create_local(db,data)
+                return {'items':batch_send.preview(db,data)}
+
+    @app.post('/api/batch/send')
+    def batch_send_route(data: BatchSend):
+        if mode != 'live': fail('Отправка доступна в режиме LIVE',403)
+        from .batch_send import send
+        with lock: return send(path,client,data)
+
+    @app.post('/api/batch/verify')
+    def batch_verify(data: BatchScope):
+        if mode != 'live': fail('Отправка доступна в режиме LIVE',403)
+        from . import batch_send
+        with lock:
+            with transaction(path,read_only=True) as db: batch_send.target(db,data)
+            batch_send.refresh(path,client)
+            return {'results':batch_send.results(path,data)}
 
     @app.post('/api/new-operations/prepare')
     def prepare_new(data: NewOperationScope):

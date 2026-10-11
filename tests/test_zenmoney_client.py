@@ -98,3 +98,21 @@ def test_create_transactions_transport_and_guardrails():
         with pytest.raises(ValueError):client.create_transactions([invalid],10)
     with pytest.raises(ValueError):client.create_transactions([payload,payload],10)
     assert len(requests)==1
+
+
+def test_mixed_batch_validates_before_single_exchange():
+    import uuid
+    new={'id':str(uuid.uuid4()),'user':1,'created':100,'changed':100,'deleted':False,'hold':False,
+         'date':'2026-10-11','incomeAccount':'a','outcomeAccount':'a','incomeInstrument':1,'outcomeInstrument':1,
+         'income':0,'outcome':10,'tag':['food'],'payee':None,'comment':'New'}
+    before={**new,'id':'existing','tag':[]};after={**before,'tag':['food'],'changed':101}
+    calls=[]
+    def handle(request):
+        calls.append(json.loads(request.content));return httpx.Response(200,json={'serverTimestamp':20})
+    client=Client('secret',transport=httpx.MockTransport(handle),clock=lambda:200)
+    client.write_transactions([new],[(before,after)],10)
+    assert len(calls)==1 and calls[0]['transaction']==[new,after]
+    with pytest.raises(ValueError):client.write_transactions([new],[(before,{**after,'outcome':20})],10)
+    with pytest.raises(ValueError):client.write_transactions([new]*20,[(before,after)],10)
+    with pytest.raises(ValueError):client.write_transactions([new],[(new,{**new,'tag':['other']})],10)
+    assert len(calls)==1

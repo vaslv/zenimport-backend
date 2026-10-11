@@ -107,7 +107,8 @@ class Client:
             payload['forceFetch'] = list(dict.fromkeys(force_fetch))
         return self._exchange(payload)
 
-    def update_categories(self, changes, server_timestamp=0):
+    @staticmethod
+    def _category_payloads(changes, server_timestamp=0):
         if type(server_timestamp) is not int or server_timestamp < 0 or not changes or len(changes) > 20:
             raise ValueError('Invalid category update request')
         transactions = []
@@ -124,9 +125,13 @@ class Client:
             transactions.append(payload)
         if len({t['id'] for t in transactions}) != len(transactions):
             raise ValueError('Duplicate transaction')
-        return self._exchange({'currentClientTimestamp': int(self._clock()), 'serverTimestamp': server_timestamp, 'transaction': transactions})
+        return transactions
 
-    def create_transactions(self, transactions, server_timestamp=0):
+    def update_categories(self, changes, server_timestamp=0):
+        return self.write_transactions([], changes, server_timestamp)
+
+    @staticmethod
+    def _creation_payloads(transactions, server_timestamp=0):
         if type(server_timestamp) is not int or server_timestamp < 0 or not 1 <= len(transactions) <= 20:
             raise ValueError('Invalid creation request')
         allowed = {'id','user','created','changed','deleted','hold','date','incomeAccount','outcomeAccount',
@@ -148,6 +153,17 @@ class Client:
             if not isinstance(tx['comment'],str) or (tx['payee'] is not None and not isinstance(tx['payee'],str)):
                 raise ValueError('Invalid description')
         if len({t['id'] for t in transactions}) != len(transactions): raise ValueError('Duplicate UUID')
+        return transactions
+
+    def create_transactions(self, transactions, server_timestamp=0):
+        return self.write_transactions(transactions, [], server_timestamp)
+
+    def write_transactions(self, creations, changes, server_timestamp=0):
+        if not 1 <= len(creations)+len(changes) <= 20:
+            raise ValueError('Expected between 1 and 20 changes')
+        transactions = (self._creation_payloads(creations, server_timestamp) if creations else []) + (self._category_payloads(changes, server_timestamp) if changes else [])
+        if len({t['id'] for t in transactions}) != len(transactions):
+            raise ValueError('Duplicate transaction across batch')
         return self._exchange({'currentClientTimestamp':int(self._clock()),'serverTimestamp':server_timestamp,'transaction':transactions})
 
     def _exchange(self, payload):
