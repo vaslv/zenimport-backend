@@ -196,3 +196,21 @@ test('bank session stops on profile failure, logout, unsupported expiration and 
   other.state.auth.credentials.isAuthenticated=true;other.state.meta.sessionExpiration=0;await other.advance(1000);assert.equal(other.messages.at(-1).status,'unsupported');
   other.location.pathname='/home';await other.advance(1000);assert.equal(other.messages.at(-1).status,'inactive');assert.equal(other.requests,0);
 });
+
+test('reviewed new operations are sent in sequential batches; uncertain results stop later batches',async()=>{
+  const {sendNewBatches}=await import('../extension/send-new-batches.js');
+  const body={bank:'demo',include_uncategorized:true,items:Array.from({length:45},(_,i)=>({bank_id:String(i),snapshot:'a'.repeat(64)}))};
+  const calls=[];
+  const result=await sendNewBatches(body,async b=>{calls.push(b);return {results:b.items.map(i=>({...i,state:'sent'}))};});
+  assert.deepEqual(calls.map(b=>b.items.length),[20,20,5]);
+  assert.deepEqual(calls.flatMap(b=>b.items),body.items);assert.equal(result.results.length,45);
+  assert.ok(calls.every(b=>b.include_uncategorized));
+  for(const failure of ['uncertain','throw','missing']){
+    let count=0;
+    const stopped=await sendNewBatches(body,async b=>{
+      count++;if(failure==='throw')throw Error('timeout');
+      return {results:failure==='missing'?[]:b.items.map(i=>({...i,state:failure}))};
+    });
+    assert.equal(count,1);assert.match(stopped.message,/остановлена/);
+  }
+});

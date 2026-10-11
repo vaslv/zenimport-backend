@@ -98,6 +98,8 @@ def test_create_transactions_transport_and_guardrails():
         with pytest.raises(ValueError):client.create_transactions([invalid],10)
     with pytest.raises(ValueError):client.create_transactions([payload,payload],10)
     assert len(requests)==1
+    client.create_transactions([{**payload,'tag':None}],10)
+    assert len(requests)==2 and requests[-1]['transaction'][0]['tag'] is None
 
 
 def test_mixed_batch_validates_before_single_exchange():

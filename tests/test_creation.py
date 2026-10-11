@@ -271,3 +271,43 @@ def test_rule_requires_name_and_category_and_does_not_change_prepared(tmp_path):
     with transaction(path,read_only=True) as db:
         job=db.execute('SELECT * FROM creation_jobs').fetchone()
         assert job['state']=='prepared' and json.loads(job['payload'])['tag']==['food']
+
+
+@pytest.mark.parametrize('remote_tag',[None,[]])
+def test_uncategorized_explicit_preview_send_and_retry(tmp_path,remote_tag):
+    c,path,remote,identifier=setup(tmp_path)
+    scope={'bank':'demo','include_uncategorized':True}
+    assert c.post('/api/new-operations/prepare-preview',json={'bank':'demo'}).json()['items']==[]
+    items=c.post('/api/new-operations/prepare-preview',json=scope).json()['items']
+    assert len(items)==1 and not items[0]['error'] and items[0]['category'] is None
+    assert not remote.writes
+    body={**scope,'items':[{'bank_id':identifier,'snapshot':items[0]['snapshot']}]}
+    assert c.post('/api/new-operations/send',json={**body,'include_uncategorized':False}).status_code==409
+    assert not remote.writes
+    original=remote.create_transactions
+    def write(transactions,cursor):
+        result=original(transactions,cursor)
+        remote.data['transaction'][-1]['tag']=remote_tag
+        return result
+    remote.create_transactions=write
+    assert c.post('/api/new-operations/send',json=body).json()['results'][0]['state']=='sent'
+    assert remote.writes[0][0]['tag'] is None
+    assert c.post('/api/new-operations/send',json=body).status_code==409
+    assert len(remote.writes)==1
+    assert c.post('/api/new-operations/prepare-preview',json=scope).json()['items']==[]
+
+
+@pytest.mark.parametrize('blocked',['candidate','ignored','deleted_category'])
+def test_all_new_does_not_bypass_existing_guards(tmp_path,blocked):
+    c,path,remote,identifier=setup(tmp_path)
+    if blocked=='candidate':
+        remote.data['transaction']=[{'id':'existing','date':'2026-10-01','income':0,'outcome':65000,
+            'incomeAccount':DEMO_ACCOUNT,'outcomeAccount':DEMO_ACCOUNT,'tag':None}]
+    elif blocked=='ignored':
+        with transaction(path) as db:db.execute("UPDATE bank_transactions SET state='ignored'")
+    else:
+        draft(c,identifier)
+        remote.data['tag'][0]['deleted']=True
+    response=c.post('/api/new-operations/prepare-preview',json={'bank':'demo','include_uncategorized':True})
+    assert response.status_code==200,response.text
+    assert response.json()['items']==[] and not remote.writes

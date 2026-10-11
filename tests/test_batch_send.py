@@ -72,3 +72,22 @@ def test_entire_mixed_batch_rejected_before_write(tmp_path,change):
         with transaction(path) as db:db.execute("UPDATE creation_drafts SET category_id='toys'")
     assert c.post('/api/batch/send',json=body).status_code in (409,422)
     assert not remote.writes
+
+
+def test_creation_only_batch_excludes_category_changes_and_respects_mode(tmp_path):
+    c,path,remote,scope,body=batch(tmp_path)
+    creation=next(i for i in body['items'] if i['kind']=='creation')
+    assert c.post('/api/new-operations/'+creation['id']+'/reopen',json={}).status_code==200
+    draft(c,creation['id'],None)
+    scope={**scope,'creations_only':True}
+    assert c.post('/api/batch/preview',json=scope).json()['items']==[]
+    scope['include_uncategorized']=True
+    items=c.post('/api/batch/preview',json=scope).json()['items']
+    assert len(items)==1 and items[0]['category'] is None and items[0]['kind']=='creation'
+    assert c.post('/api/batch/send',json={**scope,'items':body['items']}).status_code==409
+    assert not remote.writes
+    result=c.post('/api/batch/send',json={**scope,'items':[{k:items[0][k] for k in ('kind','id','snapshot')}]})
+    assert result.status_code==200,result.text
+    assert result.json()['results'][0]['state']=='sent'
+    assert len(remote.writes)==1 and len(remote.writes[0])==1 and remote.writes[0][0]['tag'] is None
+    assert remote.data['transaction'][0]['tag']==[]

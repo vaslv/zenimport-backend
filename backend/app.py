@@ -213,6 +213,16 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
         from .creation import reopen
         with lock, transaction(path) as db: return reopen(db,identifier)
 
+    @app.post('/api/new-operations/prepare-preview')
+    def prepare_preview_new(data: NewOperationScope):
+        if mode != 'live': fail('Создание доступно в режиме LIVE',403)
+        from .creation import refresh, create_local, preview
+        with lock:
+            refresh(path,client)
+            with transaction(path) as db:
+                create_local(db,data)
+                return {'items':preview(db,data)}
+
     @app.post('/api/new-operations/preview')
     def preview_new(data: NewOperationScope):
         if mode != 'live': fail('Создание доступно в режиме LIVE',403)

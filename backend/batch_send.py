@@ -24,6 +24,7 @@ def preview(db, scope):
     txs = {t['id']: t for t in entities(db, 'transaction')}
     instruments = {t['id']:t.get('shortTitle','') for t in entities(db,'instrument')}
     items = [{**i, 'kind':'creation', 'id':i['bank_id']} for i in creation.preview(db, scope)]
+    if scope.creations_only: return items
     for i in category_send.preview(db):
         tx = txs.get(i['zen_id'], {})
         if tx.get('incomeAccount') != zen_account or tx.get('outcomeAccount') != zen_account:

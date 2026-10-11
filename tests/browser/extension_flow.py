@@ -1458,9 +1458,9 @@ def test_new_operations_categories_and_scoped_creation_confirmation(browser):
         route.fulfill(json={'items':[{'bank_id':r['id'],'date':r['date'],'amount_minor':r['amount_minor'],'currency':'VND','description':r['description'],
             'account':'VietinBank account','category':(r['creation_draft'] or {}).get('title'),'source':(r['creation_draft'] or {}).get('source'),
             'error':None if r['creation_draft'] else 'Выберите категорию','snapshot':'a'*64} for r in state['review'] if r['creation_job']]})
-    page.route('**/api/new-operations/preview',preview)
+    page.route('**/api/new-operations/prepare-preview',preview)
     def send(route):
-        writes.append(json.loads(route.request.post_data));route.fulfill(json={'results':[{'state':'sent'}]})
+        body=json.loads(route.request.post_data);writes.append(body);route.fulfill(json={'results':[{'bank_id':i['bank_id'],'state':'sent'} for i in body['items']]})
     page.route('**/api/new-operations/send',send)
     page.goto(f'chrome-extension://{identifier}/app.html#banks/vietinbank')
     connect(page);page.goto(f'chrome-extension://{identifier}/app.html#banks/vietinbank')
@@ -1506,7 +1506,7 @@ def test_new_operations_categories_and_scoped_creation_confirmation(browser):
     expect(page.locator('[data-zen-id="known"]')).to_have_count(0)
     page.locator('#hide-categorized').uncheck()
     expect(page.locator('.category-picker')).to_have_count(3)
-    expect(page.locator('#creation-send')).to_be_disabled()
+    expect(page.locator('#creation-send')).to_be_enabled()
     page.locator('#creation-create').click()
     expect(page.locator('#status')).to_contain_text('Создано локальных записей: 1')
     assert created==['known'] and not writes
@@ -1535,7 +1535,7 @@ def test_new_operations_categories_and_scoped_creation_confirmation(browser):
     expect(page.locator('#review')).to_contain_text('Нет операций, требующих решения')
     page.locator('#creation-send').click()
     page.get_by_role('button',name='Отправить в ZenMoney · 3',exact=True).click()
-    expect(page.locator('#status')).to_contain_text('1 успешно')
+    expect(page.locator('#status')).to_contain_text('3 успешно')
     assert len(writes)==1 and {i['bank_id'] for i in writes[0]['items']}=={'known','mixed','unknown'}
     page.close()
 
@@ -1734,4 +1734,37 @@ def test_mixed_batch_preview_confirmation_and_verification(browser):
     page.get_by_role('button',name='Проверить результат отправки').click()
     expect(page.locator('#batch-status')).to_have_text('Подтверждено: 2 из 2.')
     assert len(writes)==1 and len(verifications)==1
+    page.close()
+
+
+@pytest.mark.parametrize('mode',['categorized','all'])
+def test_new_only_batch_modes_preview_and_confirmation(browser,mode):
+    context,identifier=browser
+    context.service_workers[0].evaluate("chrome.storage.local.set({baseUrl:'http://127.0.0.1:8000',token:'docker-test-token-not-for-real-data'})")
+    page=context.new_page();writes=[];previews=[]
+    items=[{'kind':'creation','id':'known','date':'2026-10-11','account':'Test bank','amount_minor':-65000,'currency':'VND','description':'Known shop','category':'Food','snapshot':'a'*64,'error':None}]
+    if mode=='all':items.append({**items[0],'id':'unknown','description':'Unknown recipient','category':None,'snapshot':'b'*64})
+    def route(request):
+        body=request.request.post_data_json
+        assert body['creations_only'] is True and body['include_uncategorized']==(mode=='all')
+        if request.request.url.endswith('/preview'):
+            previews.append(body);data={'items':items}
+        else:
+            writes.append(body);data={'results':[{'kind':i['kind'],'id':i['id'],'state':'sent','error':None} for i in body['items']]}
+        request.fulfill(json=data)
+    page.route('http://127.0.0.1:8000/api/batch/**',route)
+    page.goto(f'chrome-extension://{identifier}/batch.html?bank=vietinbank&account=test-account&mode={mode}')
+    dialog=page.get_by_role('dialog',name='Общая отправка в ZenMoney')
+    expect(dialog.locator('.creation-item')).to_have_count(len(items))
+    if mode=='all':
+        expect(dialog).to_contain_text('Без категории')
+        page.screenshot(path='/results/new-all-preview.png',full_page=True)
+    else:expect(dialog).to_contain_text('Только новые записи с категорией')
+    assert not writes
+    dialog.get_by_role('button',name='Отмена').click()
+    assert not writes
+    page.locator('#preview').click()
+    dialog.get_by_role('button',name=f'Отправить в ZenMoney · {len(items)}',exact=True).click()
+    expect(page.locator('#batch-status')).to_have_text(f'Подтверждено: {len(items)} из {len(items)}.')
+    assert len(writes)==1 and len(writes[0]['items'])==len(items)
     page.close()

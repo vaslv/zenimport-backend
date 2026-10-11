@@ -8,16 +8,16 @@ export function newOperationPicker(row,state,onAction){
 export function creationDialog(items,scope,send){
   if(document.querySelector('.creation-dialog'))return;
   const dialog=el('dialog');dialog.className='pairs-review-dialog creation-dialog';dialog.setAttribute('aria-label','Создание новых операций');
-  const header=el('div');header.className='pairs-review-header';header.append(el('h2','Отправить новые записи в ZenMoney'),el('p','Будут созданы новые доходы или расходы на указанных счетах. Проверьте, что это не переводы между своими счетами и не уже внесённые записи. До 20 операций за отправку.'));
+  const header=el('div');header.className='pairs-review-header';header.append(el('h2','Отправить новые записи в ZenMoney'),el('p','Будут созданы новые доходы или расходы на указанных счетах. Тип операции можно изменить позже в ZenMoney. После подтверждения весь выбранный список будет отправлен пакетами по 20 операций.'));
   const list=el('div');list.className='pairs-review-list';const selected=new Set();
   const confirm=el('button'),cancel=el('button','Отмена');cancel.autofocus=true;
-  const update=()=>{confirm.textContent=`Отправить в ZenMoney · ${selected.size}`;confirm.disabled=!selected.size||selected.size>20;};
+  const update=()=>{confirm.textContent=`Отправить в ZenMoney · ${selected.size}`;confirm.disabled=!selected.size;};
   for(const item of items){
-    const card=el('article');card.className='creation-item';const label=el('label'),check=el('input');check.type='checkbox';check.disabled=!!item.error;check.checked=!item.error&&selected.size<20;if(check.checked)selected.add(item.bank_id);
+    const card=el('article');card.className='creation-item';const label=el('label'),check=el('input');check.type='checkbox';check.disabled=!!item.error;check.checked=!item.error;if(check.checked)selected.add(item.bank_id);
     check.onchange=()=>{check.checked?selected.add(item.bank_id):selected.delete(item.bank_id);update();};
     const sum=Number(item.amount_minor)/(item.currency==='VND'?1:100);
     label.append(check,document.createTextNode(` ${dateLabel(item.date)} · ${item.account} · ${sum>0?'+':''}${formatMoney(String(sum),item.currency)}`));
-    card.append(label,el('p',item.description),el('p',`Категория: ${item.category||'не выбрана'}${item.source==='auto'?' · автоматически по истории':''}`));
+    card.append(label,el('p',item.description),el('p',`Категория: ${item.category||'без категории'}${item.source==='auto'?' · автоматически по истории':''}`));
     if(item.error)card.append(el('p',item.error));list.append(card);
   }
   if(!items.length)list.append(el('p','Нет новых операций в выбранном банке и периоде.'));
@@ -27,7 +27,7 @@ export function creationDialog(items,scope,send){
 }
 
 export function localRecord(row,onAction){
-  const box=el('div');box.append(el('p',`Создана локально · ${row.creation_draft?.title||'категория сохранена'}. Ожидает отправки в ZenMoney.`));
+  const box=el('div');box.append(el('p',`Создана локально · ${row.creation_draft?.title||'без категории'}. Ожидает отправки в ZenMoney.`));
   const button=el('button','Отменить локальное создание');button.dataset.apiAction='';
   button.onclick=()=>onAction(()=>({path:`/api/new-operations/${encodeURIComponent(row.id)}/reopen`,body:{}}));box.append(button);return box;
 }

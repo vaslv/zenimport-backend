@@ -148,8 +148,8 @@ class Client:
                 raise ValueError('Only single-account income or expense is supported')
             if any(type(tx[k]) not in (int,float) or not math.isfinite(tx[k]) or tx[k]<0 for k in ('income','outcome')) or (tx['income']>0)==(tx['outcome']>0):
                 raise ValueError('Expected one positive amount')
-            if not isinstance(tx['tag'],list) or len(tx['tag'])!=1 or not isinstance(tx['tag'][0],str) or not tx['tag'][0]:
-                raise ValueError('Expected one category')
+            if tx['tag'] is not None and (not isinstance(tx['tag'],list) or len(tx['tag'])!=1 or not isinstance(tx['tag'][0],str) or not tx['tag'][0]):
+                raise ValueError('Expected one category or null')
             if not isinstance(tx['comment'],str) or (tx['payee'] is not None and not isinstance(tx['payee'],str)):
                 raise ValueError('Invalid description')
         if len({t['id'] for t in transactions}) != len(transactions): raise ValueError('Duplicate UUID')

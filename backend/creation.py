@@ -127,14 +127,15 @@ def preview(db, scope, local=False):
         if local and row['state'] != 'pending': continue
         if not local and (not job or row['state'] != 'queued'): continue
         draft = drafts.get(row['id']);target = {}; tag = {}; error = None
+        if not local and not scope.include_uncategorized and draft and not draft['category_id']: continue
         try:
             target = mapped_account(db, accounts[row['bank_account']])
             if row['candidates'] or row['id'] in split_ids: fail('Сначала разберите возможное совпадение с ZenMoney')
             if not row['amount_minor']: fail('Нулевая сумма: создание недоступно')
-            if not draft or not draft['category_id']: fail('Выберите категорию')
-            tag = get_entity(db, 'tag', draft['category_id'])
+            if not draft or (not draft['category_id'] and not scope.include_uncategorized): fail('Выберите категорию')
+            tag = get_entity(db, 'tag', draft['category_id']) if draft['category_id'] else {}
             if tag.get('deleted'): fail('Категория удалена')
-            if not local and (str(target['id']) not in fresh.get('account',[]) or str(target['instrument']) not in fresh.get('instrument',[]) or tag['id'] not in fresh.get('tag',[])):
+            if not local and (str(target['id']) not in fresh.get('account',[]) or str(target['instrument']) not in fresh.get('instrument',[]) or (tag and tag['id'] not in fresh.get('tag',[]))):
                 fail('Счёт, валюта или категория отсутствуют в свежем ответе ZenMoney')
             if target.get('type') == 'debt': fail('Долговой счёт требует отдельного оформления')
             if local and db.execute('SELECT 1 FROM creation_jobs WHERE bank_id=?',(row['id'],)).fetchone(): fail('Запись уже создана')
@@ -188,12 +189,13 @@ def payload_for(db, row, category):
             'date':row['date'],'incomeAccount':target['id'],'outcomeAccount':target['id'],
             'incomeInstrument':target['instrument'],'outcomeInstrument':target['instrument'],
             'income':float(amount) if row['amount_minor']>0 else 0,'outcome':float(amount) if row['amount_minor']<0 else 0,
-            'tag':[category],'payee':payee,'comment':row['description']}
+            'tag':[category] if category else None,'payee':payee,'comment':row['description']}
 
 
 def matches(expected, actual):
     # Compare every field we authored except server-adjusted timestamps; server may add defaults.
-    return all(actual.get(k) == value for k,value in expected.items() if k not in ('created','changed'))
+    return all((actual.get(k) or None) == (value or None) if k == 'tag' else actual.get(k) == value
+               for k,value in expected.items() if k not in ('created','changed'))
 
 
 def refresh(path, client):

@@ -1,3 +1,4 @@
+import {sendNewBatches} from './send-new-batches.js';
 import {dateLabel} from './date-format.js';
 import {creationDialog} from './new-operations.js';
 import {bankScope,bankTitle} from './bank-scope.js';
@@ -31,8 +32,10 @@ function controls() {
   $('creation-create').textContent=`Создать локальные записи · ${newRows.length}`;
   $('creation-create').disabled=busy||!connected||!newRows.length;
   $('creation-send').hidden=!state?.capabilities?.create||!bankWorkspace();
-  $('creation-send').textContent=`Отправить новые записи в ZenMoney · ${prepared.length}`;
-  $('creation-send').disabled=busy||!connected||!prepared.length;
+  $('creation-send').textContent='Отправить новые с категорией';
+  $('creation-send').disabled=busy||!connected||!(newRows.length||prepared.length);
+  $('creation-send-all').hidden=$('creation-send').hidden;
+  $('creation-send-all').disabled=busy||!connected||!creationRows.some(r=>r.state==='pending'||r.creation_job?.state==='prepared');
   $('creation-verify').hidden=!state?.capabilities?.create||!creationRows.some(r=>r.creation_job&&!['sent','prepared'].includes(r.creation_job.state));
 
   $('send').disabled=busy||!connected||!state?.capabilities?.write||!state?.outbox?.some(x=>['queued','uncertain'].includes(x.state));
@@ -215,7 +218,8 @@ $('history-next').onclick=()=>run(async()=>{historyOffset+=100;});
 $('refresh').onclick=()=>run(async()=>{});
 $('category-send').onclick=()=>run(async()=>{const preview=await api('/api/category-updates/preview',{});const ids=categoryScopeIds();categorySendDialog(ids?preview.items.filter(i=>ids.has(i.zen_id)):preview.items,state,request=>run(()=>api(request.path,request.body)));});
 $('creation-create').onclick=()=>run(async()=>{const result=await api('/api/new-operations/create',creationScope());return {message:`Создано локальных записей: ${result.created.length}. Пропущено: ${result.skipped.length}.`};});
-$('creation-send').onclick=()=>run(async()=>{const scope=creationScope();const preview=await api('/api/new-operations/preview',scope);creationDialog(preview.items,scope,body=>run(()=>api('/api/new-operations/send',body)));});
+$('creation-send').onclick=()=>run(async()=>{const scope=creationScope();const preview=await api('/api/new-operations/prepare-preview',scope);creationDialog(preview.items,scope,body=>run(()=>sendNewBatches(body,b=>api('/api/new-operations/send',b))));});
+$('creation-send-all').onclick=()=>run(async()=>{const scope={...creationScope(),include_uncategorized:true};const preview=await api('/api/new-operations/prepare-preview',scope);creationDialog(preview.items,scope,body=>run(()=>sendNewBatches(body,b=>api('/api/new-operations/send',b))));});
 $('creation-verify').onclick=()=>run(()=>api('/api/new-operations/verify',{}));
 $('category-verify').onclick=()=>run(()=>api('/api/category-updates/verify',{}));
 $('sync').onclick=()=>run(()=>api('/api/zenmoney/sync',{}));

@@ -134,6 +134,7 @@ class CategorySend(StrictModel):
 
 
 class NewOperationScope(StrictModel):
+    include_uncategorized: bool = False
     bank: str = Field(pattern=r'^[a-z0-9_-]{1,40}$')
     account: str | None = None
     start: date | None = None
@@ -154,6 +155,7 @@ class NewOperationSend(NewOperationScope):
 
 
 class BatchScope(NewOperationScope):
+    creations_only: bool = False
     account: str = Field(min_length=1, max_length=200)
 
 
