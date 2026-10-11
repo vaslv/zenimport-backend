@@ -312,3 +312,16 @@ def test_preview_all_days_is_atomic_and_rejects_stale_snapshot(tmp_path):
     assert all(r['state']=='pending' for r in client.get('/api/state').json()['review'])
     assert client.post('/api/review-pairs/confirm',json=body).json()=={'days':3,'linked':4}
     assert not client.get('/api/state').json()['outbox']
+
+
+def test_recipient_prefers_account_then_description_before_name():
+    from backend.reconciliation import recipient
+    row={'raw':{'details':{'corresponsiveAccount':' VQR123 ', 'corresponsiveName':'Shop'}},
+         'description':'  GD MOTO tai OPENAI *CHATGPT SUBSCR, the 3610  '}
+    assert recipient(row)[0]=='account:vqr123'
+    row['raw']['details']['corresponsiveAccount']=' '
+    assert recipient(row)[0]=='description:gd moto tai openai *chatgpt subscr, the 3610'
+    row['raw']['details']['corresponsiveName']='Different name'
+    assert recipient(row)[0]=='description:gd moto tai openai *chatgpt subscr, the 3610'
+    row['description']=''
+    assert recipient(row)[0]=='name:different name'

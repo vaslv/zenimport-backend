@@ -12,10 +12,11 @@ def recipient(row):
     details = (row['raw'].get('details') or {})
     name = normalized(details.get('corresponsiveName'))
     account = normalized(details.get('corresponsiveAccount'))
-    # An exact recipient account is stronger than a name. No fuzzy text stripping.
+    # Prefer beneficiary account, then exact description; name is a last fallback.
     description = normalized(row.get('description'))
-    return ('account:' + account if account else 'name:' + name if name else
-            'description:' + description if len(description) >= 6 else None), name
+    return ('account:' + account if account else
+            'description:' + description if len(description) >= 6 else
+            'name:' + name if name else None), name
 
 
 def enrich(rows, accounts, transactions, categories):
