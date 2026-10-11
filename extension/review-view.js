@@ -1,3 +1,4 @@
+import {dateLabel} from './date-format.js';
 import {newOperationPicker,localRecord} from './new-operations.js';
 import {categoryPicker,destroyCategoryPickers} from './category-picker.js';
 import {categoryNeedsWork,zenRowsById,bankNeedsCategory,linkedIds} from './category-state.js';
@@ -59,7 +60,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
     complete.append(node('p','Все операции выбранного счёта и периода из загруженной истории. Поиск, статус и пагинация основного списка здесь не применяются. Б/З — номера записей внутри дня; совпадение суммы ещё не подтверждает связь.'));
     for(const d of comparisonDays){
       const a=accounts.get(d.bank_account),entry=node('details',undefined,'comparison-day');entry.dataset.date=d.date;
-      entry.append(node('summary',`${d.date} · ${zen.get(a?.zenmoney_account)?.title||a?.bank} · Банк ${d.bank_count} / ZenMoney ${d.zen_count} · ${d.equal?'Суммы совпадают':'Есть расхождения'}`));
+      entry.append(node('summary',`${dateLabel(d.date)} · ${zen.get(a?.zenmoney_account)?.title||a?.bank} · Банк ${d.bank_count} / ZenMoney ${d.zen_count} · ${d.equal?'Суммы совпадают':'Есть расхождения'}`));
       entry.append(dayComparison(d,state));complete.append(entry);
     }
     container.append(complete);
@@ -73,14 +74,14 @@ export function renderReview(container,state,{account='',status='all',query='',s
     box.append(node('p','Используются выбранные счёт и период целиком, включая следующие страницы. Поиск и фильтр статуса не ограничивают действие. Дни с сомнениями целиком остаются для ручной проверки.'));
     if(readyDays.length){
       const preview=node('details');preview.append(node('summary','Посмотреть список дней'));
-      for(const d of readyDays){const a=accounts.get(d.bank_account);preview.append(node('p',`${d.date} · ${zen.get(a?.zenmoney_account)?.title||a?.bank||'Счёт'} · ${d.pairs.length} операций`));}box.append(preview);
+      for(const d of readyDays){const a=accounts.get(d.bank_account);preview.append(node('p',`${dateLabel(d.date)} · ${zen.get(a?.zenmoney_account)?.title||a?.bank||'Счёт'} · ${d.pairs.length} операций`));}box.append(preview);
       const bulk=node('button',`Сопоставить все однозначные дни · ${pairs} операций`,'secondary');bulk.dataset.apiAction='';bulk.onclick=()=>reviewPairs(state,readyDays,onAction,{field:'pairs',path:'/api/review-days/confirm'});box.append(bulk);
     }else box.append(node('p','Нет полностью однозначных дней для массового сопоставления.'));
     container.prepend(box);
   }
   for(const t of rows.slice(0,limit)){
     if(day!==t.date){day=t.date;group=node('section',undefined,'ledger-day');group.dataset.date=day;
-      group.append(node('h2',new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'long',weekday:'short',timeZone:'UTC'}).format(new Date(day+'T12:00:00Z'))));container.append(group);
+      group.append(node('h2',dateLabel(day)));container.append(group);
       for(const d of (state.day_review||[]).filter(d=>d.date===day&&showDay(d.bank_account,d.date)&&(!account||d.bank_account===account))){
         const box=node('details',undefined,'day-proposal');
         const a=accounts.get(d.bank_account),title=zen.get(a?.zenmoney_account)?.title||a?.bank||'Счёт';
@@ -109,7 +110,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
     const detail=node('div',undefined,'ledger-detail');detail.append(node('p',t.description));
     if(!t.mapped)detail.append(node('p','Сопоставьте банковский счёт со счётом ZenMoney в разделе «Банки» → «Привязка счетов».','notice'));
     if(s==='conflict')detail.append(node('p','Связанная запись отсутствует или больше не совпадает по счёту, сумме и дате. Проверьте историю и отмените связь при необходимости.','notice'));
-    if(linked)detail.append(node('p',`ZenMoney: ${linked.date} · ${linked.payee||linked.comment||'Без описания'} · ${linked.categories?.join(', ')||'Без категории'}`));
+    if(linked)detail.append(node('p',`ZenMoney: ${dateLabel(linked.date)} · ${linked.payee||linked.comment||'Без описания'} · ${linked.categories?.join(', ')||'Без категории'}`));
     if(t.state==='linked'&&state.capabilities?.local_review)detail.append(button(t.group?.kind==='settlement'?'Отменить весь взаиморасчёт':'Отменить связь',()=>({path:`/api/review/${t.id}/link`,body:{},method:'DELETE'})));
     if(state.capabilities?.local_review&&['pending','ignored'].includes(t.state))detail.append(exclusionButton('bank',t.id,t.state==='ignored',onAction));
     if(state.capabilities?.local_review&&linked){
@@ -126,14 +127,14 @@ export function renderReview(container,state,{account='',status='all',query='',s
       if(state.capabilities?.write)detail.append(picker);
       if(t.candidates.length)detail.append(node('h3',`Совпадения в ZenMoney · ${t.candidates.length}`));
       for(const c of t.candidates){
-        const candidate=node('div',undefined,'match-option');candidate.append(node('strong',`${c.date} · ${money(t)}`),node('p',c.categories?.join(', ')||'Без категории'),node('p',c.payee||c.comment||c.id),node('small',c.reason));
+        const candidate=node('div',undefined,'match-option');candidate.append(node('strong',`${dateLabel(c.date)} · ${money(t)}`),node('p',c.categories?.join(', ')||'Без категории'),node('p',c.payee||c.comment||c.id),node('small',c.reason));
         if(state.capabilities?.local_review||state.capabilities?.write)candidate.append(button('Это та же операция',()=>({path:`/api/review/${t.id}/${state.capabilities?.local_review?'link':'confirm'}`,body:{action:'link',match_id:c.id,reviewed_candidates:t.candidates.map(x=>x.id)}})));
         detail.append(candidate);
       }
       if(suggestion){
         const why=node('section',undefined,'category-evidence');why.append(node('h3',suggestion.conflict?'История неоднозначна':`Предполагаемая категория: ${suggestion.title}`),node('p',`${suggestion.reason}. ${suggestion.count} операций.`));
         suggestion.distribution.forEach(c=>why.append(node('p',`${c.title}: ${c.count}`)));
-        suggestion.examples.forEach(e=>why.append(node('small',`${e.date} · ${e.payee||'Подтверждённая связь'} · ${e.title}`)));detail.append(why);
+        suggestion.examples.forEach(e=>why.append(node('small',`${dateLabel(e.date)} · ${e.payee||'Подтверждённая связь'} · ${e.title}`)));detail.append(why);
       }else if(!t.candidates.length)detail.append(node('p','Пока недостаточно повторений для уверенного выбора категории. Доступные примеры показаны в списке.','muted'));
       if(!state.capabilities?.write&&!state.capabilities?.create)detail.append(node('p','Запись отключена: новые операции пока не отправляются в ZenMoney.','muted'));
       else if(state.capabilities?.write&&t.mapped){

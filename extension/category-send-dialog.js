@@ -1,3 +1,4 @@
+import {dateLabel} from './date-format.js';
 import {formatMoney} from './zenmoney-view.js';
 const el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
 export function categorySendDialog(items,state,send){
@@ -11,7 +12,7 @@ export function categorySendDialog(items,state,send){
     const card=el('article');card.className='category-send-item';const label=el('label'),check=el('input');check.type='checkbox';check.disabled=!!item.error;check.checked=!item.error&&selected.size<20;if(check.checked)selected.add(item.zen_id);
     check.onchange=()=>{check.checked?selected.add(item.zen_id):selected.delete(item.zen_id);update();};
     const currency=(state.zenmoney_instruments||[]).find(i=>i.id===item.instrument)?.shortTitle||'';
-    label.append(check,document.createTextNode(` ${item.date||''} · ${item.account} · ${formatMoney(String(Number(item.income||0)-Number(item.outcome||0)),currency)}`));
+    label.append(check,document.createTextNode(` ${dateLabel(item.date)} · ${item.account} · ${formatMoney(String(Number(item.income||0)-Number(item.outcome||0)),currency)}`));
     card.append(label,el('p',item.payee||'Без описания'),el('p',`${item.before_categories.join(', ')||'Без категории'} → ${item.category}`));
     if(item.error)card.append(el('p',item.error));list.append(card);
   }

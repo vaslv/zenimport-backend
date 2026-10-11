@@ -1,3 +1,4 @@
+import {dateLabel} from './date-format.js';
 import {newOperationPicker,localRecord} from './new-operations.js';
 import {categoryPicker} from './category-picker.js';
 import {categoryNeedsWork,zenRowsById,bankNeedsCategory,linkedIds} from './category-state.js';
@@ -24,7 +25,7 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
   for(const d of [...days].sort((a,b)=>b.date.localeCompare(a.date)||a.bank_account.localeCompare(b.bank_account))){
     const account=state.bank_accounts.find(a=>a.id===d.bank_account),title=state.zenmoney_accounts.find(a=>a.id===account?.zenmoney_account)?.title||account?.bank||'Счёт';
     const section=el('section',undefined,'attention-day');section.dataset.date=d.date;
-    const heading=el('div',undefined,'section-heading');heading.append(el('h2',`${d.date} · ${title}`));
+    const heading=el('div',undefined,'section-heading');heading.append(el('h2',`${dateLabel(d.date)} · ${title}`));
     if(state.capabilities?.local_review&&d.preview_pairs?.length)heading.append(saveButton(`Сохранить пары дня · ${d.preview_pairs.length}`,[d]));
     section.append(heading);
     if(d.bank_total!==undefined){const total=v=>formatMoney(String(Number(v)/(account.currency==='VND'?1:100)),account.currency);section.append(el('p',`Итог банка: ${total(d.bank_total)} · Итог ZenMoney: ${total(d.zen_total)}`));}
@@ -61,7 +62,7 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
       const summary=el('summary');summary.append(el('strong',(amount>0?'+':'')+formatMoney(String(currency==='VND'?amount:amount/100),currency)),el('span',source,'badge'),el('span',status));
       if(g.banks.length>1||g.zen.length>1)summary.append(el('small',`Банк: ${g.banks.length} · ZenMoney: ${g.zen.length}`));
       const description=g.zen[0]?.categories?.join(', ')||g.zen[0]?.category_draft?.title||g.banks[0]?.description||g.zen[0]?.payee||'Без категории';summary.append(el('p',description));row.append(summary);
-      for(const b of g.banks){row.append(el('p',`Банк: ${formatMoney(String(currency==='VND'?b.amount_minor:b.amount_minor/100),currency)} · ${b.description}`));if(b.linked&&!g.confirmed)row.append(el('small',`Связано с ZenMoney за ${b.linked.date}`));}
+      for(const b of g.banks){row.append(el('p',`Банк: ${formatMoney(String(currency==='VND'?b.amount_minor:b.amount_minor/100),currency)} · ${b.description}`));if(b.linked&&!g.confirmed)row.append(el('small',`Связано с ZenMoney за ${dateLabel(b.linked.date)}`));}
       for(const z of g.zen)row.append(el('p',`ZenMoney: ${formatMoney(String(currency==='VND'?Number(z.amount_minor):Number(z.amount_minor)/100),currency)} · ${z.payee||z.comment||'Без описания'} · ${z.categories.join(', ')|| (z.transfer?'Перевод':'Без категории')}`));
       if(g.pair?.order==='chronological'){
         row.append(el('p',`Время банка: ${g.banks[0].raw?.date||'не указано'} · Запись ZenMoney создана: ${new Date(g.zen[0].created*1000).toLocaleString('ru-RU')}`));

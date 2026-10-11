@@ -122,6 +122,8 @@ def test_automatic_only_repeated_unanimous_recipient_and_manual_override(tmp_pat
     with transaction(path) as db:historical(db,id)
     assert prepare()['category_id'] is None
     with transaction(path) as db:historical(db,id)
+    assert prepare()['category_id'] is None
+    with transaction(path) as db:historical(db,id)
     assert prepare()['category_id']=='food'
     with transaction(path) as db:historical(db,id,'toys',recipient='different');historical(db,id,'toys',direction=1)
     assert prepare()['category_id']=='food'

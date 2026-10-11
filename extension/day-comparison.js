@@ -1,3 +1,4 @@
+import {dateLabel} from './date-format.js';
 import {formatMoney} from './zenmoney-view.js';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const amount=(r)=>{const n=Number(r.amount_minor),v=formatMoney(String(r.currency==='VND'?n:n/100),r.currency);return n>0?'+'+v:v;};
@@ -14,11 +15,11 @@ export function dayComparison(day,state){
     const linked=r.state==='linked'||r.state==='sent';
     const peers=zen.filter(z=>!z.excluded&&z.same_day_bank_ids.includes(r.id));
     if(r.state==='ignored')c.append(el('p','Не требует сведения'));
-    else if(linked){c.append(el('p',r.linked?`Связано: ${(r.split_ids?.length?r.split_ids.map(id=>zenLabels.get(id)||id).join(', '):zenLabels.get(r.linked_id))||'ZenMoney за '+r.linked.date}`:'Связь требует проверки','comparison-linked'));}
+    else if(linked){c.append(el('p',r.linked?`Связано: ${(r.split_ids?.length?r.split_ids.map(id=>zenLabels.get(id)||id).join(', '):zenLabels.get(r.linked_id))||'ZenMoney за '+dateLabel(r.linked.date)}`:'Связь требует проверки','comparison-linked'));}
     else if(peers.length)c.append(el('p',`Возможные пары по сумме: ${peers.map(z=>zenLabels.get(z.id)).join(', ')}. Не подтверждены.`,'comparison-possible'));
     else c.append(el('p','Нет пары по сумме в этот день','comparison-missing'));
     const other=(r.candidates||[]).filter(z=>z.date!==day.date);
-    if(!linked&&other.length)c.append(el('small',`Есть кандидаты в другие дни: ${[...new Set(other.map(z=>z.date))].join(', ')}`));
+    if(!linked&&other.length)c.append(el('small',`Есть кандидаты в другие дни: ${[...new Set(other.map(z=>dateLabel(z.date)))].join(', ')}`));
     if(r.raw?.date)c.append(el('small',r.raw.date));bankColumn.append(c);
   }
   for(const r of zen){

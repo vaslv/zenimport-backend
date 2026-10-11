@@ -1,3 +1,4 @@
+import {dateLabel} from './date-format.js';
 import {creationDialog} from './new-operations.js';
 import {bankScope,bankTitle} from './bank-scope.js';
 import {categorySendDialog} from './category-send-dialog.js';
@@ -124,7 +125,7 @@ function render() {
   });
   empty($('accounts'),'Сначала импортируйте операции через иконку расширения на странице поддерживаемого банка.');
   state.review.filter(tx=>!selectedBank()||bankAccounts.some(a=>a.id===tx.bank_account)).forEach(tx=>{
-    const card=el('article'); card.append(el('span',names[tx.state]||tx.state,'badge'),el('h3',`${tx.date} · ${amount(tx)}`),el('p',tx.description));
+    const card=el('article'); card.append(el('span',names[tx.state]||tx.state,'badge'),el('h3',`${dateLabel(tx.date)} · ${amount(tx)}`),el('p',tx.description));
     const raw=el('details'); raw.append(el('summary','Исходные поля'),el('pre',JSON.stringify(tx.raw,null,2))); card.append(raw); $('bank-rows').append(card);
   });
   empty($('bank-rows'),'Банковских операций пока нет.'); renderLedger();
@@ -132,7 +133,7 @@ function render() {
   state.outbox.forEach(item=>{const row=el('article');row.append(el('strong',names[item.state]||item.state),el('p',item.zen_id,'muted'));if(item.error)row.append(el('p',item.error));if(item.state==='queued')row.append(action('Вернуть на проверку',()=>api(`/api/outbox/${item.bank_transaction}/reopen`,{})));$('outbox').append(row);});
   empty($('outbox'),'Очередь пуста. Подтверждение добавляет операцию в очередь, отправка выполняется отдельно.');
   const coverage=state.zenmoney_summary?.transactions;
-  $('history-coverage').textContent=coverage?.first_date?`В базе: ${coverage.first_date} — ${coverage.last_date}. Полнота периода ещё не подтверждена.`:'История ещё не загружена.';
+  $('history-coverage').textContent=coverage?.first_date?`В базе: ${dateLabel(coverage.first_date)} — ${dateLabel(coverage.last_date)}. Полнота периода ещё не подтверждена.`:'История ещё не загружена.';
   $('history-page').textContent=historyPage?`Найдено: ${historyPage.total}. Показано: ${historyPage.items.length?historyOffset+1:0}–${historyOffset+historyPage.items.length}.`:'';
   renderHistory($('zen'),state.zenmoney_transactions,state,historyAccount,fn=>run(async()=>{const request=fn();if(request)await api(request.path,request.body,request.method);}));
   $('write-note').textContent=state.mode==='demo'?'DEMO: подтверждение и отправка работают только с учебными данными.':'Связи и категории сохраняются локально. Новые записи создаются отдельно после просмотра и подтверждения.';

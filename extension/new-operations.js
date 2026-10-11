@@ -1,3 +1,4 @@
+import {dateLabel} from './date-format.js';
 import {categoryPicker} from './category-picker.js';
 import {formatMoney} from './zenmoney-view.js';
 const el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
@@ -15,7 +16,7 @@ export function creationDialog(items,scope,send){
     const card=el('article');card.className='creation-item';const label=el('label'),check=el('input');check.type='checkbox';check.disabled=!!item.error;check.checked=!item.error&&selected.size<20;if(check.checked)selected.add(item.bank_id);
     check.onchange=()=>{check.checked?selected.add(item.bank_id):selected.delete(item.bank_id);update();};
     const sum=Number(item.amount_minor)/(item.currency==='VND'?1:100);
-    label.append(check,document.createTextNode(` ${item.date} · ${item.account} · ${sum>0?'+':''}${formatMoney(String(sum),item.currency)}`));
+    label.append(check,document.createTextNode(` ${dateLabel(item.date)} · ${item.account} · ${sum>0?'+':''}${formatMoney(String(sum),item.currency)}`));
     card.append(label,el('p',item.description),el('p',`Категория: ${item.category||'не выбрана'}${item.source==='auto'?' · автоматически по истории':''}`));
     if(item.error)card.append(el('p',item.error));list.append(card);
   }

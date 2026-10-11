@@ -1,3 +1,4 @@
+import {dateLabel} from './date-format.js';
 import {formatMoney} from './zenmoney-view.js';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 export function reviewPairs(state,days,onAction,{field='preview_pairs',path='/api/review-pairs/confirm'}={}){
@@ -12,7 +13,7 @@ export function reviewPairs(state,days,onAction,{field='preview_pairs',path='/ap
   for(const day of [...days].sort((a,b)=>b.date.localeCompare(a.date)||a.bank_account.localeCompare(b.bank_account))){
     const account=state.bank_accounts.find(a=>a.id===day.bank_account),target=state.zenmoney_accounts.find(a=>a.id===account?.zenmoney_account);
     const section=el('section',undefined,'pairs-review-day');section.dataset.date=day.date;
-    section.append(el('h3',`${day.date} · ${target?.title||account?.bank||'Счёт'} · ${account?.account?.slice(-4)||''}`));
+    section.append(el('h3',`${dateLabel(day.date)} · ${target?.title||account?.bank||'Счёт'} · ${account?.account?.slice(-4)||''}`));
     for(const pair of day[field]||[]){
       const bank=banks.get(pair.bank_id),zen=(day.zen_rows||[]).find(z=>z.id===pair.zen_id)||bank?.candidates?.find(z=>z.id===pair.zen_id);
       const row=el('article',undefined,'pairs-review-pair');row.dataset.bankId=pair.bank_id;row.dataset.zenId=pair.zen_id;
@@ -23,7 +24,7 @@ export function reviewPairs(state,days,onAction,{field='preview_pairs',path='/ap
       if(!bank||!zen){complete=false;row.append(el('p','Данные пары недоступны. Отмените и обновите список.','notice'));}
       else{
         const left=el('div'),right=el('div');
-        left.append(el('strong',`Банк · ${money(bank.amount_minor)}`),el('p',bank.description||'Без описания'),el('small',bank.raw?.date||bank.date));
+        left.append(el('strong',`Банк · ${money(bank.amount_minor)}`),el('p',bank.description||'Без описания'),el('small',bank.raw?.date||dateLabel(bank.date)));
         right.append(el('strong',`ZenMoney · ${money(zen.amount_minor??bank.amount_minor)}`),el('p',zen.payee||zen.comment||'Без описания'),el('p',(zen.categories||[]).join(', ')||(zen.transfer?'Перевод':'Без категории')));
         if(zen.comment&&zen.comment!==zen.payee)right.append(el('p',zen.comment));
         if(zen.created)right.append(el('small',`Создана: ${new Date(zen.created*1000).toLocaleString('ru-RU')}`));

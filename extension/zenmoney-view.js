@@ -1,3 +1,4 @@
+import {dateLabel} from './date-format.js';
 import {exclusionButton} from './exclusions-view.js';
 // Decimal strings stay decimal strings: formatting never rounds them through Number.
 export function formatMoney(value, currency='') {
@@ -40,10 +41,6 @@ export function renderAccountCards(container,state,{showArchived,onAccount}) {
   }
   if(!visible.length)container.append(node('p',all.length?'Активных счетов нет. Включите показ архивных.':'Счета ещё не загружены. Запустите синхронизацию.','empty'));
   return {visible:visible.length,total:all.length,archived:all.filter(a=>a.archive).length};
-}
-function dateLabel(value){
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(value||''))return 'Дата не указана';
-  return new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(value+'T00:00:00Z'));
 }
 export function renderHistory(container,items,state,selectedAccount,onAction){
   container.replaceChildren();const lookup=lookups(state);let lastDay=null,list;
