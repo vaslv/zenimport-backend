@@ -7,7 +7,9 @@ export function categoryPicker(row,state,onAction){
   const compare=(a,b)=>a.title.localeCompare(b.title,'ru',{sensitivity:'base'})||a.id.localeCompare(b.id);
   const ranking=(row.category_ranking||row.category_suggestion?.distribution||[]).filter(c=>byId.has(c.id)&&c.count>0).map(c=>({...c,title:byId.get(c.id).title})).sort((a,b)=>b.count-a.count||compare(a,b));
   const priority=new Set(ranking.map(c=>c.id)),others=categories.filter(c=>!priority.has(c.id)).sort(compare);
-  const saved=row.category_draft?.id||'';box.value=row.category_draft?.valid===false?'':saved;
+  const adjustments=categories.filter(c=>c.title.trim().toLocaleLowerCase('ru')==='корректировка');
+  const fallback=!row.category_draft&&!row.transfer&&!row.categories?.length&&!row.tag_ids?.length&&!ranking.length&&adjustments.length===1?adjustments[0]:null;
+  const saved=row.category_draft?.id||'';box.value=row.category_draft?.valid===false?'':saved||fallback?.id||'';
   const select=el('select'),message=el('p',undefined,'muted');
   select.setAttribute('aria-label','Категория операции ZenMoney');
   const options=[...ranking.map(c=>({...c,priority:true})),...others,{id:'',title:'Без выбранной категории'}];
@@ -34,7 +36,7 @@ export function categoryPicker(row,state,onAction){
     evidence.append(document.createTextNode('Предполагаемые категории: '));
     ranking.forEach((c,i)=>{if(i)evidence.append(document.createTextNode('; '));evidence.append(el('strong',`${c.title} · ${c.count}`));});
     evidence.append(document.createTextNode(ranking.length>1?' · несколько вариантов — проверьте выбор.':ranking[0].count>=2?' · повторяется в истории.':' · только один пример — проверьте выбор.'));
-  }else evidence.textContent='Нет подходящих подтверждённых примеров для подсказки категории.';
+  }else evidence.textContent=fallback?'Нет подходящих подтверждённых примеров. По умолчанию выбрана «Корректировка»; сохраните её или выберите другую категорию.':'Нет подходящих подтверждённых примеров для подсказки категории.';
   box.prepend(el('h3','Категория операции ZenMoney'),evidence);box.append(message,save);
   if(row.category_draft?.valid===false)box.append(el('p','Категория недоступна или данные ZenMoney изменились. Проверьте выбор заново.','notice'));
   if(row.candidates?.length)box.append(el('p','Есть возможные совпадения с ZenMoney. Выбор категории не подтверждает создание новой операции.','muted'));

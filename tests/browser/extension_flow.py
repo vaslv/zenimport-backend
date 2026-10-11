@@ -1279,3 +1279,44 @@ def test_category_send_preview_cancel_confirm_and_verify(browser):
     page.locator('#category-verify').click()
     expect(page.locator('#category-verify')).to_be_hidden();expect(page.locator('#category-send')).to_be_disabled()
     page.close()
+
+
+@pytest.mark.parametrize('case,expected',[
+    ('unknown','adjust'),('ranked',''),('saved','food'),('conflict',''),
+    ('deleted',''),('missing',''),('duplicate',''),('categorized',''),('transfer',''),
+])
+def test_adjustment_default_is_unsaved_and_never_replaces_existing_choice(browser,case,expected):
+    context,identifier=browser
+    page=context.new_page()
+    page.goto(f'chrome-extension://{identifier}/app.html')
+    connect(page)
+    expect(page.locator('#feedback')).to_have_text('Данные обновлены.')
+    page.evaluate("""async ({case:mode})=>{
+      const {categoryPicker}=await import('./category-picker.js');
+      const row={id:'default-test',categories:[],tag_ids:[],transfer:false,category_ranking:[]};
+      const categories=[{id:'adjust',title:'Корректировка'},{id:'food',title:'Еда'}];
+      if(mode==='ranked')row.category_ranking=[{id:'food',count:2}];
+      if(mode==='saved'||mode==='conflict')row.category_draft={id:'food',valid:mode==='saved'};
+      if(mode==='deleted')categories[0].deleted=true;
+      if(mode==='missing')categories.shift();
+      if(mode==='duplicate')categories.push({id:'adjust2',title:'Корректировка'});
+      if(mode==='categorized'){row.categories=['Еда'];row.tag_ids=['food'];}
+      if(mode==='transfer')row.transfer=true;
+      window.categoryRequests=[];
+      const host=document.createElement('div');host.id='default-test-host';
+      document.body.append(host);
+      host.append(categoryPicker(row,{categories},action=>window.categoryRequests.push(action())));
+    }""",{'case':case})
+    picker=page.locator('#default-test-host .category-picker')
+    assert picker.locator('select').input_value()==expected
+    assert page.evaluate('window.categoryRequests')==[]
+    if case=='unknown':
+        expect(picker).to_contain_text('По умолчанию выбрана «Корректировка»')
+        expect(picker).to_contain_text('Выбор ещё не сохранён')
+        picker.get_by_role('button',name='Сохранить категорию',exact=True).click()
+        assert page.evaluate('window.categoryRequests')==[{'path':'/api/zenmoney/transactions/default-test/category','method':'PUT','body':{'category_id':'adjust','expected_tags':[]}}]
+        picker.locator('.ts-control').click()
+        picker.locator('[data-category-id="food"]').click()
+        picker.get_by_role('button',name='Сохранить категорию',exact=True).click()
+        assert page.evaluate('window.categoryRequests.at(-1).body.category_id')=='food'
+    page.close()
