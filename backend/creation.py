@@ -39,7 +39,7 @@ def prepare(db, scope):
         old = db.execute('SELECT * FROM creation_drafts WHERE bank_id=?', (row['id'],)).fetchone()
         if old and old['source'] == 'manual': continue
         choices = ranking(row, learned); key, _ = recipient(row)
-        category = choices[0]['id'] if key and not key.startswith('description:') and len(choices) == 1 and choices[0]['count'] >= 3 else None
+        category = choices[0]['id'] if key and len(choices) == 1 and choices[0]['count'] >= 3 else None
         # Split/uncategorized confirmed payments are not evidence of one unambiguous category.
         if category and any(other['bank_account']==row['bank_account'] and recipient(other)[0]==key
                             and (other['amount_minor']>0)==(row['amount_minor']>0)

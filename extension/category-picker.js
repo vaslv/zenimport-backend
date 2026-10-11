@@ -38,7 +38,7 @@ export function categoryPicker(row,state,onAction,{newOperation=false}={}){
     evidence.append(document.createTextNode(ranking.length>1?' · несколько вариантов — проверьте выбор.':ranking[0].count>=2?' · повторяется в истории.':' · только один пример — проверьте выбор.'));
   }else evidence.textContent=fallback?'Нет подходящих подтверждённых примеров. По умолчанию выбрана «Корректировка»; сохраните её или выберите другую категорию.':'Нет подходящих подтверждённых примеров для подсказки категории.';
   box.prepend(el('h3',newOperation?'Категория новой операции':'Категория операции ZenMoney'),evidence);box.append(message,save);
-  if(newOperation&&row.category_draft?.source==='auto'&&row.category_draft?.valid)box.append(el('p','Назначена автоматически: у получателя не менее трёх подтверждённых операций с одной категорией и нет других категорий. Проверьте перед созданием.','notice'));
+  if(newOperation&&row.category_draft?.source==='auto'&&row.category_draft?.valid)box.append(el('p',row.raw?.details?.corresponsiveAccount||row.raw?.details?.corresponsiveName?'Назначена автоматически: у получателя не менее трёх подтверждённых операций с одной категорией и нет других категорий. Проверьте перед созданием.':'Назначена автоматически по точному описанию платежа: не менее трёх подтверждённых операций с одной категорией и нет других категорий. Проверьте перед созданием.','notice'));
   if(row.category_draft?.valid===false)box.append(el('p','Категория недоступна или данные ZenMoney изменились. Проверьте выбор заново.','notice'));
   if(!newOperation&&row.candidates?.length)box.append(el('p','Есть возможные совпадения с ZenMoney. Выбор категории не подтверждает создание новой операции.','muted'));
   update();return box;

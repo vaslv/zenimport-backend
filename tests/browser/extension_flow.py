@@ -1467,7 +1467,7 @@ def test_new_operations_categories_and_scoped_creation_confirmation(browser):
     expect(page.locator('.attention-day h2')).to_have_text('11 октября 2026 · VietinBank account')
     known=page.locator('[data-zen-id="known"]')
     expect(known.locator('.ts-control .item')).to_have_text('Еда')
-    expect(known).to_contain_text('Назначена автоматически')
+    expect(known).to_contain_text('Назначена автоматически по точному описанию платежа')
     unknown=page.locator('[data-zen-id="unknown"]')
     expect(unknown.locator('.ts-control .item')).to_have_count(0)
     expect(page.locator('#creation-send')).to_be_disabled()

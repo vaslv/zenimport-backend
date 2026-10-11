@@ -196,3 +196,31 @@ def test_reopen_prepared_record_keeps_category_and_invalidates_preview(tmp_path)
     draft(c,id,'toys');body=request(c)
     assert c.post('/api/new-operations/send',json=body).json()['results'][0]['state']=='sent'
     assert remote.writes[0][0]['tag']==['toys']
+
+
+def test_exact_description_auto_category_without_recipient_fields(tmp_path):
+    c,path,remote,id=setup(tmp_path)
+    with transaction(path) as db:
+        raw=json.loads(db.execute('SELECT raw FROM bank_transactions WHERE id=?',(id,)).fetchone()[0])
+        raw['details']={}
+        db.execute('UPDATE bank_transactions SET raw=? WHERE id=?',(json.dumps(raw),id))
+        for _ in range(2):historical(db,id)
+        # Real card history may have neither a recipient account nor a name.
+        db.execute('UPDATE bank_transactions SET raw=?,description=?',(json.dumps(raw),'Phi GD MOTO tai OPENAI *CHATGPT SUBSCR, the 3610'))
+    def category():
+        assert c.post('/api/new-operations/prepare',json={'bank':'demo'}).status_code==200
+        return next(r for r in c.get('/api/state').json()['review'] if r['id']==id)['creation_draft']
+    assert category()['category_id'] is None
+    with transaction(path) as db:
+        historical(db,id)
+        db.execute('UPDATE bank_transactions SET raw=?,description=?',(json.dumps(raw),'Phi GD MOTO tai OPENAI *CHATGPT SUBSCR, the 3610'))
+    assert category()['category_id']=='food' and category()['source']=='auto'
+    with transaction(path) as db:
+        db.execute('UPDATE bank_transactions SET description=? WHERE id=?',('Different card payment',id))
+    assert category()['category_id'] is None
+    with transaction(path) as db:
+        db.execute('UPDATE bank_transactions SET description=? WHERE id=?',('Phi GD MOTO tai OPENAI *CHATGPT SUBSCR, the 3610',id))
+        historical(db,id,'toys')
+        db.execute('UPDATE bank_transactions SET raw=?,description=?',(json.dumps(raw),'Phi GD MOTO tai OPENAI *CHATGPT SUBSCR, the 3610'))
+    assert category()['category_id'] is None
+    assert not remote.writes
