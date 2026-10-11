@@ -1,10 +1,10 @@
 import {categoryPicker} from './category-picker.js';
-import {categoryNeedsWork,zenRowsById,bankNeedsCategory} from './category-state.js';
+import {categoryNeedsWork,zenRowsById,bankNeedsCategory,linkedIds} from './category-state.js';
 import {reviewPairs} from './pairs-review-dialog.js';
 import {exclusionButton} from './exclusions-view.js';
 import {formatMoney} from './zenmoney-view.js';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
-export function attentionDays(container,state,days,onAction,{hideReconciled=false}={}){
+export function attentionDays(container,state,days,onAction,{hideReconciled=false,includePending=false}={}){
   const saveButton=(label,selected,mass=false)=>{
     const button=el('button',label);button.dataset.apiAction='';
     button.onclick=()=>mass?reviewPairs(state,selected,onAction):onAction(()=>({path:'/api/review-pairs/confirm',body:{days:selected.map(d=>({bank_account:d.bank_account,date:d.date,snapshot:d.snapshot}))}}));return button;
@@ -18,7 +18,8 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
   }
   const bankMap=new Map(state.review.map(r=>[r.id,r]));
   const zenRows=zenRowsById(state);
-  const settled=b=>b&&['linked','sent'].includes(b.state)&&b.linked&&!bankNeedsCategory(b,zenRows);
+  const pending=z=>includePending&&(z.category_draft||(state.category_sends||[]).some(s=>s.zen_id===z.id&&s.state!=='sent'));
+  const settled=b=>!(b?linkedIds(b):[]).some(id=>pending(zenRows.get(id)||{}))&&b&&['linked','sent'].includes(b.state)&&b.linked&&!bankNeedsCategory(b,zenRows);
   for(const d of [...days].sort((a,b)=>b.date.localeCompare(a.date)||a.bank_account.localeCompare(b.bank_account))){
     const account=state.bank_accounts.find(a=>a.id===d.bank_account),title=state.zenmoney_accounts.find(a=>a.id===account?.zenmoney_account)?.title||account?.bank||'Счёт';
     const section=el('section',undefined,'attention-day');section.dataset.date=d.date;
@@ -69,6 +70,7 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
 
         for(const z of g.zen)if(!z.linked_bank_id){const actions=el('div',`ZenMoney · ${z.payee||z.comment||'Без описания'} `);actions.append(exclusionButton('zenmoney',z.id,!!z.excluded,onAction));row.append(actions);}
       }
+      if(g.zen.some(pending))row.append(el('p','Категория ожидает отправки или проверки результата в ZenMoney.','notice'));
       if(g.confirmed&&g.zen.some(categoryNeedsWork))row.append(el('p','Нужно определить категорию.'));
       for(const b of g.banks){
         if(!g.settlement&&b.group?.kind==='settlement'&&b.state==='linked'&&state.capabilities?.local_review){const undo=el('button','Отменить весь взаиморасчёт');undo.dataset.apiAction='';undo.onclick=()=>onAction(()=>({path:`/api/review/${b.id}/link`,body:{},method:'DELETE'}));row.append(el('p','Состав группы изменился или больше не совпадает по сумме. Отмена освободит всех участников.'),undo);}

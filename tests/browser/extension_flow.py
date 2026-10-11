@@ -54,7 +54,7 @@ def test_installed_extension_end_to_end(browser):
     expect(page.locator('#status')).to_have_text('Данные обновлены.')
     expect(page.locator('#connection')).to_have_text('Сервер подключён')
     page.locator('nav a[href="#banks"]').click()
-    expect(page.locator('#accounts')).to_contain_text('Сначала импортируйте')
+    expect(page.locator('#bank-list')).to_contain_text('Сначала импортируйте')
     page.locator('#sync').click()
     expect(page.locator('#status')).to_have_text('Данные обновлены.')
     page.locator('nav a[href="#zenmoney"]').click()
@@ -75,6 +75,8 @@ def test_installed_extension_end_to_end(browser):
     page.locator('#refresh').click()
     expect(page.locator('#status')).to_have_text('Данные обновлены.')
     page.locator('nav a[href="#banks"]').click()
+    page.locator('#bank-list a[href="#banks/demo"]').click()
+    page.locator('#bank-settings-link').click()
     page.locator('#accounts select').select_option(label='Демо · VND')
     page.get_by_role('button',name='Сопоставить',exact=True).click()
     expect(page.locator('#status')).to_have_text('Данные обновлены.')
@@ -185,6 +187,8 @@ def test_vietinbank_period_popup_and_import(browser):
     expect(popup.locator('#status')).to_contain_text('Уже были: 3')
     app = open_app(browser)
     app.locator('nav a[href="#banks"]').click()
+    app.locator('#bank-list a[href="#banks/vietinbank"]').click()
+    app.locator('#bank-settings-link').click()
     expect(app.locator('#accounts')).to_contain_text('vietinbank / 111122223333')
     expect(app.locator('#accounts')).to_contain_text('строки 1–3 из 3')
     expect(app.locator('#bank-rows')).to_contain_text('Fee without a reference')
@@ -740,7 +744,7 @@ def test_work_days_filter_keeps_all_rows_of_problem_days(browser):
     page.goto(f'chrome-extension://{identifier}/app.html#review')
     expect(page.locator('.ledger-entry')).to_have_count(5)
     page.locator('[data-review-status="synced"]').click()
-    page.locator('nav a[href="#attention"]').click()
+    page.evaluate("location.hash='attention'")
     expect(page.locator('#title')).to_have_text('Требуют внимания')
     expect(page.locator('.attention-day')).to_have_count(3)
     expect(page.locator('.attention-day[data-date="2026-10-02"]')).to_contain_text('Банк + ZenMoney')
@@ -776,8 +780,9 @@ def test_work_days_filter_keeps_all_rows_of_problem_days(browser):
     page.close()
 
 
+@pytest.mark.parametrize('route',['attention','banks/bank'])
 @pytest.mark.parametrize('scope',['day','all'])
-def test_attention_preview_pairs_save_explicitly(browser,scope):
+def test_attention_preview_pairs_save_explicitly(browser,scope,route):
     context,identifier=browser
     state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
     state.update(mode='live',capabilities={'write':False,'local_review':True},recipient_profiles=[],outbox=[])
@@ -805,7 +810,12 @@ def test_attention_preview_pairs_save_explicitly(browser,scope):
             row.update(state='linked',linked=z,linked_id=z['id'],reconciliation_status='synced')
         route.fulfill(content_type='application/json',body=json.dumps({'days':len(expected),'linked':len(expected)}))
     page.route('**/api/review-pairs/confirm',save)
-    page.goto(f'chrome-extension://{identifier}/app.html#attention')
+    page.goto(f'chrome-extension://{identifier}/app.html#{route}')
+    connect(page)
+    expect(page.locator('#status')).to_have_text('Данные обновлены.')
+    page.goto(f'chrome-extension://{identifier}/app.html#{route}')
+    if route.startswith('banks/'):
+        page.locator('#bank-attention-only').check()
     expect(page.locator('.attention-operation')).to_have_count(2)
     expect(page.locator('.attention-operation').first).to_contain_text('Предварительная пара · не сохранена')
     assert not calls
@@ -1319,4 +1329,91 @@ def test_adjustment_default_is_unsaved_and_never_replaces_existing_choice(browse
         picker.locator('[data-category-id="food"]').click()
         picker.get_by_role('button',name='Сохранить категорию',exact=True).click()
         assert page.evaluate('window.categoryRequests.at(-1).body.category_id')=='food'
+    page.close()
+
+
+
+def test_bank_workspace_scopes_whole_days_and_keeps_drafts_until_sent(browser):
+    context,identifier=browser
+    state=context.request.get(BASE+'/api/state',headers={'Authorization':'Bearer '+TOKEN}).json()
+    state.update(mode='live',capabilities={'write':False,'local_review':True,'category_write':True},
+                 review=[],day_review=[],outbox=[],recipient_profiles=[],category_sends=[],category_draft_count=2)
+    state['bank_accounts']=[{'id':id,'bank':bank,'account':id,'currency':'VND','zenmoney_account':'zen-'+id}
+        for id,bank in [('vt1','vietinbank'),('vt2','vietinbank'),('other','other-bank'),('unmapped','vietinbank')]]
+    state['bank_accounts'][-1]['zenmoney_account']=None
+    state['zenmoney_accounts']=[{'id':'zen-'+id,'title':id,'instrument':1} for id in ['vt1','vt2','other','unrelated']]
+    state['categories']=[{'id':'food','title':'Еда'}]
+    def pair(id,account,date,draft=False):
+        z={'id':'z-'+id,'date':date,'amount_minor':'-100','currency':'VND','payee':id,'categories':[] if draft else ['Еда'],
+           'tag_ids':[] if draft else ['food'],'transfer':False,'linked_bank_id':id,'same_day_bank_ids':[id],
+           'category_draft':{'id':'food','title':'Еда','valid':True} if draft else None}
+        b={'id':id,'bank_account':account,'date':date,'amount_minor':-100,'currency':'VND','description':id,'raw':{},
+           'state':'linked','mapped':True,'linked':z,'linked_id':z['id'],'split_ids':[],'candidates':[],'reconciliation_status':'synced'}
+        state['review'].append(b)
+        day=next((d for d in state['day_review'] if d['bank_account']==account and d['date']==date),None)
+        if day is None:
+            day={'bank_account':account,'date':date,'bank_ids':[],'zen_rows':[],'equal':True,'resolved':True,'pairs':[],'preview_pairs':[]}
+            state['day_review'].append(day)
+        day['bank_ids'].append(id);day['zen_rows'].append(z)
+        return z
+    draft=pair('waiting','vt1','2026-10-01',True)
+    pair('same-day-complete','vt1','2026-10-01')
+    pair('complete-day','vt1','2026-10-02')
+    pair('second-account','vt2','2026-10-03')
+    pair('foreign-draft','other','2026-10-01',True)
+    state['review'].append({'id':'no-mapping','bank_account':'unmapped','date':'2026-10-04','amount_minor':-100,'currency':'VND',
+        'description':'No mapping','raw':{},'state':'pending','mapped':False,'linked':None,'candidates':[],'reconciliation_status':'new'})
+    page=context.new_page();calls=[]
+    page.route('**/api/state',lambda route:route.fulfill(json=state))
+    items=[{'zen_id':id,'snapshot':'a'*64,'date':'2026-10-01','account':'Account','income':0,'outcome':100,'instrument':1,
+            'payee':id,'before_categories':[],'category':'Еда','error':None} for id in ['z-waiting','z-foreign-draft']]
+    page.route('**/api/category-updates/preview',lambda route:route.fulfill(json={'items':items}))
+    def send(route):
+        calls.append(json.loads(route.request.post_data))
+        draft.update(category_draft=None,categories=['Еда'],tag_ids=['food'])
+        state['category_draft_count']=1
+        route.fulfill(json={'results':[{'zen_id':'z-waiting','state':'sent'}]})
+    page.route('**/api/category-updates/send',send)
+    page.goto(f'chrome-extension://{identifier}/app.html#banks')
+    connect(page)
+    expect(page.locator('#status')).to_have_text('Данные обновлены.')
+    page.locator('nav a[href="#banks"]').click()
+    expect(page.locator('nav a[href="#attention"]')).to_have_count(0)
+    page.locator('#bank-list a[href="#banks/vietinbank"]').click()
+    expect(page.locator('#title')).to_have_text('VietinBank')
+    expect(page.locator('.attention-day')).to_have_count(4)
+    expect(page.locator('#review')).not_to_contain_text('foreign-draft')
+    assert page.locator('#review-account option').evaluate_all('(xs)=>xs.map(x=>x.value)')==['','vt1','vt2','unmapped']
+    page.locator('#bank-attention-only').check()
+    expect(page.locator('.attention-day')).to_have_count(2)
+    expect(page.locator('.attention-day[data-date="2026-10-01"]')).to_contain_text('same-day-complete')
+    page.screenshot(path='/results/bank-workspace.png',full_page=True)
+    page.locator('#hide-reconciled').check()
+    expect(page.locator('#review')).to_contain_text('waiting')
+    expect(page.locator('#review')).not_to_contain_text('same-day-complete')
+    page.locator('#review-account').select_option('vt1')
+    expect(page.locator('.attention-day')).to_have_count(1)
+    expect(page.locator('#category-send')).to_have_text('Отправить категории в ZenMoney · 1')
+    assert page.locator('#feedback').inner_text()=='Данные обновлены.'
+    page.locator('#category-send').click()
+    expect(page.locator('.category-send-item')).to_have_count(1)
+    expect(page.locator('.category-send-dialog')).not_to_contain_text('z-foreign-draft')
+    page.get_by_role('button',name='Подтвердить отправку · 1',exact=True).click()
+    expect(page.locator('.attention-day')).to_have_count(0)
+    assert calls==[{'items':[{'zen_id':'z-waiting','snapshot':'a'*64}]}]
+    state['category_sends']=[{'zen_id':'z-waiting','state':'uncertain'}]
+    page.locator('#refresh').click()
+    expect(page.locator('.attention-day')).to_have_count(1)
+    expect(page.locator('#review')).to_contain_text('ожидает отправки или проверки результата')
+    state['category_sends'][0]['state']='sent'
+    page.locator('#refresh').click()
+    expect(page.locator('.attention-day')).to_have_count(0)
+    page.locator('#bank-attention-only').uncheck()
+    page.locator('#hide-reconciled').uncheck()
+    expect(page.locator('.attention-day')).to_have_count(2)
+    page.locator('nav a[href="#banks"]').click()
+    page.locator('#bank-list a[href="#banks/other-bank"]').click()
+    expect(page.locator('.attention-day')).to_have_count(1)
+    expect(page.locator('#review')).to_contain_text('foreign-draft')
+    expect(page.locator('#review')).not_to_contain_text('same-day-complete')
     page.close()

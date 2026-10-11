@@ -1,3 +1,4 @@
+import {bankScope,bankTitle} from './bank-scope.js';
 import {categorySendDialog} from './category-send-dialog.js';
 import {renderReview} from './review-view.js';
 import {destroyCategoryPickers} from './category-picker.js';
@@ -5,7 +6,7 @@ import {renderAccountCards,renderHistory} from './zenmoney-view.js';
 import {api, settings, normalizeBaseUrl} from './api.js';
 const $ = id => document.getElementById(id);
 const names = {pending:'Ожидает проверки',queued:'Подтверждена',sent:'Отправлена',linked:'Связана',ignored:'Пропущена',uncertain:'Результат неизвестен',conflict:'Конфликт'};
-const titles = {overview:'Обзор',zenmoney:'Данные ZenMoney',banks:'Банковские данные',review:'Операции',attention:'Требуют внимания',settings:'Подключение'};
+const titles = {overview:'Обзор',zenmoney:'Данные ZenMoney',banks:'Банки','bank-settings':'Привязка счетов',review:'Операции',attention:'Требуют внимания',settings:'Подключение'};
 let state = null, busy = false, connected = false, historyOffset = 0, historyPage = null, historyAccount = '', zenTab = 'accounts';
 function el(tag, text, className) { const n=document.createElement(tag); if(text!==undefined)n.textContent=text; if(className)n.className=className; return n; }
 function empty(node, text) { if(!node.childNodes.length)node.append(el('p',text,'empty')); }
@@ -20,23 +21,48 @@ function controls() {
   $('history-account').disabled=busy||!connected;
   $('show-archived').disabled=busy;
   $('save').disabled=busy; $('url').disabled=busy; $('token').disabled=busy;
-  $('category-send').disabled=busy||!connected||!state?.category_draft_count;
+  categoryControls();
   $('send').disabled=busy||!connected||!state?.capabilities?.write||!state?.outbox?.some(x=>['queued','uncertain'].includes(x.state));
   $('demo').disabled=busy||!connected||state?.mode!=='demo';
   $('connection').textContent=busy?'Обновление…':connected?'Сервер подключён':'Нет подключения';
   $('refresh').disabled=busy; // Reconnect is possible after a network error.
 }
+function selectedBank(){
+  const [route,id]=location.hash.slice(1).split('/');
+  return ['banks','bank-settings'].includes(route)&&id?decodeURIComponent(id):'';
+}
+function bankWorkspace(){return location.hash.startsWith('#banks/')&&!!selectedBank();}
+function categoryScopeIds(){
+  if(!bankWorkspace())return null;
+  return new Set((bankScope(state,selectedBank()).day_review||[])
+    .filter(d=>(!reviewAccount||d.bank_account===reviewAccount)&&(!$('review-start').value||d.date>=$('review-start').value)&&(!$('review-end').value||d.date<=$('review-end').value))
+    .flatMap(d=>d.zen_rows||[]).filter(z=>z.category_draft).map(z=>z.id));
+}
+function categoryControls(){
+  const ids=state?categoryScopeIds():null;
+  const count=ids?ids.size:state?.category_draft_count||0;
+  const jobs=state?(bankWorkspace()?bankScope(state,selectedBank()).category_sends:state.category_sends||[]):[];
+  const unresolved=jobs.some(s=>s.state!=='sent');
+  $('category-send').hidden=!state?.capabilities?.category_write||location.hash==='#banks';
+  $('category-verify').hidden=!state?.capabilities?.category_write||!unresolved||location.hash==='#banks';
+  $('category-send-status').hidden=!unresolved||location.hash==='#banks';
+  $('category-send').textContent=`Отправить категории в ZenMoney · ${count}`;
+  $('category-send').disabled=busy||!connected||!count||location.hash==='#banks';
+}
 function navigate() {
-  let name=(location.hash.slice(1)||'review').split('/')[0]; if(!titles[name])name='overview';
-  document.querySelectorAll('[data-view]').forEach(n=>n.hidden=n.dataset.view!==(name==='attention'?'review':name));
-  document.querySelectorAll('nav a').forEach(n=>{if(n.hash===`#${name}`)n.setAttribute('aria-current','page');else n.removeAttribute('aria-current');});
-  $('title').textContent=titles[name];
-  const attention=name==='attention';
+  let name=(location.hash.slice(1)||'banks').split('/')[0]; if(!titles[name])name='overview';
+  document.querySelectorAll('[data-view]').forEach(n=>n.hidden=n.dataset.view!==(name==='attention'||bankWorkspace()?'review':name));
+  document.querySelectorAll('nav a').forEach(n=>{if(n.hash===`#${name==='bank-settings'?'banks':name}`)n.setAttribute('aria-current','page');else n.removeAttribute('aria-current');});
+  $('title').textContent=bankWorkspace()?bankTitle(selectedBank()):titles[name];
+  $('bank-workspace').hidden=!bankWorkspace();
+  $('bank-settings-link').href=`#bank-settings/${encodeURIComponent(selectedBank())}`;
+  $('bank-scope-note').textContent='Операции выбранного банка и только явно привязанных к нему счетов ZenMoney.';
+  const attention=name==='attention'||bankWorkspace();
   $('hide-reconciled-label').hidden=!attention;
   $('review-search').closest('label').hidden=attention;
   document.querySelector('.status-filters').hidden=attention;
   $('queue-panel').hidden=attention||(!state?.capabilities?.write&&!state?.outbox?.length);
-  if(state){renderLedger();controls();}
+  if(state){render();controls();}
   if(name==='zenmoney')setZenTab(location.hash.split('/')[1]||zenTab);
 }
 function render() {
@@ -65,7 +91,14 @@ function render() {
   $('history-title').textContent=historyAccount?`Операции · ${state.zenmoney_accounts.find(a=>String(a.id)===historyAccount)?.title||'Недоступный счёт'}`:'Все операции';
   $('history-clear-account').hidden=!historyAccount;
   state.categories.forEach(t=>$('categories').append(el('span',t.title,'badge'))); empty($('categories'),'Категорий пока нет.');
-  state.bank_accounts.forEach(a=>{
+  $('bank-list').replaceChildren();
+  for(const bank of [...new Set(state.bank_accounts.map(a=>a.bank))].sort()){
+    const card=el('article'),link=el('a',bankTitle(bank));link.href=`#banks/${encodeURIComponent(bank)}`;
+    card.append(el('h3',bankTitle(bank)),el('p',`Счетов: ${state.bank_accounts.filter(a=>a.bank===bank).length}`),link);$('bank-list').append(card);
+  }
+  empty($('bank-list'),'Сначала импортируйте операции через иконку расширения.');
+  const bankAccounts=selectedBank()?state.bank_accounts.filter(a=>a.bank===selectedBank()):state.bank_accounts;
+  bankAccounts.forEach(a=>{
     const card=el('article'); card.append(el('h3',`${a.bank} / ${a.account} · ${a.currency}`));
     const target=select(state.zenmoney_accounts.filter(z=>!z.archive),'Счёт ZenMoney'); target.value=a.zenmoney_account||'';
     const lastImport=state.bank_imports?.find(i=>i.bank_account===a.id && i.capture);
@@ -77,12 +110,12 @@ function render() {
     $('accounts').append(card);
   });
   empty($('accounts'),'Сначала импортируйте операции через иконку расширения на странице поддерживаемого банка.');
-  state.review.forEach(tx=>{
+  state.review.filter(tx=>!selectedBank()||bankAccounts.some(a=>a.id===tx.bank_account)).forEach(tx=>{
     const card=el('article'); card.append(el('span',names[tx.state]||tx.state,'badge'),el('h3',`${tx.date} · ${amount(tx)}`),el('p',tx.description));
     const raw=el('details'); raw.append(el('summary','Исходные поля'),el('pre',JSON.stringify(tx.raw,null,2))); card.append(raw); $('bank-rows').append(card);
   });
   empty($('bank-rows'),'Банковских операций пока нет.'); renderLedger();
-  $('queue-panel').hidden=location.hash==='#attention'||!state.capabilities?.write&&!state.outbox.length;
+  $('queue-panel').hidden=bankWorkspace()||location.hash==='#attention'||!state.capabilities?.write&&!state.outbox.length;
   state.outbox.forEach(item=>{const row=el('article');row.append(el('strong',names[item.state]||item.state),el('p',item.zen_id,'muted'));if(item.error)row.append(el('p',item.error));if(item.state==='queued')row.append(action('Вернуть на проверку',()=>api(`/api/outbox/${item.bank_transaction}/reopen`,{})));$('outbox').append(row);});
   empty($('outbox'),'Очередь пуста. Подтверждение добавляет операцию в очередь, отправка выполняется отдельно.');
   const coverage=state.zenmoney_summary?.transactions;
@@ -95,18 +128,21 @@ function render() {
 let reviewAccount='',reviewFilter='all',reviewLimit=100;
 function renderLedger(){
   if(!state)return;
-  const filter=$('review-account');filter.replaceChildren(new Option('Все счета',''));
-  for(const a of state.bank_accounts){const z=state.zenmoney_accounts.find(z=>z.id===a.zenmoney_account);filter.append(new Option(z?.title||`${a.bank} · ${a.account.slice(-4)}`,a.id));}
+  const scoped=bankWorkspace()?bankScope(state,selectedBank()):state;
+  if(!scoped.bank_accounts.some(a=>a.id===reviewAccount))reviewAccount='';
+  const filter=$('review-account');filter.replaceChildren(new Option(bankWorkspace()?'Все счета банка':'Все счета',''));
+  for(const a of scoped.bank_accounts){const z=state.zenmoney_accounts.find(z=>z.id===a.zenmoney_account);filter.append(new Option(z?.title||`${a.bank} · ${a.account.slice(-4)}`,a.id));}
   filter.value=reviewAccount;
   if($('review-start').value&&$('review-end').value&&$('review-start').value>$('review-end').value){destroyCategoryPickers($('review'));$('review').replaceChildren(el('p','Начало периода позже конца.','empty'));return;}
-  const result=renderReview($('review'),state,{account:reviewAccount,status:reviewFilter,query:$('review-search').value,start:$('review-start').value,end:$('review-end').value,limit:reviewLimit,workDays:location.hash==='#attention',hideReconciled:$('hide-reconciled').checked,
+  const result=renderReview($('review'),scoped,{account:reviewAccount,status:reviewFilter,query:$('review-search').value,start:$('review-start').value,end:$('review-end').value,limit:reviewLimit,workDays:location.hash==='#attention'||bankWorkspace(),attentionOnly:!bankWorkspace()||$('bank-attention-only').checked,includePending:bankWorkspace(),hideReconciled:$('hide-reconciled').checked,
     onShowAll:()=>{reviewFilter='all';reviewLimit=100;$('review-search').value='';},
     onMore:()=>{reviewLimit+=100;renderLedger();controls();},
     onAction:fn=>run(async()=>{const request=fn();if(request)await api(request.path,request.body,request.method);})});
-  $('review-count').textContent=location.hash==='#attention'?`Дней, требующих внимания: ${result.days||0}`:`Показано ${result.shown} из ${result.total} · Банковская история, новые сначала`;
+  $('review-count').textContent=bankWorkspace()?`Дней: ${result.days||0}`:location.hash==='#attention'?`Дней, требующих внимания: ${result.days||0}`:`Показано ${result.shown} из ${result.total} · Банковская история, новые сначала`;
   const labels={all:'Все',synced:'Уже в ZenMoney',new:'Новые',attention:'Проверить'};
   document.querySelectorAll('[data-review-status]').forEach(b=>{const k=b.dataset.reviewStatus;b.textContent=`${labels[k]} · ${result.counts[k]}`;b.setAttribute('aria-pressed',String(reviewFilter===k));});
 }
+$('bank-attention-only').onchange=()=>{renderLedger();controls();};
 $('hide-reconciled').onchange=()=>{renderLedger();controls();};
 $('review-account').onchange=()=>{reviewAccount=$('review-account').value;reviewLimit=100;renderLedger();controls();};
 for(const id of ['review-search','review-start','review-end'])$(id).oninput=()=>{reviewLimit=100;renderLedger();controls();};
@@ -160,7 +196,7 @@ $('history-filter').onsubmit=event=>{event.preventDefault();run(async()=>{histor
 $('history-prev').onclick=()=>run(async()=>{historyOffset=Math.max(0,historyOffset-100);});
 $('history-next').onclick=()=>run(async()=>{historyOffset+=100;});
 $('refresh').onclick=()=>run(async()=>{});
-$('category-send').onclick=()=>run(async()=>{const preview=await api('/api/category-updates/preview',{});categorySendDialog(preview.items,state,request=>run(()=>api(request.path,request.body)));});
+$('category-send').onclick=()=>run(async()=>{const preview=await api('/api/category-updates/preview',{});const ids=categoryScopeIds();categorySendDialog(ids?preview.items.filter(i=>ids.has(i.zen_id)):preview.items,state,request=>run(()=>api(request.path,request.body)));});
 $('category-verify').onclick=()=>run(()=>api('/api/category-updates/verify',{}));
 $('sync').onclick=()=>run(()=>api('/api/zenmoney/sync',{}));
 $('demo').onclick=async()=>{const config=await settings();chrome.tabs.create({url:config.baseUrl+'/demo-bank'});};
