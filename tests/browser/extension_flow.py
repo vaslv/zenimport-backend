@@ -1470,7 +1470,7 @@ def test_new_operations_categories_and_scoped_creation_confirmation(browser):
     expect(page.locator('.attention-day summary .beneficiary-account')).to_have_count(1)
     expect(page.locator('.attention-day summary .beneficiary-account')).to_have_text('Beneficiary account: VQR123 · Shop <img src=x>')
     expect(page.locator('.attention-day summary img')).to_have_count(0)
-    expect(page.locator('.attention-day summary .bank-time')).to_have_text(['Время банка: 19:19:33 · known','Время банка: 19:36:11 · mixed'])
+    expect(page.locator('.attention-day summary .bank-time')).to_have_text(['11 октября 2026, 19:19:33 · known','11 октября 2026, 19:36:11 · mixed','11 октября 2026 · unknown'])
     original_viewport=page.viewport_size
     for width in (1280,480):
         page.set_viewport_size({'width':width,'height':1000})

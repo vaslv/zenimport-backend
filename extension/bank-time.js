@@ -1,3 +1,4 @@
+import {dateLabel} from './date-format.js';
 // Preserve the bank's wall-clock time; do not convert it to the browser timezone.
 export function bankTime(row){
   for(const value of [row.raw?.date,row.raw?.details?.processDate]){
@@ -9,4 +10,9 @@ export function bankTime(row){
     return `${match[7]}:${match[8]}${match[9]?':'+match[9]:''}`;
   }
   return '';
+}
+
+export function bankDateTime(row){
+  const time=bankTime(row);
+  return `${dateLabel(row.date)}${time?', '+time:''}`;
 }

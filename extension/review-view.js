@@ -1,4 +1,4 @@
-import {bankTime} from './bank-time.js';
+import {bankDateTime} from './bank-time.js';
 import {beneficiaryLabel} from './beneficiary.js';
 import {dateLabel} from './date-format.js';
 import {newOperationPicker,localRecord} from './new-operations.js';
@@ -105,7 +105,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
     const symbol=node('span',undefined,'category-symbol');symbol.append(icon(title,linked?.transfer));
     const content=node('span',undefined,'ledger-text');content.append(node('strong',title,'ledger-title'),node('span','▱ '+accountTitle,'ledger-account'));
     if(t.description&&t.description!==title)content.append(node('span',t.description,'ledger-description'));
-    if(bankTime(t))content.append(node('span',`Время банка: ${bankTime(t)}`,'bank-time'));
+    content.append(node('span',bankDateTime(t),'bank-time'));
     if(beneficiaryLabel(t))content.append(node('span',beneficiaryLabel(t),'beneficiary-account'));
     const statusLabel=node('span',labels[s]||s,'sync-status status-'+s);content.append(statusLabel);
     if(drafts.length)content.append(node('span','Категория выбрана · ожидает отправки','pending-category'));
