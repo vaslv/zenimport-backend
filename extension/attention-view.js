@@ -7,7 +7,7 @@ import {reviewPairs} from './pairs-review-dialog.js';
 import {exclusionButton} from './exclusions-view.js';
 import {formatMoney} from './zenmoney-view.js';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
-export function attentionDays(container,state,days,onAction,{hideReconciled=false,includePending=false}={}){
+export function attentionDays(container,state,days,onAction,{hideReconciled=false,hideCategorized=false,includePending=false}={}){
   const saveButton=(label,selected,mass=false)=>{
     const button=el('button',label);button.dataset.apiAction='';
     button.onclick=()=>mass?reviewPairs(state,selected,onAction):onAction(()=>({path:'/api/review-pairs/confirm',body:{days:selected.map(d=>({bank_account:d.bank_account,date:d.date,snapshot:d.snapshot}))}}));return button;
@@ -23,6 +23,7 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
   const zenRows=zenRowsById(state);
   const pending=z=>includePending&&(z.category_draft||(state.category_sends||[]).some(s=>s.zen_id===z.id&&s.state!=='sent'));
   const settled=b=>!(b?linkedIds(b):[]).some(id=>pending(zenRows.get(id)||{}))&&b&&['linked','sent'].includes(b.state)&&b.linked&&!bankNeedsCategory(b,zenRows);
+  let visibleDays=0;
   for(const d of [...days].sort((a,b)=>b.date.localeCompare(a.date)||a.bank_account.localeCompare(b.bank_account))){
     const account=state.bank_accounts.find(a=>a.id===d.bank_account),title=state.zenmoney_accounts.find(a=>a.id===account?.zenmoney_account)?.title||account?.bank||'Счёт';
     const section=el('section',undefined,'attention-day');section.dataset.date=d.date;
@@ -33,10 +34,15 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
     if(d.excluded_count)section.append(el('p',`Не участвуют в сведении: ${d.excluded_count}. Итоги для сведения: банк ${formatMoney(String(Number(d.reconcile_bank_total)/(account.currency==='VND'?1:100)),account.currency)} · ZenMoney ${formatMoney(String(Number(d.reconcile_zen_total)/(account.currency==='VND'?1:100)),account.currency)}. Исключённые записи также скрываются в компактном режиме.`,'muted'));
     if(d.split_search_limited)section.append(el('p','Поиск комбинаций ограничен из-за количества вариантов. Показанный список может быть неполным.'));
     const allBanks=(d.bank_ids||[]).map(id=>bankMap.get(id)).filter(Boolean),allZen=d.zen_rows||[];
-    const banks=allBanks.filter(b=>!hideReconciled||(b.state!=='ignored'&&!settled(b)));
+    const proposed=new Set([...(d.preview_pairs||[]).map(p=>p.bank_id),...(d.split_candidates||[]).map(p=>p.bank_id)]);
+    const categorized=b=>hideCategorized&&b.creation_draft?.valid===true&&b.mapped&&!b.candidates?.length&&!proposed.has(b.id)&&
+      (b.state==='pending'||(b.state==='queued'&&b.creation_job?.state==='prepared'));
+    const banks=allBanks.filter(b=>(!hideReconciled||(b.state!=='ignored'&&!settled(b)))&&!categorized(b));
     const zs=allZen.filter(z=>{const b=bankMap.get(z.linked_bank_id);return !hideReconciled||(!z.excluded&&(!settled(b)||!(b.split_ids?.length?b.split_ids:[b.linked_id]).includes(z.id)));});
+    if(hideCategorized&&!banks.length&&!zs.length)continue;
+    visibleDays++;
     const hidden=allBanks.length+allZen.length-banks.length-zs.length;
-    if(hidden)section.append(el('p',`Скрыто сведённых записей: ${hidden}. Итоги выше относятся к полному дню.`,'muted'));
+    if(hidden)section.append(el('p',`Скрыто записей выбранными фильтрами: ${hidden}. Итоги выше относятся к полному дню.`,'muted'));
     if(!banks.length&&!zs.length)section.append(el('p','Все записи дня сведены и имеют категории; проверьте расхождения дня в полном виде.'));
     const usedB=new Set(),usedZ=new Set(),groups=[];
     for(const b of banks)if(b.state==='ignored'){groups.push({banks:[b],zen:[],excluded:true});usedB.add(b.id);}
@@ -118,7 +124,7 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
       }
       section.append(item);
     }
-    const freeBanks=allBanks.filter(b=>b.state==='pending'),freeZen=allZen.filter(z=>!z.linked_bank_id&&!z.excluded);
+    const freeBanks=banks.filter(b=>b.state==='pending'),freeZen=zs.filter(z=>!z.linked_bank_id&&!z.excluded);
     if(state.capabilities?.local_review&&freeBanks.length&&freeZen.length){
       const form=el('details',undefined,'settlement-form');form.append(el('summary','Создать группу взаиморасчёта'));
       form.append(el('p','Отметьте связанные записи. Сохраняется только локальная группа; эти операции не обучают категории.'));
@@ -131,5 +137,6 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
     }
     container.append(section);
   }
-  if(!days.length)container.append(el('p','Нет дней, требующих внимания, в выбранном счёте и периоде.','empty'));
+  if(!visibleDays)container.append(el('p',hideCategorized?'Нет операций, требующих решения, при выбранных фильтрах. Подготовленные записи доступны для создания и отправки кнопками выше.':'Нет дней, требующих внимания, в выбранном счёте и периоде.','empty'));
+  return visibleDays;
 }

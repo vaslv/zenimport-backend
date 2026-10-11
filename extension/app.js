@@ -73,6 +73,7 @@ function navigate() {
   $('bank-scope-note').textContent='Операции выбранного банка и только явно привязанных к нему счетов ZenMoney.';
   const attention=name==='attention'||bankWorkspace();
   $('hide-reconciled-label').hidden=!attention;
+  $('hide-categorized-label').hidden=!attention;
   $('review-search').closest('label').hidden=attention;
   document.querySelector('.status-filters').hidden=attention;
   $('queue-panel').hidden=attention||(!state?.capabilities?.write&&!state?.outbox?.length);
@@ -148,7 +149,7 @@ function renderLedger(){
   for(const a of scoped.bank_accounts){const z=state.zenmoney_accounts.find(z=>z.id===a.zenmoney_account);filter.append(new Option(z?.title||`${a.bank} · ${a.account.slice(-4)}`,a.id));}
   filter.value=reviewAccount;
   if($('review-start').value&&$('review-end').value&&$('review-start').value>$('review-end').value){destroyCategoryPickers($('review'));$('review').replaceChildren(el('p','Начало периода позже конца.','empty'));return;}
-  const result=renderReview($('review'),scoped,{account:reviewAccount,status:reviewFilter,query:$('review-search').value,start:$('review-start').value,end:$('review-end').value,limit:reviewLimit,workDays:location.hash==='#attention'||bankWorkspace(),attentionOnly:!bankWorkspace()||$('bank-attention-only').checked,includePending:bankWorkspace(),hideReconciled:$('hide-reconciled').checked,
+  const result=renderReview($('review'),scoped,{account:reviewAccount,status:reviewFilter,query:$('review-search').value,start:$('review-start').value,end:$('review-end').value,limit:reviewLimit,workDays:location.hash==='#attention'||bankWorkspace(),attentionOnly:!bankWorkspace()||$('bank-attention-only').checked,includePending:bankWorkspace(),hideReconciled:$('hide-reconciled').checked,hideCategorized:$('hide-categorized').checked,
     onShowAll:()=>{reviewFilter='all';reviewLimit=100;$('review-search').value='';},
     onMore:()=>{reviewLimit+=100;renderLedger();controls();},
     onAction:fn=>run(async()=>{const request=fn();if(request)await api(request.path,request.body,request.method);})});
@@ -157,6 +158,7 @@ function renderLedger(){
   document.querySelectorAll('[data-review-status]').forEach(b=>{const k=b.dataset.reviewStatus;b.textContent=`${labels[k]} · ${result.counts[k]}`;b.setAttribute('aria-pressed',String(reviewFilter===k));});
 }
 $('bank-attention-only').onchange=()=>{renderLedger();controls();};
+$('hide-categorized').onchange=()=>{renderLedger();controls();};
 $('hide-reconciled').onchange=()=>{renderLedger();controls();};
 $('review-account').onchange=()=>{reviewAccount=$('review-account').value;reviewLimit=100;renderLedger();controls();};
 for(const id of ['review-search','review-start','review-end'])$(id).oninput=()=>{reviewLimit=100;renderLedger();controls();};
