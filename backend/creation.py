@@ -6,7 +6,7 @@ from decimal import Decimal
 from fastapi import HTTPException
 from .db import transaction, entities
 from .service import review, get_row, get_entity, mapped_account, fail, audit, SCALES
-from .reconciliation import recipient, recipient_profiles
+from .reconciliation import recipient, recipient_profiles, normalized
 from .category_send import fingerprint
 from .zenmoney import apply_diff
 
@@ -34,6 +34,8 @@ def prepare(db, scope):
     rows = review(db); learned = profiles(db, rows)
     historical_txs = {t['id']:t for t in entities(db, 'transaction')}
     accounts = {a['id']:dict(a) for a in db.execute('SELECT * FROM bank_accounts')}
+    rules = {(r['bank'],r['name'],r['direction']):dict(r) for r in db.execute('SELECT * FROM recipient_rules')}
+    tags = {t['id'] for t in entities(db,'tag') if not t.get('deleted')}
     for row in rows:
         if row['state'] != 'pending' or not selected(row, accounts, scope): continue
         old = db.execute('SELECT * FROM creation_drafts WHERE bank_id=?', (row['id'],)).fetchone()
@@ -46,18 +48,45 @@ def prepare(db, scope):
                             and other.get('reconciliation_status')=='synced'
                             and (other.get('split_ids') or historical_txs.get(other.get('linked_id'),{}).get('tag') != [category]) for other in rows):
             category = None
-        if not old or old['category_id'] != category:
-            db.execute('INSERT OR REPLACE INTO creation_drafts VALUES (?,?,?,?)', (row['id'], category, 'auto', int(time.time())))
-            audit(db, 'creation_category_auto', {'bank_id':row['id'], 'category_id':category, 'evidence':choices})
+        rule = rules.get(rule_key(row,accounts[row['bank_account']]['bank']))
+        source = 'rule' if rule else 'auto'
+        if rule: category = rule['category_id'] if rule['category_id'] in tags else None
+        if not old or old['category_id'] != category or old['source'] != source:
+            db.execute('INSERT OR REPLACE INTO creation_drafts VALUES (?,?,?,?)', (row['id'], category, source, int(time.time())))
+            audit(db, 'creation_category_'+source, {'bank_id':row['id'], 'category_id':category, 'evidence':choices})
     return {'status':'prepared'}
 
 
-def save_category(db, identifier, category):
+def rule_key(row, bank):
+    raw = json.loads(row['raw']) if isinstance(row['raw'],str) else row['raw']
+    return (bank, normalized((raw.get('details') or {}).get('corresponsiveName')), 'income' if row['amount_minor']>0 else 'expense')
+
+
+def remove_rule(db, identifier):
+    from .models import NewOperationScope
+    row = get_row(db,'bank_transactions',identifier)
+    bank = get_row(db,'bank_accounts',row['bank_account'])['bank']
+    key = rule_key(row,bank)
+    db.execute('DELETE FROM recipient_rules WHERE bank=? AND name=? AND direction=?',key)
+    audit(db,'recipient_rule_removed',{'bank':bank,'name':key[1],'direction':key[2]})
+    prepare(db,NewOperationScope(bank=bank))
+    return {'status':'removed'}
+
+
+def save_category(db, identifier, category, remember=False):
     row = get_row(db, 'bank_transactions', identifier)
     if row['state'] != 'pending' or db.execute('SELECT 1 FROM creation_jobs WHERE bank_id=?',(identifier,)).fetchone():
         fail('Операция уже связана, исключена или отправлялась')
     if category and get_entity(db, 'tag', category).get('deleted'): fail('Категория удалена')
+    if remember:
+        from .models import NewOperationScope
+        bank = get_row(db,'bank_accounts',row['bank_account'])['bank']
+        key = rule_key(row,bank)
+        if not key[1] or not category: fail('Для правила нужны имя получателя и категория',422)
+        db.execute('INSERT OR REPLACE INTO recipient_rules VALUES (?,?,?,?,?)',(*key,category,int(time.time())))
+        audit(db,'recipient_rule_saved',{'bank':bank,'name':key[1],'direction':key[2],'category_id':category})
     db.execute('INSERT OR REPLACE INTO creation_drafts VALUES (?,?,?,?)', (identifier, category, 'manual', int(time.time())))
+    if remember: prepare(db,NewOperationScope(bank=bank))
     audit(db, 'creation_category_manual', {'bank_id':identifier, 'category_id':category})
     return {'category_id':category}
 
@@ -67,7 +96,11 @@ def decorate(db, rows):
     jobs = {r['bank_id']:dict(r) for r in db.execute('SELECT * FROM creation_jobs')}
     tags = {t['id']:t for t in entities(db, 'tag') if not t.get('deleted')}
     learned = profiles(db, rows)
+    accounts = {r['id']:r['bank'] for r in db.execute('SELECT id,bank FROM bank_accounts')}
+    rules = {(r['bank'],r['name'],r['direction']):dict(r) for r in db.execute('SELECT * FROM recipient_rules')}
     for row in rows:
+        rule = rules.get(rule_key(row,accounts[row['bank_account']]))
+        row['recipient_rule'] = {**rule,'title':tags.get(rule['category_id'],{}).get('title')} if rule else None
         draft = drafts.get(row['id'])
         row['creation_draft'] = {**draft, 'title':tags.get(draft['category_id'],{}).get('title'),
                                  'valid':draft['category_id'] in tags} if draft else None

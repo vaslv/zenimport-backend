@@ -169,7 +169,12 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
     def new_category(identifier: str, data: NewOperationCategory):
         from .creation import save_category
         with lock, transaction(path) as db:
-            return save_category(db, identifier, data.category_id)
+            return save_category(db, identifier, data.category_id, data.remember_recipient)
+
+    @app.delete('/api/new-operations/{identifier}/recipient-rule')
+    def delete_recipient_rule(identifier: str):
+        from .creation import remove_rule
+        with lock, transaction(path) as db: return remove_rule(db,identifier)
 
     @app.post('/api/new-operations/create')
     def create_local_new(data: NewOperationScope):

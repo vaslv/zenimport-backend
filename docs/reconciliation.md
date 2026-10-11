@@ -515,3 +515,18 @@ payload уже сохранены при локальном создании. П
 Клиент zenimport-zenmoney 0.3.0 добавляет отдельный create_transactions; общий diff
 остаётся чтением в LIVE, старые DEMO endpoints создания не открываются для LIVE.
 Контракт: https://github.com/zenmoney/ZenPlugins/wiki/ZenMoney-API#transaction
+
+
+## Явные правила получателей, 0.10.0
+
+Схема 10 добавляет recipient_rules с ключом (bank, name, direction), category_id и
+updated_at. name — NFKC/casefold/нормализация пробелов, без нечёткого совпадения.
+PUT /api/new-operations/{id}/category принимает remember_recipient=true: в одной
+транзакции сохраняет ручную категорию текущей записи, правило и пересчитывает pending
+записи всего банка. Правило имеет приоритет над историей, но ниже ручного выбора.
+Отсутствующее имя или пустая/удалённая категория запрещены. При удалении категории
+в ZenMoney правило не подставляет другую категорию самовольно.
+DELETE /api/new-operations/{id}/recipient-rule удаляет правило, пересчитывает его
+автоматические черновики по истории, сохраняет manual и queued/sent. События аудируются.
+Запросы правила не записывают в ZenMoney. creation_drafts.source=rule отличает правило
+пользователя от auto (истории); /api/state возвращает recipient_rule для карточки.

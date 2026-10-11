@@ -1487,10 +1487,13 @@ def test_new_operations_categories_and_scoped_creation_confirmation(browser):
         picker=page.locator(f'[data-zen-id="{id}"]');picker.locator('.ts-control').click()
         if id=='mixed':expect(picker.locator('.category-option strong')).to_have_count(2)
         picker.locator('[data-category-id="toys"]').click()
+        if id=='mixed':picker.get_by_label('Всегда использовать выбранную категорию',exact=False).check()
         with page.expect_response(lambda r:'/category' in r.url and '/new-operations/' in r.url):
             picker.get_by_role('button',name='Сохранить категорию',exact=True).click()
         expect(page.locator('#creation-create')).to_be_enabled()
     assert len(saved)==2 and not writes
+    assert saved[0][1]['remember_recipient'] is True
+    assert 'remember_recipient' not in saved[1][1]
     page.locator('#creation-create').click()
     expect(page.locator('#status')).to_contain_text('Создано локальных записей: 2')
     assert set(created)=={'known','mixed','unknown'} and not writes

@@ -224,3 +224,50 @@ def test_exact_description_auto_category_without_recipient_fields(tmp_path):
         db.execute('UPDATE bank_transactions SET raw=?,description=?',(json.dumps(raw),'Phi GD MOTO tai OPENAI *CHATGPT SUBSCR, the 3610'))
     assert category()['category_id'] is None
     assert not remote.writes
+
+
+def test_explicit_recipient_rule_across_accounts_and_manual_precedence(tmp_path):
+    c,path,remote,id=setup(tmp_path)
+    def add(external,account,name=' SHOP ',amount=-111,bank='demo'):
+        data=copy.deepcopy(IMPORT);data.update(account=account,bank=bank)
+        data['transactions'][0].update(external_id=external,amount_minor=amount)
+        data['transactions'][0]['raw']['details']={'corresponsiveName':name,'corresponsiveAccount':external}
+        assert c.post('/api/imports',json=data).status_code==200
+        with transaction(path) as db:
+            db.execute('UPDATE bank_accounts SET zenmoney_account=?',(DEMO_ACCOUNT,))
+            return db.execute('SELECT id FROM bank_transactions WHERE external_id=?',(external,)).fetchone()[0]
+    same=add('same','other-account');manual=add('manual','other-account',amount=-112)
+    incoming=add('incoming','other-account',amount=113)
+    other=add('other','other-account',bank='other');different=add('different','other-account',name='Shop Other')
+    draft(c,manual,'toys')
+    response=c.put(f'/api/new-operations/{id}/category',json={'category_id':'food','remember_recipient':True})
+    assert response.status_code==200,response.text
+    def rows():return {r['id']:r for r in c.get('/api/state').json()['review']}
+    r=rows();assert r[same]['creation_draft']['category_id']=='food'
+    assert r[same]['creation_draft']['source']=='rule' and r[same]['recipient_rule']['title']=='Еда'
+    assert r[manual]['creation_draft']['category_id']=='toys'
+    for identifier in (incoming,other,different):assert not (r[identifier]['creation_draft'] or {}).get('category_id')
+    initialize(path,'live')
+    future=add('future','other-account',amount=-114)
+    c.post('/api/new-operations/prepare',json={'bank':'demo'})
+    assert rows()[future]['creation_draft']['source']=='rule'
+    assert c.delete(f'/api/new-operations/{id}/recipient-rule').status_code==200
+    r=rows();assert r[same]['creation_draft']['category_id'] is None
+    assert r[id]['creation_draft']['category_id']=='food' and r[manual]['creation_draft']['category_id']=='toys'
+    assert not remote.writes
+
+
+def test_rule_requires_name_and_category_and_does_not_change_prepared(tmp_path):
+    c,path,remote,id=setup(tmp_path)
+    assert c.put(f'/api/new-operations/{id}/category',json={'category_id':None,'remember_recipient':True}).status_code==422
+    with transaction(path) as db:
+        original=db.execute('SELECT raw FROM bank_transactions WHERE id=?',(id,)).fetchone()[0]
+        db.execute('UPDATE bank_transactions SET raw=? WHERE id=?',('{"details":{}}',id))
+    assert c.put(f'/api/new-operations/{id}/category',json={'category_id':'food','remember_recipient':True}).status_code==422
+    with transaction(path) as db:db.execute('UPDATE bank_transactions SET raw=? WHERE id=?',(original,id))
+    assert c.put(f'/api/new-operations/{id}/category',json={'category_id':'food','remember_recipient':True}).status_code==200
+    assert c.post('/api/new-operations/create',json={'bank':'demo'}).json()['created']==[id]
+    assert c.delete(f'/api/new-operations/{id}/recipient-rule').status_code==200
+    with transaction(path,read_only=True) as db:
+        job=db.execute('SELECT * FROM creation_jobs').fetchone()
+        assert job['state']=='prepared' and json.loads(job['payload'])['tag']==['food']

@@ -41,7 +41,7 @@ def connect(path):
 def initialize(path, mode):
     with closing(connect(path)) as db, db:
         version = db.execute('PRAGMA user_version').fetchone()[0]
-        if version > 9:
+        if version > 10:
             raise RuntimeError('Database schema is newer than this application')
         db.executescript(SCHEMA)
         previous = db.execute("SELECT value FROM meta WHERE key='mode'").fetchone()
@@ -61,7 +61,8 @@ def initialize(path, mode):
         db.execute('CREATE TABLE IF NOT EXISTS zen_category_sends (zen_id TEXT PRIMARY KEY, category_id TEXT NOT NULL, draft_updated_at INTEGER NOT NULL, before_payload TEXT NOT NULL, payload TEXT NOT NULL, state TEXT NOT NULL, error TEXT)')
         db.execute('CREATE TABLE IF NOT EXISTS creation_drafts (bank_id TEXT PRIMARY KEY REFERENCES bank_transactions(id), category_id TEXT, source TEXT NOT NULL, updated_at INTEGER NOT NULL)')
         db.execute('CREATE TABLE IF NOT EXISTS creation_jobs (bank_id TEXT PRIMARY KEY REFERENCES bank_transactions(id), zen_id TEXT NOT NULL UNIQUE, payload TEXT NOT NULL, state TEXT NOT NULL, error TEXT)')
-        db.execute('PRAGMA user_version=9')
+        db.execute('CREATE TABLE IF NOT EXISTS recipient_rules (bank TEXT NOT NULL, name TEXT NOT NULL, direction TEXT NOT NULL, category_id TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(bank,name,direction))')
+        db.execute('PRAGMA user_version=10')
 
 
 @contextmanager
