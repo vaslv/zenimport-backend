@@ -1432,6 +1432,7 @@ def test_new_operations_categories_and_scoped_creation_confirmation(browser):
             'raw':{},'state':'pending','mapped':True,'candidates':[],'linked':None,'reconciliation_status':'new','creation_job':None,
             'creation_draft':{'category_id':'food','title':'Еда','source':'auto','valid':True} if id=='known' else None,
             'creation_ranking':[{'id':'food','count':3},{'id':'toys','count':2}] if id=='mixed' else [{'id':'food','count':3}] if id=='known' else []})
+    state['review'][1]['raw']={'details':{'corresponsiveAccount':'VQR123','corresponsiveName':'Shop <img src=x>'}}
     state['day_review']=[{'bank_account':'ba','date':'2026-10-11','bank_ids':['known','mixed','unknown'],'zen_rows':[],
                          'bank_count':3,'zen_count':0,'equal':False,'resolved':False,'pairs':[],'preview_pairs':[]}]
     page=context.new_page();writes=[];saved=[];created=[]
@@ -1465,6 +1466,9 @@ def test_new_operations_categories_and_scoped_creation_confirmation(browser):
     expect(page.locator('#creation-create')).to_be_enabled()
     expect(page.locator('.category-picker')).to_have_count(3)
     expect(page.locator('.attention-day h2')).to_have_text('11 октября 2026 · VietinBank account')
+    expect(page.locator('.attention-day summary .beneficiary-account')).to_have_count(1)
+    expect(page.locator('.attention-day summary .beneficiary-account')).to_have_text('Beneficiary account: VQR123 · Shop <img src=x>')
+    expect(page.locator('.attention-day summary img')).to_have_count(0)
     known=page.locator('[data-zen-id="known"]')
     expect(known.locator('.ts-control .item')).to_have_text('Еда')
     expect(known).to_contain_text('Назначена автоматически по точному описанию платежа')

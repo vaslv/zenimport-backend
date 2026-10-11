@@ -1,3 +1,4 @@
+import {beneficiaryLabel} from './beneficiary.js';
 import {dateLabel} from './date-format.js';
 import {newOperationPicker,localRecord} from './new-operations.js';
 import {categoryPicker,destroyCategoryPickers} from './category-picker.js';
@@ -103,6 +104,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
     const symbol=node('span',undefined,'category-symbol');symbol.append(icon(title,linked?.transfer));
     const content=node('span',undefined,'ledger-text');content.append(node('strong',title,'ledger-title'),node('span','▱ '+accountTitle,'ledger-account'));
     if(t.description&&t.description!==title)content.append(node('span',t.description,'ledger-description'));
+    if(beneficiaryLabel(t))content.append(node('span',beneficiaryLabel(t),'beneficiary-account'));
     const statusLabel=node('span',labels[s]||s,'sync-status status-'+s);content.append(statusLabel);
     if(drafts.length)content.append(node('span','Категория выбрана · ожидает отправки','pending-category'));
     if(suggestion)content.append(node('span',`${suggestion.conflict?'Категория неоднозначна':'Уверенная подсказка'} · ${suggestion.count} примера · требуется подтверждение`,'suggestion-label '+(suggestion.conflict?'confidence-low':'confidence-high')));
