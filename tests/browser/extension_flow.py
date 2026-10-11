@@ -1660,6 +1660,26 @@ def test_inline_bank_statuses_categories_and_account_boundary(browser,sync_failu
         bank.reload()
         expect(cards.nth(0).locator('strong').first).to_have_class('error')
         expect(bank.locator('#zenimport-status')).to_contain_text('Данные ZenMoney получены')
+        expect(footer).to_contain_text('Без категории на странице: 1.')
+        jump=footer.get_by_role('link',name='Следующая без категории')
+        jump.click()
+        expect(cards.nth(0).get_by_role('combobox')).to_be_focused()
+        assert bank.url==url
+        # Count both new and existing uncategorized operations; navigate in DOM order and wrap.
+        worker.evaluate("inlineTest.state.day_review[0].zen_rows[0].categories=[];inlineTest.state.day_review[0].zen_rows[0].tag_ids=[]")
+        bank.reload()
+        expect(footer).to_contain_text('Без категории на странице: 2.')
+        jump.click();expect(cards.nth(0).get_by_role('combobox')).to_be_focused()
+        jump.click();expect(cards.nth(1).get_by_role('combobox')).to_be_focused()
+        jump.click();expect(cards.nth(0).get_by_role('combobox')).to_be_focused()
+        cards.nth(0).get_by_role('button',name='Продукты',exact=True).click()
+        expect(footer).to_contain_text('Без категории на странице: 1.')
+        jump.click();expect(cards.nth(1).get_by_role('combobox')).to_be_focused()
+        assert bank.url==url
+        worker.evaluate("inlineTest.state.day_review[0].zen_rows[0].categories=['Продукты'];inlineTest.state.day_review[0].zen_rows[0].tag_ids=['food']")
+        bank.reload()
+        expect(footer).to_contain_text('Без категории на странице: 0.')
+        expect(jump).to_have_count(0)
         # Duplicate DOM identity must never attach the same editable operation twice.
         bank.evaluate("document.querySelector('tbody').append(document.querySelector('tbody tr').cloneNode(true))")
         expect(bank.locator('#zenimport-status')).to_contain_text('Опознано строк: 1 из 3')

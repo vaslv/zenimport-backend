@@ -2,14 +2,36 @@
 (() => {
   if(globalThis.__zenImportInlineUI)return;globalThis.__zenImportInlineUI=true;
   let account=null,generation=0,state=null,fresh=false,busy=false,signature='',timer,refreshAt=0;
+  let navigationPage='',lastCategoryIndex=-1;
   const mounted=new Map();let banner,activeMenu,loadError='',syncGeneration=0,pollGeneration=0,nextSyncAt=0,retryDelay=30000;
   const text=e=>e?.textContent?.replace(/\s+/g,' ').trim()||'';
   const norm=v=>String(v??'').replace(/\s+/g,' ').trim();
   const el=(tag,value)=>{const e=document.createElement(tag);if(value!==undefined)e.textContent=value;return e;};
-  const css=`:host{display:block;width:100%;color:#292735;font:14px/1.4 system-ui,sans-serif;text-align:left}*{box-sizing:border-box}[hidden]{display:none!important}section{padding:8px 12px;min-width:0}.placeholder{min-height:56px;display:flex;align-items:center}.spinner{width:14px;height:14px;border:2px solid #e4e0ed;border-top-color:#8b829b;border-radius:50%;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.operation{min-height:56px;display:grid;grid-template-columns:minmax(180px,1fr) minmax(200px,1.5fr) minmax(220px,1.5fr);align-items:center;gap:16px;border-bottom:1px solid #e4e0ed}p{margin:0}strong{font-weight:500}button,input,select{font:inherit}button{cursor:pointer;border:0;background:transparent;color:#476fa7;padding:0;text-decoration:underline}button:disabled{cursor:wait;opacity:.6}:host(#zenimport-status){position:fixed;bottom:0;left:0;z-index:2147483646;text-align:center;background:#fff;border-top:1px solid #e4e0ed;box-shadow:0 -2px 8px #0001}.good{color:#258057}.pending{color:#b56308}.error{color:#ae3737}.picker{min-width:0}.trigger{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;padding:8px 10px;border:1px solid #d8d3e0;border-radius:6px;background:white;color:#292735;text-decoration:none;text-align:left}.menu{position:fixed;z-index:2147483647;padding:6px;border:1px solid #d8d3e0;border-radius:6px;background:white;box-shadow:0 6px 20px #0002;max-height:320px;overflow:auto}.menu input{width:100%;padding:8px;border:1px solid #d8d3e0;border-radius:4px;position:sticky;top:0;background:white;color:#292735}.options{display:grid;padding-top:4px}.options button{text-align:left;color:#292735;text-decoration:none;padding:8px;border-radius:4px}.options button:hover,.options button:focus{background:#eeeaf5;outline:2px solid #b4a6cb}.options button[aria-selected=true]{background:#f3effa;font-weight:600}.hints{overflow-wrap:anywhere}.hints button{display:inline} @media(max-width:700px){.operation{grid-template-columns:1fr;gap:6px}.menu{max-height:240px}}`;
+  const css=`:host{display:block;width:100%;color:#292735;font:14px/1.4 system-ui,sans-serif;text-align:left}*{box-sizing:border-box}[hidden]{display:none!important}section{padding:8px 12px;min-width:0}.placeholder{min-height:56px;display:flex;align-items:center}.spinner{width:14px;height:14px;border:2px solid #e4e0ed;border-top-color:#8b829b;border-radius:50%;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.operation{min-height:56px;display:grid;grid-template-columns:minmax(180px,1fr) minmax(200px,1.5fr) minmax(220px,1.5fr);align-items:center;gap:16px;border-bottom:1px solid #e4e0ed}p{margin:0}strong{font-weight:500}a{color:#476fa7;text-decoration:underline}button,input,select{font:inherit}button{cursor:pointer;border:0;background:transparent;color:#476fa7;padding:0;text-decoration:underline}button:disabled{cursor:wait;opacity:.6}:host(#zenimport-status){position:fixed;bottom:0;left:0;z-index:2147483646;text-align:center;background:#fff;border-top:1px solid #e4e0ed;box-shadow:0 -2px 8px #0001}.good{color:#258057}.pending{color:#b56308}.error{color:#ae3737}.picker{min-width:0}.trigger{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;padding:8px 10px;border:1px solid #d8d3e0;border-radius:6px;background:white;color:#292735;text-decoration:none;text-align:left}.menu{position:fixed;z-index:2147483647;padding:6px;border:1px solid #d8d3e0;border-radius:6px;background:white;box-shadow:0 6px 20px #0002;max-height:320px;overflow:auto}.menu input{width:100%;padding:8px;border:1px solid #d8d3e0;border-radius:4px;position:sticky;top:0;background:white;color:#292735}.options{display:grid;padding-top:4px}.options button{text-align:left;color:#292735;text-decoration:none;padding:8px;border-radius:4px}.options button:hover,.options button:focus{background:#eeeaf5;outline:2px solid #b4a6cb}.options button[aria-selected=true]{background:#f3effa;font-weight:600}.hints{overflow-wrap:anywhere}.hints button{display:inline} @media(max-width:700px){.operation{grid-template-columns:1fr;gap:6px}.menu{max-height:240px}}`;
   function host(){const h=el('zenimport-operation');const root=h.attachShadow({mode:'open'});const style=el('style',css),box=el('section');root.append(style,box);return {h,box};}
   function clear(){activeMenu?.close();for(const panel of mounted.values())panel.container?.remove();document.querySelectorAll('tr[data-zenimport-row]').forEach(h=>h.remove());mounted.clear();signature='';}
-  function status(message,error=false){if(!document.body)return;if(!banner?.h.isConnected){banner=host();banner.h.id='zenimport-status';banner.spacer=el('div');banner.spacer.setAttribute('aria-hidden','true');document.body.append(banner.spacer,banner.h);}if(banner.message===message&&banner.error===error)return;banner.message=message;banner.error=error;banner.box.replaceChildren(el('strong','ZenImport · '),el('span',message));banner.box.setAttribute('role','status');banner.box.className=error?'error':'';banner.spacer.style.height=banner.h.getBoundingClientRect().height+'px';}
+  function categoryTargets(){return [...mounted.values()].filter(p=>p.needsCategory&&p.h.isConnected);}
+  function nextCategory(event){
+    event.preventDefault();if(busy)return;activeMenu?.close();
+    const targets=categoryTargets(),target=targets.find(p=>p.pageIndex>lastCategoryIndex)||targets[0];
+    if(!target)return;lastCategoryIndex=target.pageIndex;
+    target.h.scrollIntoView({block:'center',behavior:'instant'});
+    (target.h.shadowRoot.querySelector('[role=combobox]')||target.h).focus({preventScroll:true});
+    // Do not change the bank SPA's URL/hash or open its transaction modal.
+  }
+  function status(message,error=false){
+    if(!document.body)return;
+    if(!banner?.h.isConnected){banner=host();banner.h.id='zenimport-status';banner.spacer=el('div');banner.spacer.setAttribute('aria-hidden','true');document.body.append(banner.spacer,banner.h);}
+    const targets=categoryTargets(),targetKey=targets.map(p=>p.h.id).join('|');
+    if(banner.message===message&&banner.error===error&&banner.targetKey===targetKey)return;
+    banner.message=message;banner.error=error;banner.targetKey=targetKey;
+    banner.box.replaceChildren(el('strong','ZenImport · '),el('span',message));
+    if(state&&mounted.size){
+      banner.box.append(el('span',` · Без категории на странице: ${targets.length}.`));
+      if(targets.length){const link=el('a','Следующая без категории');link.href='#'+targets[0].h.id;link.onclick=nextCategory;banner.box.append(document.createTextNode(' '),link);}
+    }
+    banner.box.setAttribute('role','status');banner.box.className=error?'error':'';banner.spacer.style.height=banner.h.getBoundingClientRect().height+'px';
+  }
   async function rpc(type,extra={}){const r=await chrome.runtime.sendMessage({type,account,...extra});if(!r?.ok)throw Error(r?.error||'Перезагрузите страницу после обновления расширения.');return r.data;}
   function current(){const u=new URL(location.href);if(u.pathname!=='/payment-history')return null;const a=u.searchParams.get('accountNo');return /^\d{6,30}$/.test(a||'')?a:null;}
   async function start(){
@@ -38,17 +60,17 @@
       const single=row.group?.kind==='single'&&zs.length===1&&!zs[0].transfer;
       const z=zs[0];
       return {label:pending?'Изменения ожидают отправки':complete?'✓ В ZenMoney · '+zs.flatMap(z=>z.categories||[]).join(', '):'Нужна категория',good:!pending&&complete,tone:pending?(zs.every(z=>z.category_draft?z.category_draft.valid:z.transfer||z.categories?.length)?'pending':'error'):complete?'good':'error',
-        editable:single,selected:z?.category_draft?.valid?z.category_draft.id:z?.tag_ids?.[0]||'',ranking:z?.category_ranking||[]};
+        needsCategory:zs.some(z=>!z.transfer&&(z.category_draft?!z.category_draft.valid:!z.categories?.length)),editable:single,selected:z?.category_draft?.valid?z.category_draft.id:z?.tag_ids?.[0]||'',ranking:z?.category_ranking||[]};
     }
     if(row.creation_job?.state==='prepared')return {label:'Создана локально · ожидает отправки',tone:'pending'};
     const unresolved=row.candidates?.length||state.days.some(d=>(d.split_candidates||[]).some(p=>p.bank_id===row.id));
     if(!row.mapped)return {label:'Нужно связать банковский счёт с ZenMoney',tone:'error'};
     if(unresolved||row.state!=='pending')return {label:'Нужно уточнить соответствие',tone:'error'};
-    return {label:row.creation_draft?.valid?'Новая · категория выбрана локально':'Новая · выберите категорию',tone:row.creation_draft?.valid?'pending':'error',editable:true,
+    return {label:row.creation_draft?.valid?'Новая · категория выбрана локально':'Новая · выберите категорию',tone:row.creation_draft?.valid?'pending':'error',needsCategory:!row.creation_draft?.valid,editable:true,
       selected:row.creation_draft?.valid?row.creation_draft.category_id:'',ranking:row.creation_ranking||[]};
   }
   function card(row){
-    const panel=host(),v=view(row),heading=el('strong',!fresh&&v.good?v.label.replace('✓ В ZenMoney','В ZenMoney по сохранённым данным'):v.label);panel.box.className='operation';heading.className=v.tone==='good'&&!fresh?'':v.tone||'';panel.box.append(heading);
+    const panel=host(),v=view(row),heading=el('strong',!fresh&&v.good?v.label.replace('✓ В ZenMoney','В ZenMoney по сохранённым данным'):v.label);panel.h.id='zenimport-operation-'+encodeURIComponent(row.id);panel.h.tabIndex=-1;panel.needsCategory=!!v.needsCategory;panel.box.className='operation';heading.className=v.tone==='good'&&!fresh?'':v.tone||'';panel.box.append(heading);
     if(v.editable){
       const categories=[...state.categories].sort((a,b)=>a.title.localeCompare(b.title,'ru'));
       const ranked=(v.ranking||[]).filter(r=>categories.some(c=>c.id===r.id)).sort((a,b)=>b.count-a.count);
@@ -87,12 +109,13 @@
     const tables=[...document.querySelectorAll('table.cms-table')];
     if(tables.length!==1||[...tables[0].querySelectorAll('thead th,thead td')].map(text).join('|')!=='DATE|DESCRIPTION|AMOUNT|BALANCE'){clear();status('Ожидаем таблицу истории DATE / DESCRIPTION / AMOUNT / BALANCE…');return;}
     const rows=[...tables[0].querySelectorAll('tbody tr:not([data-zenimport-row])')].map(tr=>({tr,cells:[...tr.children].filter(n=>n.tagName==='TD').map(td=>{const clone=td.cloneNode(true);clone.querySelectorAll('zenimport-operation').forEach(e=>e.remove());return text(clone);})}));
+    const pageKey=JSON.stringify([account,rows.map(r=>r.cells)]);if(pageKey!==navigationPage){navigationPage=pageKey;lastCategoryIndex=-1;}
     const key=JSON.stringify([fresh,loadError,!!state,syncGeneration===generation,pollGeneration===generation,rows.map(r=>r.cells)]);if(key===signature&&[...mounted].every(([tr,panel])=>tr.isConnected&&panel.container?.isConnected&&panel.container.previousElementSibling===tr)){for(const [tr,panel] of mounted)rowBackground(tr,panel.container.firstElementChild);return;}clear();signature=key;
     let found=0;
     for(const {tr,cells} of rows){if(cells.length!==4)continue;const matchesRows=state?state.rows.filter(r=>matches(cells,r)):[];let panel;
       if(matchesRows.length===1&&rows.filter(r=>JSON.stringify(r.cells)===JSON.stringify(cells)).length===1){panel=card(matchesRows[0]);found++;}
       else{panel=host();panel.box.className='placeholder';if(matchesRows.length)panel.box.append(el('strong','Неоднозначная строка · нужна сверка'));else if(syncGeneration===generation||pollGeneration===generation){const spinner=el('span');spinner.className='spinner';spinner.setAttribute('role','status');spinner.setAttribute('aria-label','Загрузка данных операции');panel.box.append(spinner);}}
-      const container=el('tr'),cell=el('td');container.dataset.zenimportRow='';cell.colSpan=4;cell.style.cssText='padding:0!important;border:0!important;';container.style.setProperty('background','transparent','important');rowBackground(tr,cell);container.append(cell);cell.append(panel.h);tr.after(container);panel.container=container;mounted.set(tr,panel);
+      const container=el('tr'),cell=el('td');container.dataset.zenimportRow='';cell.colSpan=4;cell.style.cssText='padding:0!important;border:0!important;';container.style.setProperty('background','transparent','important');rowBackground(tr,cell);container.append(cell);cell.append(panel.h);tr.after(container);panel.container=container;panel.pageIndex=mounted.size;mounted.set(tr,panel);
     }
     if(fresh)status(`Данные ZenMoney получены. Опознано строк: ${found} из ${rows.length}.`);else if(loadError)status(loadError,true);else status('Обновляем ZenMoney… Показываем сохранённые данные.');
   }
