@@ -99,3 +99,6 @@ flowchart LR
 Документация FastAPI и Chrome проверена через Context7 2026-10-05. ZenMoney не найден в Context7; использована официальная wiki.
 
 Актуальные детали клиента и БД: `docs/zenmoney-client.md`, `docs/zenmoney-storage.md`. Outbox/confirm описаны как demo-прототип; в LIVE запись заблокирована.
+
+Самостоятельная библиотека ZenMoney и границы компонентов описаны в
+[решении о разделении API-клиента](zenmoney-library.md).

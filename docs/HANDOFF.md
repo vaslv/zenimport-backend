@@ -1,5 +1,11 @@
 # ZenImport — продолжение работы
 
+> 13 октября 2026: API-библиотека вынесена в самостоятельный соседний проект
+> `/Users/vaslv/Projects/Vaslv/ZenMoneyAPI`. Текущий приоритет — его живая приёмка
+> по `docs/live-validation.md`; новые функции backend/Chrome пока отложены.
+> ZenImport использует фиксированный wheel из `vendor`, локального пакета
+> `packages/zenmoney-client` больше нет. Остальные заметки ниже исторические.
+
 Основной проект: `/Users/vaslv/Projects/Vaslv/ZenImport`. Перед работой прочитать README, docs/TASK.md, docs/PLAN.md, docs/acceptance.md, docs/zenmoney-client.md и docs/zenmoney-storage.md. Копии в чате — только снимки, не основная рабочая папка.
 
 ## Что уже сделано
