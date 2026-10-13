@@ -1,7 +1,7 @@
 import json
 import httpx
 import pytest
-from zenimport_zenmoney import Client, HTTPError, ResponseError, TransportError, FORCE_FETCH, entity_key
+from zenimport_zenmoney import Client, HTTPError, ResponseError, TransportError, FORCE_FETCH, entity_key, CREATION_DEFAULTS
 from backend.zenmoney import ZenMoney
 
 
@@ -92,7 +92,7 @@ def test_create_transactions_transport_and_guardrails():
         return httpx.Response(200,json={'serverTimestamp':20})
     client=Client('private-secret',transport=httpx.MockTransport(handle),clock=lambda:200)
     client.create_transactions([payload],10)
-    assert requests==[{'serverTimestamp':10,'currentClientTimestamp':200,'transaction':[payload]}]
+    assert requests==[{'serverTimestamp':10,'currentClientTimestamp':200,'transaction':[{**CREATION_DEFAULTS,**payload}]}]
     for key,value in [('deleted',True),('hold',True),('income',2),('outcome',-1),('outcome',float('nan')),('tag',[]),('incomeAccount','other'),('id','existing'),('user',0)]:
         invalid=copy.deepcopy(payload);invalid[key]=value
         with pytest.raises(ValueError):client.create_transactions([invalid],10)
@@ -113,8 +113,26 @@ def test_mixed_batch_validates_before_single_exchange():
         calls.append(json.loads(request.content));return httpx.Response(200,json={'serverTimestamp':20})
     client=Client('secret',transport=httpx.MockTransport(handle),clock=lambda:200)
     client.write_transactions([new],[(before,after)],10)
-    assert len(calls)==1 and calls[0]['transaction']==[new,after]
+    assert len(calls)==1 and calls[0]['transaction']==[{**CREATION_DEFAULTS,**new},after]
     with pytest.raises(ValueError):client.write_transactions([new],[(before,{**after,'outcome':20})],10)
     with pytest.raises(ValueError):client.write_transactions([new]*20,[(before,after)],10)
     with pytest.raises(ValueError):client.write_transactions([new],[(new,{**new,'tag':['other']})],10)
     assert len(calls)==1
+
+
+def test_creation_wire_includes_required_empty_fields_without_mutating_draft():
+    import uuid, copy
+    payload={'id':str(uuid.uuid4()),'user':1,'created':100,'changed':100,'deleted':False,'hold':False,
+             'date':'2026-10-11','incomeAccount':'account','outcomeAccount':'account','incomeInstrument':1,'outcomeInstrument':1,
+             'income':0,'outcome':12.34,'tag':None,'payee':None,'comment':'Payment'}
+    original=copy.deepcopy(payload)
+    fields={'merchant','originalPayee','reminderMarker','opIncome','opIncomeInstrument',
+            'opOutcome','opOutcomeInstrument','latitude','longitude','qrCode','source','incomeBankID','outcomeBankID'}
+    def strict_server(request):
+        tx=json.loads(request.content)['transaction'][0]
+        assert fields <= tx.keys() and all(tx[k] is None for k in fields)
+        assert tx['viewed'] is True and tx['tag'] is None and tx['id']==payload['id']
+        return httpx.Response(200,json={'serverTimestamp':200,'transaction':[tx]})
+    result=Client('secret',transport=httpx.MockTransport(strict_server)).create_transactions([payload],100)
+    from backend.creation import matches
+    assert payload==original and matches(payload,result['transaction'][0])

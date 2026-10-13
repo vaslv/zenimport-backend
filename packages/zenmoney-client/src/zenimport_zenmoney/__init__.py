@@ -8,6 +8,13 @@ from collections.abc import Callable, Sequence
 import httpx
 
 ENDPOINT = 'https://api.zenmoney.ru/v8/diff/'
+# ZenMoney validates the complete transaction shape, even for empty optional values.
+CREATION_DEFAULTS = {key: None for key in (
+    'merchant', 'originalPayee', 'reminderMarker', 'opIncome', 'opIncomeInstrument',
+    'opOutcome', 'opOutcomeInstrument', 'latitude', 'longitude', 'qrCode', 'source',
+    'incomeBankID', 'outcomeBankID')}
+CREATION_DEFAULTS['viewed'] = True
+
 KINDS = ('instrument', 'company', 'user', 'account', 'tag', 'merchant',
          'budget', 'reminder', 'reminderMarker', 'transaction', 'country')
 # Country is observed in responses but not documented as a forceFetch key.
@@ -153,7 +160,7 @@ class Client:
             if not isinstance(tx['comment'],str) or (tx['payee'] is not None and not isinstance(tx['payee'],str)):
                 raise ValueError('Invalid description')
         if len({t['id'] for t in transactions}) != len(transactions): raise ValueError('Duplicate UUID')
-        return transactions
+        return [{**CREATION_DEFAULTS, **tx} for tx in transactions]
 
     def create_transactions(self, transactions, server_timestamp=0):
         return self.write_transactions(transactions, [], server_timestamp)
