@@ -14,7 +14,7 @@ function showResults(data){
   $('batch-status').textContent=`Подтверждено: ${data.results.filter(i=>i.state==='sent').length} из ${data.results.length}.`;
   if(data.message)$('batch-status').textContent=data.message;
 }
-async function run(fn){if(working)return;working=true;$('preview').disabled=$('verify').disabled=true;try{await fn();}catch(e){$('batch-status').textContent=e.message+' Если отправка началась, нажмите «Проверить результат отправки».';}finally{working=false;$('preview').disabled=$('verify').disabled=false;}}
+async function run(fn){if(working)return;working=true;$('preview').disabled=$('verify').disabled=$('retry').disabled=true;try{await fn();}catch(e){$('batch-status').textContent=e.message+' Если отправка началась, нажмите «Проверить результат отправки».';}finally{working=false;$('preview').disabled=$('verify').disabled=$('retry').disabled=false;}}
 function review(items){
   lastItems=items;const dialog=el('dialog');dialog.className='pairs-review-dialog';dialog.setAttribute('aria-label','Общая отправка в ZenMoney');
   const head=el('div');head.className='pairs-review-header';head.append(el('h2','Проверьте изменения перед отправкой'),el('p',scope.creations_only?(scope.include_uncategorized?'Новые записи, включая записи без категории.':'Только новые записи с категорией.')+' Будут созданы доходы или расходы. Тип можно изменить позже в ZenMoney. Отправка выполняется последовательными пакетами по 20 операций.':'Новые записи с категорией и изменения категорий будут отправлены одним запросом. До 20 операций за отправку.'));
@@ -34,6 +34,13 @@ function review(items){
   cancel.onclick=()=>dialog.close();dialog.addEventListener('close',()=>dialog.remove(),{once:true});const footer=el('div');footer.className='pairs-review-footer';footer.append(cancel,send);update();dialog.append(head,list,footer);document.body.append(dialog);dialog.showModal();
 }
 $('preview').onclick=()=>run(async()=>{$('batch-status').textContent='Получаем свежие данные и готовим локальные записи…';const data=await api('/api/batch/preview',scope);$('batch-status').textContent=`Подготовлено изменений: ${data.items.filter(i=>!i.error).length}.`;review(data.items);});
+$('retry').onclick=()=>run(async()=>{
+  $('batch-status').textContent='Проверяем полную базу ZenMoney. Повтор будет возможен только после просмотра и подтверждения…';
+  scope.creations_only=true;scope.include_uncategorized=true;
+  const data=await api('/api/batch/retry-preview',scope);
+  $('batch-status').textContent='Подготовлены только отсутствующие записи. Их исходные идентификаторы сохранены. Проверьте список перед повторной отправкой.';
+  review(data.items);
+});
 $('verify').onclick=()=>run(async()=>{$('batch-status').textContent='Проверяем фактические данные ZenMoney без повторной отправки…';showResults(await api('/api/batch/verify',scope));});
 if(scope.bank&&scope.account){$('scope').textContent=`Банк: ${scope.bank}. Отправка только для выбранного банковского счёта.`;$('preview').click();}
-else{$('batch-status').textContent='Откройте отправку из меню расширения на странице истории банка.';$('preview').disabled=$('verify').disabled=true;}
+else{$('batch-status').textContent='Откройте отправку из меню расширения на странице истории банка.';$('preview').disabled=$('verify').disabled=$('retry').disabled=true;}

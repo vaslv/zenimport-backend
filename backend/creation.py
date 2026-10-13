@@ -198,10 +198,10 @@ def matches(expected, actual):
                for k,value in expected.items() if k not in ('created','changed'))
 
 
-def refresh(path, client):
+def refresh(path, client, *, full=False):
     with transaction(path) as db:
         cursor = db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()
-        cursor = int(cursor[0]) if cursor else 0
+        cursor = int(cursor[0]) if cursor and not full else 0
         try:
             result = client.diff({'serverTimestamp':cursor,'currentClientTimestamp':int(time.time()),
                                   'forceFetch':['transaction','account','tag','instrument']})
@@ -214,6 +214,8 @@ def refresh(path, client):
             actual = remote.get(job['zen_id'])
             state = 'sent' if actual and matches(json.loads(job['payload']),actual) else 'conflict' if actual else 'uncertain'
             error = None if state=='sent' else 'Данные записи отличаются от отправленных' if actual else 'Запись пока не подтверждена. Повторите проверку; новая отправка заблокирована.'
+            if state=='uncertain' and (job['error'] or '').startswith('Ошибка отправки:'):
+                error = job['error']
             if state=='sent':
                 from .link_groups import insert
                 insert(db,[job['bank_id']],[job['zen_id']],'single','creation',state='sent')
@@ -248,8 +250,38 @@ def send(path, client, scope):
         cursor = int(db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()[0])
     try:
         client.create_transactions(payloads,cursor)
-    except Exception:
-        pass  # Durable intent prevents any blind resend, including after a timeout/restart.
+    except Exception as exc:
+        record_write_failure(path,exc,ids)
     try: refresh(path,client)
     except HTTPException: pass
     return {'results':[r for r in results(path)['results'] if r['bank_id'] in ids]}
+
+
+def record_write_failure(path, exc, identifiers):
+    from zenimport_zenmoney import HTTPError, TransportError, ResponseError
+    if isinstance(exc, HTTPError): reason = f'ZenMoney вернул HTTP {exc.status_code}'
+    elif isinstance(exc, TransportError): reason = 'сбой соединения с ZenMoney'
+    elif isinstance(exc, ResponseError): reason = 'не удалось проверить ответ ZenMoney'
+    elif isinstance(exc, ValueError): reason = 'локальная проверка запроса не пройдена'
+    else: reason = 'внутренняя ошибка при отправке'
+    error = 'Ошибка отправки: '+reason+'. Создание не подтверждено; автоматический повтор заблокирован.'
+    with transaction(path) as db:
+        audit(db,'zenmoney_write_failed',{'bank_ids':identifiers,'error_type':type(exc).__name__,'reason':reason})
+        for identifier in identifiers:
+            db.execute("UPDATE creation_jobs SET error=? WHERE bank_id=? AND state='uncertain'",(error,identifier))
+
+
+def retry_preview(path, client, scope):
+    # An explicit user action only. Keep the original UUID and payload, never clone a job.
+    refresh(path,client,full=True)
+    with transaction(path) as db:
+        accounts={r['id']:dict(r) for r in db.execute('SELECT * FROM bank_accounts')}
+        recovered=[]
+        for row in db.execute("SELECT b.* FROM bank_transactions b JOIN creation_jobs j ON j.bank_id=b.id WHERE j.state='uncertain'").fetchall():
+            if not selected(row,accounts,scope): continue
+            job=db.execute('SELECT * FROM creation_jobs WHERE bank_id=?',(row['id'],)).fetchone()
+            if db.execute("SELECT 1 FROM zen_entities WHERE kind='transaction' AND lower(id)=lower(?)",(job['zen_id'],)).fetchone(): continue
+            db.execute("UPDATE creation_jobs SET state='prepared',error=NULL WHERE bank_id=?",(row['id'],))
+            audit(db,'creation_retry_prepared',{'bank_id':row['id'],'zen_id':job['zen_id']})
+            recovered.append(row['id'])
+        return [item for item in preview(db,scope) if item['bank_id'] in recovered]

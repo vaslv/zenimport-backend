@@ -91,3 +91,43 @@ def test_creation_only_batch_excludes_category_changes_and_respects_mode(tmp_pat
     assert result.json()['results'][0]['state']=='sent'
     assert len(remote.writes)==1 and len(remote.writes[0])==1 and remote.writes[0][0]['tag'] is None
     assert remote.data['transaction'][0]['tag']==[]
+
+
+def test_failed_write_diagnostic_survives_verification_and_explicit_retry_keeps_uuid(tmp_path):
+    from zenimport_zenmoney import HTTPError
+    c,path,remote,scope,body=batch(tmp_path)
+    original=remote.write_transactions
+    def rejected(*args):raise HTTPError(400)
+    remote.write_transactions=rejected
+    response=c.post('/api/batch/send',json=body)
+    created=next(r for r in response.json()['results'] if r['kind']=='creation')
+    assert 'HTTP 400' in created['error']
+    response=c.post('/api/batch/verify',json=scope)
+    assert 'HTTP 400' in next(r for r in response.json()['results'] if r['kind']=='creation')['error']
+    with transaction(path,read_only=True) as db:
+        before=dict(db.execute('SELECT * FROM creation_jobs').fetchone())
+    assert c.post('/api/batch/retry-preview',json=scope).status_code==422
+    requests=[];old_diff=remote.diff
+    def diff(request):requests.append(request);return old_diff(request)
+    remote.diff=diff
+    retry_scope={**scope,'creations_only':True,'include_uncategorized':True}
+    response=c.post('/api/batch/retry-preview',json=retry_scope)
+    assert response.status_code==200,response.text
+    items=response.json()['items'];assert len(items)==1 and not items[0]['error']
+    assert requests[0]['serverTimestamp']==0 and not remote.writes
+    with transaction(path,read_only=True) as db:
+        after=dict(db.execute('SELECT * FROM creation_jobs').fetchone())
+        assert before['zen_id']==after['zen_id'] and before['payload']==after['payload']
+    remote.write_transactions=original
+    response=c.post('/api/batch/send',json={**retry_scope,'items':[{k:items[0][k] for k in ('kind','id','snapshot')}]})
+    assert response.json()['results'][0]['state']=='sent'
+    assert len(remote.writes)==1 and remote.writes[0][0]['id']==before['zen_id']
+
+
+def test_retry_never_reprepares_remote_applied_record_after_lost_read(tmp_path):
+    c,path,remote,scope,body=batch(tmp_path);remote.behavior='lost_read'
+    c.post('/api/batch/send',json=body)
+    remote.fail_read=False
+    response=c.post('/api/batch/retry-preview',json={**scope,'creations_only':True,'include_uncategorized':True})
+    assert response.status_code==200 and response.json()['items']==[]
+    assert len(remote.writes)==1

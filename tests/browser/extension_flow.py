@@ -1768,3 +1768,26 @@ def test_new_only_batch_modes_preview_and_confirmation(browser,mode):
     expect(page.locator('#batch-status')).to_have_text(f'Подтверждено: {len(items)} из {len(items)}.')
     assert len(writes)==1 and len(writes[0]['items'])==len(items)
     page.close()
+
+
+def test_retry_preview_requires_new_confirmation(browser):
+    context,identifier=browser
+    context.service_workers[0].evaluate("chrome.storage.local.set({baseUrl:'http://127.0.0.1:8000',token:'docker-test-token-not-for-real-data'})")
+    page=context.new_page();calls=[]
+    def route(request):
+        path=request.request.url.rsplit('/',1)[-1];calls.append(path)
+        if path=='retry-preview':
+            assert request.request.post_data_json['creations_only'] is True
+            data={'items':[{'kind':'creation','id':'original-id','date':'2026-10-11','account':'Test','amount_minor':-10,'currency':'VND','description':'Retry','category':None,'snapshot':'a'*64,'error':None}]}
+        else:data={'items':[]}
+        request.fulfill(json=data)
+    page.route('http://127.0.0.1:8000/api/batch/**',route)
+    page.goto(f'chrome-extension://{identifier}/batch.html?bank=vietinbank&account=test-account')
+    page.get_by_role('button',name='Отмена',exact=True).click()
+    page.locator('#retry').click()
+    dialog=page.get_by_role('dialog',name='Общая отправка в ZenMoney')
+    expect(dialog).to_contain_text('Retry')
+    expect(dialog.get_by_role('button',name='Отправить в ZenMoney · 1')).to_be_enabled()
+    dialog.get_by_role('button',name='Отмена',exact=True).click()
+    assert calls==['preview','retry-preview']
+    page.close()

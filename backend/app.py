@@ -170,6 +170,16 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
                 creation.create_local(db,data)
                 return {'items':batch_send.preview(db,data)}
 
+    @app.post('/api/batch/retry-preview')
+    def batch_retry_preview(data: BatchScope):
+        if mode != 'live': fail('Отправка доступна в режиме LIVE',403)
+        if not data.creations_only: fail('Повторная подготовка доступна только для новых записей',422)
+        from . import batch_send, creation
+        with lock:
+            with transaction(path,read_only=True) as db: batch_send.target(db,data)
+            return {'items':[{**item,'kind':'creation','id':item['bank_id']}
+                             for item in creation.retry_preview(path,client,data)]}
+
     @app.post('/api/batch/send')
     def batch_send_route(data: BatchSend):
         if mode != 'live': fail('Отправка доступна в режиме LIVE',403)

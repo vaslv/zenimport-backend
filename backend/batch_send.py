@@ -77,8 +77,8 @@ def send(path, client, scope):
         cursor = int(db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()[0])
     try:
         client.write_transactions(creations, changes, cursor)
-    except Exception:
-        pass  # Intents committed before I/O; never blindly retry an uncertain creation.
+    except Exception as exc:
+        creation.record_write_failure(path,exc,[item.id for item in scope.items if item.kind=='creation'])
     for verify in (creation.refresh,category_send.refresh):
         try: verify(path, client)
         except HTTPException: pass
