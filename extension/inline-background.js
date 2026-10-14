@@ -60,6 +60,11 @@ async function handle(m,sender){
     return scoped(account);
   }
   if(m.type==='inline-state')return scoped(account);
+  if(m.type==='inline-link'){
+    const state=await scoped(account),row=state.rows.find(r=>r.id===m.id);
+    if(!row||row.state!=='pending'||!row.mapped||!row.candidates.some(c=>c.id===m.zen_id))throw Error('Совпадение недоступно.');
+    await api(`/api/review/${encodeURIComponent(row.id)}/link`,{action:'link',match_id:m.zen_id,reviewed_candidates:m.candidates});return scoped(account);
+  }
   if(m.type==='inline-operation'){
     const state=await scoped(account),row=state.rows.find(r=>r.id===m.id);
     const part=m.zen_id&&row?.linked&&(row.group?.zen_ids||[]).includes(m.zen_id)?state.days.flatMap(d=>d.zen_rows||[]).find(z=>z.id===m.zen_id):null;
@@ -100,7 +105,7 @@ async function handle(m,sender){
 }
 chrome.tabs.onRemoved.addListener(id=>{for(const k of totals.keys())if(k.startsWith(id+':'))totals.delete(k);});
 chrome.runtime.onMessage.addListener((m,sender,reply)=>{
-  if(!['inline-enable','inline-toggle','inline-popup-state','inline-new-send','inline-sync','inline-state','inline-import','inline-category','inline-operation','inline-session-status'].includes(m?.type))return;
+  if(!['inline-enable','inline-toggle','inline-popup-state','inline-new-send','inline-sync','inline-state','inline-import','inline-category','inline-operation','inline-link','inline-session-status'].includes(m?.type))return;
   // Serialize writes: user edits may update an existing record; only the popup can create records.
   const started=Date.now();
   const run=()=>handle(m,sender);
