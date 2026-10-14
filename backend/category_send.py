@@ -19,6 +19,12 @@ def content(tx):
     for field in ('opIncome', 'opOutcome'):
         if field in result and result[field] in (None, 0) and result.get(field+'Instrument') is None:
             result[field] = 0
+    # Observed on creation: ZenMoney copies a nonempty payee into a null
+    # originalPayee. Only that exact copy is equivalent; preserve missing fields,
+    # empty strings and any explicitly different original recipient.
+    payee = result.get('payee')
+    if 'originalPayee' in result and result['originalPayee'] is None and isinstance(payee, str) and payee.strip():
+        result['originalPayee'] = payee
     return result
 
 

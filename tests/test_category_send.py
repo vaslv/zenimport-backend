@@ -116,6 +116,30 @@ def test_verified_api_normalization_and_conflict_recheck_never_write(tmp_path):
     assert content({})!=content({'opIncome':0})
 
 
+def test_original_payee_copy_is_narrow_and_does_not_mutate_archived_objects():
+    from backend.category_send import content
+    before={'payee':'Synthetic recipient','originalPayee':None}
+    after={'payee':'Synthetic recipient','originalPayee':'Synthetic recipient'}
+    assert content(before)==content(after)
+    assert before['originalPayee'] is None
+    assert content(before)!=content({'payee':'Synthetic recipient','originalPayee':'Different original'})
+    assert content(before)!=content({'payee':'Changed recipient','originalPayee':'Synthetic recipient'})
+    assert content(before)!=content({'payee':'Synthetic recipient','originalPayee':''})
+    assert content(before)!=content({'payee':'Synthetic recipient'})
+    assert content({'payee':None,'originalPayee':None})!=content({'payee':None,'originalPayee':'Synthetic recipient'})
+
+
+def test_category_verification_accepts_server_payee_copy_without_rewriting(tmp_path):
+    c,path,remote=setup(tmp_path)
+    for t in remote.data['transaction']:t.update(payee='Synthetic recipient',originalPayee=None)
+    body=request(c);remote.behavior='lost_read';c.post('/api/category-updates/send',json=body)
+    for t in remote.data['transaction']:t['originalPayee']=t['payee']
+    remote.fail_read=False
+    with transaction(path) as db:db.execute("UPDATE zen_category_sends SET state='conflict'")
+    result=c.post('/api/category-updates/verify',json={})
+    assert all(r['state']=='sent' for r in result.json()['results']) and len(remote.writes)==1
+
+
 
 def test_preview_survives_remote_clock_adjustment_and_uses_fresh_record(tmp_path):
     c,path,remote=setup(tmp_path)

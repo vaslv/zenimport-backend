@@ -283,3 +283,18 @@ def test_other_family_category_is_rejected(tmp_path):
     api,path,remote,bank_id=setup(tmp_path);remote.data['tag'][0]['user']=7
     with transaction(path) as db:apply_diff(db,{'serverTimestamp':2,**remote.data})
     assert save(api,bank_id,definition('expense')).status_code==409 and not remote.writes
+
+
+def test_existing_type_verification_accepts_exact_original_payee_copy(tmp_path):
+    api,path,remote,bank_id=setup(tmp_path,existing=True)
+    assert save(api,bank_id,definition('expense')).status_code==200
+    items=api.post('/api/operation-updates/preview',json={}).json()['items']
+    remote.behavior='lost_read'
+    body={'items':[{'zen_id':i['zen_id'],'snapshot':i['snapshot']} for i in items]}
+    api.post('/api/operation-updates/send',json=body)
+    actual=remote.data['transaction'][0];assert actual['originalPayee'] is None
+    actual['originalPayee']=actual['payee'];remote.fail_read=False
+    with transaction(path) as db:db.execute("UPDATE zen_operation_sends SET state='conflict'")
+    result=api.post('/api/operation-updates/verify',json={})
+    assert result.json()['results'][0]['state']=='sent' and not model(api,bank_id)['draft']
+    assert len(remote.writes)==1

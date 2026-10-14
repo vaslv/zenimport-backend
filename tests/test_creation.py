@@ -18,6 +18,9 @@ class CreationRemote(Remote):
         self.writes.append(copy.deepcopy(transactions))
         if self.behavior=='fail_before': raise TimeoutError()
         self.data['transaction'].extend(copy.deepcopy(transactions[:1] if self.behavior=='partial' else transactions))
+        if self.behavior=='copy_payee':
+            for t in self.data['transaction']:
+                if t.get('payee') and t.get('originalPayee') is None:t['originalPayee']=t['payee']
         if self.behavior=='conflict': self.data['transaction'][-1]['outcome']+=1
         if self.behavior=='lost_read': self.fail_read=True
         if self.behavior=='lost_response': raise TimeoutError()
@@ -66,6 +69,58 @@ def test_create_only_after_preview_verify_restart_and_duplicate_block(tmp_path):
     assert c.post('/api/new-operations/send',json=body).status_code==409
     restarted=TestClient(create_app(path,TOKEN,'live',zen_client=remote));restarted.headers.update(c.headers)
     assert restarted.post('/api/new-operations/verify',json={}).status_code==200
+    assert len(remote.writes)==1
+
+
+@pytest.mark.parametrize('amount',[-65000,65000])
+def test_server_copy_of_payee_recovers_conflict_without_resending(tmp_path,amount):
+    c,path,remote,id=setup(tmp_path)
+    with transaction(path) as db:db.execute('UPDATE bank_transactions SET amount_minor=?',(amount,))
+    draft(c,id);body=request(c);remote.behavior='lost_read'
+    assert c.post('/api/new-operations/send',json=body).json()['results'][0]['state']=='uncertain'
+    actual=remote.data['transaction'][0]
+    assert actual['originalPayee'] is None and actual['payee']=='Shop'
+    actual['originalPayee']=actual['payee'];remote.fail_read=False
+    with transaction(path) as db:
+        db.execute("UPDATE creation_jobs SET state='conflict'")
+        original=db.execute('SELECT payload FROM creation_jobs').fetchone()[0]
+    restarted=TestClient(create_app(path,TOKEN,'live',zen_client=remote));restarted.headers.update(c.headers)
+    for _ in range(2):
+        result=restarted.post('/api/new-operations/verify',json={})
+        assert result.status_code==200 and result.json()['results'][0]['state']=='sent'
+    assert len(remote.writes)==1
+    with transaction(path) as db:
+        assert db.execute('SELECT payload FROM creation_jobs').fetchone()[0]==original
+        assert db.execute('SELECT state FROM bank_transactions').fetchone()[0]=='sent'
+        assert db.execute('SELECT count(*) FROM reconciliation_groups').fetchone()[0]==1
+        assert db.execute('SELECT count(*) FROM creation_drafts').fetchone()[0]==0
+    assert restarted.post('/api/new-operations/send',json=body).status_code==409
+    assert len(remote.writes)==1
+
+
+def test_successful_create_with_server_original_payee_default_is_confirmed_immediately(tmp_path):
+    c,path,remote,id=setup(tmp_path);draft(c,id);body=request(c);remote.behavior='copy_payee'
+    result=c.post('/api/new-operations/send',json=body)
+    assert result.status_code==200 and result.json()['results'][0]['state']=='sent'
+    assert remote.data['transaction'][0]['originalPayee']=='Shop'
+    assert remote.writes[0][0]['originalPayee'] is None and len(remote.writes)==1
+
+
+@pytest.mark.parametrize('field,value',[
+    ('outcome',12345),('income',1),('incomeAccount','other'),('outcomeAccount','other'),
+    ('incomeInstrument',999),('outcomeInstrument',999),('date','2026-01-01'),
+    ('tag',['toys']),('comment','Changed'),('payee','Other person'),
+    ('originalPayee','Different original'),('merchant','other-merchant'),('deleted',True),
+    ('opOutcome',Decimal('123.456789012')),('opOutcomeInstrument',2),
+])
+def test_payee_copy_never_masks_real_creation_conflict(tmp_path,field,value):
+    c,path,remote,id=setup(tmp_path);draft(c,id);body=request(c);remote.behavior='lost_read'
+    c.post('/api/new-operations/send',json=body)
+    actual=remote.data['transaction'][0];actual['originalPayee']=actual['payee'];actual[field]=value
+    remote.fail_read=False
+    result=c.post('/api/new-operations/verify',json={})
+    assert result.status_code==200 and result.json()['results'][0]['state']=='conflict'
+    with transaction(path) as db:assert db.execute('SELECT count(*) FROM reconciliation_groups').fetchone()[0]==0
     assert len(remote.writes)==1
 
 
