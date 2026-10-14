@@ -30,7 +30,9 @@ def insert(db, bank_ids, zen_ids, kind, origin, identifier=None, state='linked')
     if len(accounts) != 1:
         fail('Группа должна относиться к одному банковскому счёту')
     for zen_id in zen_ids:
-        if db.execute('SELECT 1 FROM reconciliation_zen_members WHERE zen_id=?', (zen_id,)).fetchone():
+        owned=db.execute('SELECT group_id FROM reconciliation_zen_members WHERE zen_id=?',(zen_id,)).fetchone()
+        if owned and len(zen_ids)==len(bank_ids)==1 and attach_transfer(db,owned[0],bank_ids[0],zen_id,state):return owned[0]
+        if owned:
             fail('Операция ZenMoney уже входит в другую группу')
     identifier = identifier or str(uuid.uuid4())
     db.execute('INSERT INTO reconciliation_groups VALUES (?,?,?,?,?)',
@@ -41,6 +43,27 @@ def insert(db, bank_ids, zen_ids, kind, origin, identifier=None, state='linked')
     legacy = zen_ids[0] if len(bank_ids) == len(zen_ids) == 1 else None
     db.executemany('UPDATE bank_transactions SET state=?,linked_id=? WHERE id=?', [(state, legacy, i) for i in bank_ids])
     return identifier
+
+
+def attach_transfer(db,group_id,bank_id,zen_id,state):
+    """Two imported legs of one ordinary transfer share one remote UUID/group."""
+    from .service import get_entity,SCALES
+    tx=get_entity(db,'transaction',zen_id)
+    if tx.get('incomeAccount')==tx.get('outcomeAccount') or not tx.get('income') or not tx.get('outcome'):return False
+    group=db.execute('SELECT kind FROM reconciliation_groups WHERE id=?',(group_id,)).fetchone()
+    if group['kind']!='single':return False
+    for identifier in (tx['incomeAccount'],tx['outcomeAccount']):
+        if get_entity(db,'account',identifier).get('type')=='debt':return False
+    row=db.execute('SELECT b.*,a.zenmoney_account,a.currency FROM bank_transactions b JOIN bank_accounts a ON a.id=b.bank_account WHERE b.id=?',(bank_id,)).fetchone()
+    if row['date']!=tx.get('date'):return False
+    previous=db.execute('SELECT a.zenmoney_account FROM reconciliation_bank_members m JOIN bank_transactions b ON b.id=m.bank_id JOIN bank_accounts a ON a.id=b.bank_account WHERE m.group_id=?',(group_id,)).fetchall()
+    target=row['zenmoney_account']
+    if any(r[0]==target for r in previous) or target not in (tx['incomeAccount'],tx['outcomeAccount']):return False
+    net=(Decimal(str(tx['income'])) if tx['incomeAccount']==target else 0)-(Decimal(str(tx['outcome'])) if tx['outcomeAccount']==target else 0)
+    if net*SCALES[row['currency']]!=row['amount_minor']:return False
+    db.execute('INSERT INTO reconciliation_bank_members VALUES (?,?)',(group_id,bank_id))
+    db.execute('UPDATE bank_transactions SET state=?,linked_id=? WHERE id=?',(state,zen_id,bank_id))
+    return True
 
 
 def migrate(db):
@@ -74,6 +97,14 @@ def unlink(db, bank_id):
     group = next((g for g in read(db) if bank_id in g['bank_ids']), None)
     if not group:
         fail('Группа связи не найдена')
+    if group['kind']=='single' and len(group['bank_ids'])>1:
+        if db.execute('SELECT state FROM bank_transactions WHERE id=?',(bank_id,)).fetchone()[0]!='linked':fail('Отменить можно только локальную связь')
+        db.execute('DELETE FROM reconciliation_bank_members WHERE group_id=? AND bank_id=?',(group['id'],bank_id))
+        db.execute("UPDATE bank_transactions SET state='pending',linked_id=NULL WHERE id=?",(bank_id,))
+        remaining=next(i for i in group['bank_ids'] if i!=bank_id)
+        account=db.execute('SELECT bank_account FROM bank_transactions WHERE id=?',(remaining,)).fetchone()[0]
+        db.execute('UPDATE reconciliation_groups SET bank_account=? WHERE id=?',(account,group['id']))
+        audit(db,'unlink_transfer_leg',{'bank_id':bank_id,'group_id':group['id']});return group
     if any(db.execute('SELECT state FROM bank_transactions WHERE id=?', (i,)).fetchone()['state'] != 'linked' for i in group['bank_ids']):
         fail('Отменить можно только локальную группу')
     db.execute('DELETE FROM reconciliation_groups WHERE id=?', (group['id'],))

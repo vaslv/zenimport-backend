@@ -16,7 +16,8 @@ from backend.zenstore import TABLES
 LOCAL = ('bank_accounts', 'bank_transactions', 'imports', 'outbox', 'audit',
          'reconciliation_groups', 'reconciliation_bank_members', 'reconciliation_zen_members',
          'reconciliation_exclusions', 'category_drafts', 'zen_category_drafts', 'zen_category_sends',
-         'creation_drafts', 'recipient_rules')
+         'creation_drafts', 'recipient_rules', 'bank_operation_drafts',
+         'zen_operation_drafts', 'zen_operation_sends')
 
 
 def digest(db, table, query=None):
@@ -46,6 +47,8 @@ def main():
     before_counts, before_stable = snapshot(args.path)
     initialize(args.path, args.mode)
     counts, stable = snapshot(args.path)
+    # Schema 12 adds empty draft/send tables; existing tables must remain identical.
+    stable = {k:v for k,v in stable.items() if k in before_stable}
     with sqlite3.connect(args.path) as db:
         checks = {'version': db.execute('PRAGMA user_version').fetchone()[0] == SCHEMA_VERSION,
                   'integrity': db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok',
@@ -56,7 +59,8 @@ def main():
     if not all(checks.values()):
         raise RuntimeError('Offline migration audit failed')
     initialize(args.path, args.mode)
-    if snapshot(args.path) != (counts, stable):
+    repeated_counts,repeated_stable=snapshot(args.path)
+    if repeated_counts!=counts or any(repeated_stable[k]!=v for k,v in stable.items()):
         raise RuntimeError('Repeated initialization is not idempotent')
     print(json.dumps({'idempotent': True}), flush=True)
 

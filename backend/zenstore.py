@@ -159,8 +159,9 @@ def complete_creation(payload):
 
 
 def migrate(db):
+    from .db import SCHEMA_VERSION
     version = db.execute('PRAGMA user_version').fetchone()[0]
-    if version > 11:
+    if version > SCHEMA_VERSION:
         raise RuntimeError('Database schema is newer than this application')
     create_schema(db)
     legacy = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='zen_entities'").fetchone()
@@ -262,8 +263,11 @@ def history(db, *, limit=100, offset=0, start=None, end=None, account=None, incl
     rows = db.execute('SELECT data,income,outcome FROM zen_transaction' + clause + ' ORDER BY date DESC,id LIMIT ? OFFSET ?',
                       [*params, limit, offset]).fetchall()
     items = []
+    from .operations import context,describe_zen
+    ctx=context(db)
     for row in rows:
         item = json.loads(row['data'])
         item['_amounts'] = {'income': row['income'], 'outcome': row['outcome']}
+        item['operation_edit']=describe_zen(db,json.loads(row['data']),account,ctx)
         items.append(item)
     return {'items': items, 'total': total, 'offset': offset, 'limit': limit, 'has_more': offset + len(items) < total}

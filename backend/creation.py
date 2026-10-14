@@ -1,7 +1,6 @@
 """Local new-operation drafts and explicit, at-most-once remote creation attempts."""
 from . import jsoncodec as json
 import time
-import uuid
 from decimal import Decimal
 from fastapi import HTTPException
 from .db import transaction, entities
@@ -40,6 +39,7 @@ def prepare(db, scope):
     tags = {t['id'] for t in entities(db,'tag') if not t.get('deleted')}
     for row in rows:
         if row['state'] != 'pending' or not selected(row, accounts, scope): continue
+        if db.execute('SELECT 1 FROM bank_operation_drafts WHERE bank_id=?',(row['id'],)).fetchone():continue
         old = db.execute('SELECT * FROM creation_drafts WHERE bank_id=?', (row['id'],)).fetchone()
         if old and old['source'] == 'manual': continue
         choices = ranking(row, learned); key, _ = recipient(row)
@@ -80,6 +80,8 @@ def save_category(db, identifier, category, remember=False):
     if row['state'] != 'pending' or db.execute('SELECT 1 FROM creation_jobs WHERE bank_id=?',(identifier,)).fetchone():
         fail('Операция уже связана, исключена или отправлялась')
     if category and get_entity(db, 'tag', category).get('deleted'): fail('Категория удалена')
+    typed=db.execute('SELECT definition FROM bank_operation_drafts WHERE bank_id=?',(identifier,)).fetchone()
+    if typed:fail('Категорию настроенной операции измените в форме «Тип операции»')
     if remember:
         from .models import NewOperationScope
         bank = get_row(db,'bank_accounts',row['bank_account'])['bank']
@@ -94,6 +96,8 @@ def save_category(db, identifier, category, remember=False):
 
 
 def decorate(db, rows):
+    from .operations import context,describe_bank,describe_zen
+    ctx=context(db)
     drafts = {r['bank_id']:dict(r) for r in db.execute('SELECT * FROM creation_drafts')}
     jobs = {r['bank_id']:dict(r) for r in db.execute('SELECT * FROM creation_jobs')}
     tags = {t['id']:t for t in entities(db, 'tag') if not t.get('deleted')}
@@ -109,6 +113,10 @@ def decorate(db, rows):
         row['creation_ranking'] = ranking(row, learned)
         job = jobs.get(row['id'])
         row['creation_job'] = {k:job[k] for k in ('zen_id','state','error')} if job else None
+        if row.get('linked') and (row.get('group') or {}).get('kind')=='single':
+            row['operation_edit']=describe_zen(db,get_entity(db,'transaction',row['linked_id']),get_row(db,'bank_accounts',row['bank_account'])['zenmoney_account'],ctx)
+        else:row['operation_edit']=describe_bank(db,row,ctx)
+        row['operation_ready']=row['operation_edit'].get('ready',False)
 
 
 def preview(db, scope, local=False):
@@ -129,13 +137,17 @@ def preview(db, scope, local=False):
         if local and row['state'] != 'pending': continue
         if not local and (not job or row['state'] != 'queued'): continue
         draft = drafts.get(row['id']);target = {}; tag = {}; error = None
-        if not local and not scope.include_uncategorized and draft and not draft['category_id']: continue
+        typed=db.execute('SELECT definition FROM bank_operation_drafts WHERE bank_id=?',(row['id'],)).fetchone()
+        definition=json.loads(typed[0]) if typed else None
+        category_required=not definition or definition['kind'] in ('expense','income','refund')
+        if not local and not scope.include_uncategorized and category_required and draft and not draft['category_id']: continue
         try:
             target = mapped_account(db, accounts[row['bank_account']])
             if row['candidates'] or row['id'] in split_ids: fail('Сначала разберите возможное совпадение с ZenMoney')
             if not row['amount_minor']: fail('Нулевая сумма: создание недоступно')
-            if not draft or (not draft['category_id'] and not scope.include_uncategorized): fail('Выберите категорию')
-            tag = get_entity(db, 'tag', draft['category_id']) if draft['category_id'] else {}
+            if category_required and (not draft or (not draft['category_id'] and not scope.include_uncategorized)): fail('Выберите категорию')
+            category=definition.get('category_id') if definition else draft['category_id'] if draft else None
+            tag = get_entity(db, 'tag', category) if category else {}
             if tag.get('deleted'): fail('Категория удалена')
             if not local and (str(target['id']) not in fresh.get('account',[]) or str(target['instrument']) not in fresh.get('instrument',[]) or (tag and tag['id'] not in fresh.get('tag',[]))):
                 fail('Счёт, валюта или категория отсутствуют в свежем ответе ZenMoney')
@@ -143,16 +155,21 @@ def preview(db, scope, local=False):
             if local and db.execute('SELECT 1 FROM creation_jobs WHERE bank_id=?',(row['id'],)).fetchone(): fail('Запись уже создана')
             if job:
                 payload = json.loads(job['payload'])
-                expected = payload_for(db, get_row(db,'bank_transactions',row['id']), draft['category_id'])
+                expected = payload_for(db, get_row(db,'bank_transactions',row['id']), category)
                 expected['id'] = job['zen_id']
                 if not matches(expected,payload): fail('Локальная запись не соответствует текущим данным')
                 if db.execute('SELECT 1 FROM zen_transaction WHERE id=?',(job['zen_id'],)).fetchone(): fail('Идентификатор уже существует в ZenMoney')
         except HTTPException as exc: error = exc.detail
+        operation_details=None
+        if not error:
+            from .operations import context,details
+            operation_details=details(context(db),payload_for(db,get_row(db,'bank_transactions',row['id']),category))
         target_fields = {k:target.get(k) for k in ('id','user','instrument','archive','deleted','type','title')}
         items.append({'bank_id':row['id'], 'date':row['date'], 'amount_minor':row['amount_minor'], 'currency':row['currency'],
                       'description':row['description'], 'account':target.get('title','Счёт не привязан'),
                       'category':tag.get('title'), 'source':draft['source'] if draft else None, 'error':error,
-                      'snapshot':fingerprint([get_row(db,'bank_transactions',row['id']),draft,target_fields,tag.get('id'),tag.get('title'),job])})
+                      'definition':definition,'details':operation_details,
+                      'snapshot':fingerprint([get_row(db,'bank_transactions',row['id']),draft,target_fields,tag.get('id'),tag.get('title'),job,definition])})
     return items
 
 
@@ -164,7 +181,7 @@ def create_local(db, scope):
         identifier = item['bank_id']
         row = get_row(db,'bank_transactions',identifier)
         draft = db.execute('SELECT category_id FROM creation_drafts WHERE bank_id=?',(identifier,)).fetchone()
-        payload = payload_for(db,row,draft[0])
+        payload = payload_for(db,row,draft[0] if draft else None)
         db.execute('INSERT INTO creation_jobs VALUES (?,?,?,?,NULL)',(identifier,payload['id'],json.dumps(payload),'prepared'))
         db.execute("UPDATE bank_transactions SET state='queued',linked_id=? WHERE id=?",(payload['id'],identifier))
         audit(db,'creation_local',{'bank_id':identifier,'payload':payload})
@@ -182,6 +199,9 @@ def reopen(db, identifier):
 
 
 def payload_for(db, row, category):
+    if db.execute('SELECT 1 FROM bank_operation_drafts WHERE bank_id=?',(row['id'],)).fetchone():
+        from .operations import bank_payload
+        return bank_payload(db,row,category)
     account = get_row(db,'bank_accounts',row['bank_account']);target = mapped_account(db,account)
     amount = Decimal(abs(row['amount_minor'])) / SCALES[account['currency']]
     raw = json.loads(row['raw']);payee = (raw.get('details') or {}).get('corresponsiveName') or None

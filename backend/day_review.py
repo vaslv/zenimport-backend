@@ -60,8 +60,10 @@ def proposals(db, rows):
             if zen_account == target and lo <= day <= hi:
                 groups.setdefault((account_id, day), [])
     tx_by_id = {t['id']: t for t in transactions}
+    from .operations import context,describe_zen
+    operation_context=context(db)
     tags = {t['id']: t['title'] for t in entities(db, 'tag') if not t.get('deleted')}
-    used = {identifier: r['id'] for r in rows if r['state'] in ('linked', 'sent') for identifier in (r.get('split_ids') or [r['linked_id']]) if identifier}
+    used = {(r['bank_account'],identifier): r['id'] for r in rows if r['state'] in ('linked', 'sent') for identifier in (r.get('split_ids') or [r['linked_id']]) if identifier}
     result = []
     for (account_id, day), bank in sorted(groups.items(), reverse=True):
         account = accounts[account_id]
@@ -76,10 +78,11 @@ def proposals(db, rows):
             for match in matches:
                 tx = tx_by_id[match['id']]
                 zen_rows.append({**match, 'amount_minor': str(amount), 'currency': account['currency'],
+                    'operation_edit':describe_zen(db,tx,account['zenmoney_account'],operation_context),
                     'categories': [tags.get(t, t) for t in tx.get('tag') or []],
                     'transfer': tx.get('incomeAccount') != tx.get('outcomeAccount'),
                     'split_eligible': (Decimal(str(tx.get('income', 0))) > 0) != (Decimal(str(tx.get('outcome', 0))) > 0),
-                    'created': tx.get('created'), 'linked_bank_id': used.get(match['id']), 'excluded': match['id'] in excluded,
+                    'created': tx.get('created'), 'linked_bank_id': used.get((account_id,match['id'])), 'excluded': match['id'] in excluded,
                     'same_day_bank_ids': [r['id'] for r in bank if r['state'] != 'ignored' and r['amount_minor'] == amount]})
         all_bank = bank
         all_zen_rows = zen_rows
@@ -97,7 +100,7 @@ def proposals(db, rows):
                 valid &= bool(row.get('linked')) if row.get('split_ids') else any(m['id'] == row['linked_id'] for m in matches)
             elif row['state'] != 'pending':
                 valid = False
-        remaining = {a: [m for m in v if m['id'] not in used] for a, v in zen.items()}
+        remaining = {a: [m for m in v if (account_id,m['id']) not in used] for a, v in zen.items()}
         for amount in sorted({r['amount_minor'] for r in bank if r['state'] == 'pending'}):
             pending = [r for r in bank if r['state'] == 'pending' and r['amount_minor'] == amount]
             matches = remaining.get(amount, [])
@@ -114,7 +117,7 @@ def proposals(db, rows):
             valid = False
             account_valid = False
         # Hash includes full rows/candidate details/tags so stale previews cannot be accepted.
-        payload = {'used_links': used, 'account': account, 'bank': all_bank, 'excluded_zen_ids': sorted(excluded), 'zen': [t for t in transactions if t.get('date') == day and account['zenmoney_account'] in (t.get('incomeAccount'), t.get('outcomeAccount'))]}
+        payload = {'used_links': [[a,z,b] for (a,z),b in sorted(used.items())], 'account': account, 'bank': all_bank, 'excluded_zen_ids': sorted(excluded), 'zen': [t for t in transactions if t.get('date') == day and account['zenmoney_account'] in (t.get('incomeAccount'), t.get('outcomeAccount'))]}
         snapshot = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         result.append({'bank_account': account_id, 'date': day, 'bank_count': len(bank),
                        'zen_count': sum(map(len, zen.values())), 'equal': equal,

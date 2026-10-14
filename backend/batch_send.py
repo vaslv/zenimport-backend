@@ -2,7 +2,7 @@
 from . import jsoncodec as json
 import time
 from fastapi import HTTPException
-from . import category_send, creation
+from . import category_send, creation, operations
 from .db import transaction, entities
 from .service import fail, get_row, audit
 from zenmoney_api import transactions as tx
@@ -18,6 +18,7 @@ def target(db, scope):
 def refresh(path, client):
     creation.refresh(path, client)
     category_send.refresh(path, client)
+    operations.refresh(path,client)
 
 
 def preview(db, scope):
@@ -33,6 +34,11 @@ def preview(db, scope):
         if scope.start and (i['date'] or '') < scope.start.isoformat(): continue
         if scope.end and (i['date'] or '') > scope.end.isoformat(): continue
         items.append({**i, 'kind':'category', 'id':i['zen_id'], 'currency':instruments.get(i['instrument'],'')})
+    for i in operations.preview(db):
+        original=txs.get(i['zen_id'],{})
+        if zen_account not in (original.get('incomeAccount'),original.get('outcomeAccount')):continue
+        if scope.start and (i['date'] or '')<scope.start.isoformat() or scope.end and (i['date'] or '')>scope.end.isoformat():continue
+        items.append(i)
     return items
 
 
@@ -44,6 +50,8 @@ def results(path, scope):
                   for r in db.execute('SELECT j.* FROM creation_jobs j JOIN bank_transactions b ON b.id=j.bank_id WHERE b.bank_account=?', (scope.account,))]
         values += [{'kind':'category','id':r['zen_id'],'state':r['state'],'error':r['error']}
                    for r in category_send.results(db) if txs.get(r['zen_id'],{}).get('incomeAccount') == zen_account]
+        values += [{'kind':'operation','id':r['zen_id'],'state':r['state'],'error':r['error']}
+                   for r in operations.results(db) if zen_account in (txs.get(r['zen_id'],{}).get('incomeAccount'),txs.get(r['zen_id'],{}).get('outcomeAccount'))]
         return values
 
 
@@ -65,6 +73,8 @@ def send(path, client, scope):
                 payload = json.loads(job['payload']);creations.append(payload)
                 db.execute("UPDATE creation_jobs SET state='uncertain',error=NULL WHERE bank_id=?",(item.id,))
                 audit(db,'creation_intent',{'bank_id':item.id,'payload':payload})
+            elif item.kind=='operation':
+                changes.append((txs[item.id],operations.intent(db,item.id)))
             else:
                 draft = db.execute('SELECT * FROM zen_category_drafts WHERE zen_id=?',(item.id,)).fetchone()
                 before = txs[item.id]
@@ -80,7 +90,7 @@ def send(path, client, scope):
         client.upsert('transaction', creations + [payload for before, payload in changes], cursor)
     except Exception as exc:
         creation.record_write_failure(path,exc,[item.id for item in scope.items if item.kind=='creation'])
-    for verify in (creation.refresh,category_send.refresh):
+    for verify in (creation.refresh,category_send.refresh,operations.refresh):
         try: verify(path, client)
         except HTTPException: pass
     return {'results':[r for r in results(path,scope) if (r['kind'],r['id']) in keys]}

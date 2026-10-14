@@ -6,6 +6,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from zenmoney_api import Client
 from .jsoncodec import exact_response
+from .models import OperationEdit, OperationUpdates
 from fastapi import FastAPI, HTTPException, Request, Query
 from datetime import date
 from .zenstore import history, summary
@@ -86,6 +87,7 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
             decorate_creation(db, rows)
             from .reconciliation import recipient_profiles
             profiles = recipient_profiles(rows, {}, entities(db, 'transaction'), entities(db, 'tag'))
+            from .operations import public_catalog
             return {'mode': mode, 'capabilities': {'write': mode == 'demo', 'local_review': True, 'category_write': mode == 'live', 'create': mode == 'live'}, 'last_sync': int(cursor['value']) if cursor else None,
                     'bank_accounts': [dict(r) for r in db.execute('SELECT * FROM bank_accounts')],
                     'bank_imports': [{'id': r['id'], 'received_at': r['received_at'], 'bank_account': r['bank_account'],
@@ -97,6 +99,9 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
                     'excluded_zen_ids': sorted(excluded),
                     'category_sends': [dict(r) for r in db.execute('SELECT zen_id,state,error FROM zen_category_sends')],
                     'category_draft_count': db.execute('SELECT count(*) FROM zen_category_drafts').fetchone()[0],
+                    'operation_sends': [dict(r) for r in db.execute('SELECT zen_id,state,error FROM zen_operation_sends')],
+                    'operation_draft_count': db.execute('SELECT count(*) FROM zen_operation_drafts').fetchone()[0],
+                    'operation_catalog':public_catalog(db),
                     'outbox': [dict(r) for r in db.execute('SELECT bank_transaction,zen_id,state,error FROM outbox')]}
 
     @app.get('/api/zenmoney/history')
@@ -115,6 +120,43 @@ def create_app(db_path=None, token=None, mode=None, zen_client=None):
     def imports(data: BankImport):
         with transaction(path) as db:
             return import_bank(db, data)
+
+    @app.put('/api/new-operations/{identifier}/operation')
+    @exact_response
+    def bank_operation(identifier: str, data: OperationEdit):
+        from .operations import save_bank
+        with lock,transaction(path) as db:return save_bank(db,identifier,data)
+
+    @app.put('/api/zenmoney/transactions/{identifier}/operation')
+    @exact_response
+    def zen_operation(identifier: str, data: OperationEdit):
+        from .operations import save_zen
+        with lock,transaction(path) as db:return save_zen(db,identifier,data)
+
+    @app.post('/api/operation-updates/preview')
+    @exact_response
+    def operation_preview():
+        from .operations import refresh,preview
+        if mode!='live':fail('Отправка доступна в LIVE',403)
+        with lock:
+            refresh(path,client)
+            with transaction(path,read_only=True) as db:return {'items':preview(db)}
+
+    @app.post('/api/operation-updates/send')
+    @exact_response
+    def operation_send(data: OperationUpdates):
+        from .operations import send
+        if mode!='live':fail('Отправка доступна в LIVE',403)
+        with lock:return send(path,client,data.items)
+
+    @app.post('/api/operation-updates/verify')
+    @exact_response
+    def operation_verify():
+        from .operations import refresh,results
+        if mode!='live':fail('Отправка доступна в LIVE',403)
+        with lock:
+            refresh(path,client)
+            with transaction(path,read_only=True) as db:return {'results':results(db)}
 
     @app.post('/api/zenmoney/sync')
     @exact_response

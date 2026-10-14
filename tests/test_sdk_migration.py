@@ -61,7 +61,7 @@ def test_v10_migration_restores_precision_and_preserves_local_jobs_and_archive(t
     path = tmp_path / 'db'
     data = legacy_v10(path)
     initialize(path, 'live')
-    backups = list(tmp_path.glob('db.pre-v11-*.sqlite3'))
+    backups = list(tmp_path.glob('db.pre-v12-*.sqlite3'))
     assert len(backups) == 1 and backups[0].stat().st_mode & 0o777 == 0o600
     with sqlite3.connect(backups[0]) as old:
         assert old.execute('PRAGMA user_version').fetchone()[0] == 10
@@ -77,7 +77,7 @@ def test_v10_migration_restores_precision_and_preserves_local_jobs_and_archive(t
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
         assert json.loads(db.execute('SELECT report FROM zen_migrations').fetchone()[0])['restored_from_archives'] == 1
     initialize(path, 'live')
-    assert len(list(tmp_path.glob('db.pre-v11-*.sqlite3'))) == 1
+    assert len(list(tmp_path.glob('db.pre-v12-*.sqlite3'))) == 1
 
 
 def test_failed_migration_rolls_back_schema_and_keeps_attempted_payload(tmp_path):

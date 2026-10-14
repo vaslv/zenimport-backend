@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -160,9 +161,27 @@ class BatchScope(NewOperationScope):
 
 
 class BatchItem(DayDecision):
-    kind: Literal['creation', 'category']
+    kind: Literal['creation', 'category', 'operation']
     id: str = Field(min_length=1, max_length=200)
 
 
 class BatchSend(BatchScope):
     items: list[BatchItem] = Field(min_length=1, max_length=20)
+
+
+class OperationDefinition(StrictModel):
+    kind: Literal['expense', 'income', 'refund', 'transfer', 'lend', 'borrow', 'repay', 'collect']
+    account_id: str = Field(min_length=1, max_length=200)
+    category_id: str | None = Field(default=None, min_length=1, max_length=200)
+    other_account_id: str | None = Field(default=None, min_length=1, max_length=200)
+    other_amount: Decimal | None = Field(default=None, gt=0, allow_inf_nan=False, max_digits=28, decimal_places=12)
+    payee: str | None = Field(default=None, max_length=200)
+
+
+class OperationEdit(StrictModel):
+    definition: OperationDefinition
+    expected_snapshot: str = Field(pattern=r'^[a-f0-9]{64}$')
+
+
+class OperationUpdates(StrictModel):
+    items: list[CategorySendItem] = Field(min_length=1, max_length=20)
