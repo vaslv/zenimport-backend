@@ -78,7 +78,14 @@ def candidates(db, row, account, index=None):
     found = []
     for delta in range(-2, 3):
         found.extend(index.get((account['zenmoney_account'], day + delta, row['amount_minor']), []))
-    return [match for _, match in sorted(found, key=lambda item: item[0])]
+    occupied=set()
+    if 'id' in row.keys() and (row['state'] if 'state' in row.keys() else 'pending') in ('pending','queued'):
+        occupied={r[0] for r in db.execute('''SELECT z.zen_id FROM reconciliation_zen_members z
+            JOIN reconciliation_bank_members m ON m.group_id=z.group_id
+            JOIN bank_transactions b ON b.id=m.bank_id
+            JOIN bank_accounts a ON a.id=b.bank_account
+            WHERE a.zenmoney_account=? AND b.id!=?''',(account['zenmoney_account'],row['id']))}
+    return [match for _,match in sorted(found,key=lambda item:item[0]) if match['id'] not in occupied]
 
 
 def import_bank(db, data):

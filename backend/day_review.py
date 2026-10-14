@@ -5,7 +5,7 @@ from collections import Counter, defaultdict
 from datetime import date, datetime
 from decimal import Decimal
 from fastapi import HTTPException
-from .service import candidate_index, mapped_account, fail, confirm, audit
+from .service import candidate_index, candidates, get_row, mapped_account, fail, confirm, audit
 from .models import Decision
 from .db import entities
 
@@ -166,7 +166,7 @@ def confirm_day(db, account_id, day, snapshot, rows):
     index = candidate_index(db, [dict(a) for a in db.execute('SELECT * FROM bank_accounts')])
     for pair in proposal['pairs']:
         row = by_id[pair['bank_id']]
-        confirm(db, row['id'], Decision(action='link', match_id=pair['zen_id'], reviewed_candidates=[c['id'] for c in row['candidates']]), index=index)
+        confirm(db, row['id'], Decision(action='link', match_id=pair['zen_id'], reviewed_candidates=[c['id'] for c in candidates(db,get_row(db,'bank_transactions',row['id']),dict(get_row(db,'bank_accounts',row['bank_account'])),index)]), index=index)
     audit(db, 'confirm_day', {'account': account_id, 'date': day, 'pairs': proposal['pairs'], 'snapshot': snapshot})
     return {'linked': len(proposal['pairs'])}
 
@@ -190,7 +190,7 @@ def confirm_days(db, decisions, rows, *, pairs_only=False):
         for pair in (proposal['preview_pairs'] if pairs_only else proposal['pairs']):
             row = by_id[pair['bank_id']]
             confirm(db, row['id'], Decision(action='link', match_id=pair['zen_id'],
-                    reviewed_candidates=[c['id'] for c in row['candidates']]), index=index)
+                    reviewed_candidates=[c['id'] for c in candidates(db,get_row(db,'bank_transactions',row['id']),dict(get_row(db,'bank_accounts',row['bank_account'])),index)]), index=index)
             linked += 1
     audit(db, 'confirm_preview_pairs' if pairs_only else 'confirm_days', {'days': [d.model_dump(mode='json') for d in decisions], 'linked': linked, 'pairs': [p for d in chosen for p in (d['preview_pairs'] if pairs_only else d['pairs'])]})
     return {'days': len(chosen), 'linked': linked}

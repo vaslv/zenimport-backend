@@ -172,7 +172,7 @@ def describe_bank(db,row,ctx=None):
             try:bank_payload(db,raw,category[0] if category else None);ready=True
             except HTTPException as exc:ready=False;error=exc.detail
     except HTTPException as exc:error=exc.detail
-    return {'source':'bank','id':row['id'],'definition':public_definition(definition),'draft':bool(draft),'editable':row.get('mapped',False) and (row['state']=='pending' or bool(job and job['state']=='prepared')) and not row.get('candidates'),
+    return {'source':'bank','id':row['id'],'definition':public_definition(definition),'draft':bool(draft),'editable':row.get('mapped',False) and (row['state']=='pending' or bool(job and job['state']=='prepared')),
             'error':error,'ready':ready,'snapshot':fingerprint([raw,draft,job,category[0] if category else None]),'label':LABELS.get(definition.get('kind'),'Операция'),'amount':str(row['amount_minor'])}
 
 
