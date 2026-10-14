@@ -1010,3 +1010,21 @@ roher-roher/zenmoney-mcp src/index.ts; затем проверено на пол
 
 Docker:182 Python+19 Node+70 browser, HTTP/restart smoke; лог work/full-transaction-tests.log.
 Исправление только backend/client: расширение перезагружать не требуется.
+
+
+## 14 октября 2026 — SDK 0.6 / backend / schema 11
+
+Реализация b3ad95b: backend напрямую использует zenmoney_api, Decimal во всех JSON
+границах и lifecycle Client. Полные проекции SDK, удалена zen_entities. Миграция
+восстанавливает текущие объекты из своих raw ответов, defaults только для никогда
+не отправлявшихся prepared/queued jobs. Cursor/UUID/состояния/группы сохраняются.
+Проверка копии: 32 608 объектов восстановлены, 0 без архива, данные/архив идентичны;
+повторный initialize идемпотентен. Automatic backup 0600 в LIVE volume и внешняя
+копия data/backups/pre-sdk-2026-10-14.sqlite3.
+Полный Docker: 167 backend, 19 parser, 70 browser, HTTP smoke/recreate успешно.
+Рабочий контейнер пересоздан, healthy; схема 11, SDK 0.6.0. Сверка с auto backup
+подтвердила сохранность. Получение настоящих данных ZenMoney через новый backend
+прошло (200/synced); финансовые изменения в этой задаче не отправлялись.
+Подробности: sdk-migration.md, zenmoney-storage.md, zenmoney-library.md.
+Следующий этап — UI типов долга/перевода/возврата; текущие HTTP маршруты расширения
+сохранены, новые пользовательские формы этим рефакторингом не добавлялись.
