@@ -11,8 +11,16 @@ let working=false,lastItems=[];
 const labels={sent:'Подтверждено в ZenMoney',prepared:'Подготовлено локально',uncertain:'Результат не подтверждён — проверьте повторно',conflict:'Конфликт — требуется сверка',not_applied:'Изменение не применено'};
 function showResults(data){
   $('results').replaceChildren();
-  for(const item of data.results){const prior=lastItems.find(i=>i.kind===item.kind&&i.id===item.id);const row=el('p',`${item.kind==='creation'?'Новая операция':item.kind==='operation'?'Тип операции':'Категория'} · ${prior?.description||prior?.payee||item.id} · ${labels[item.state]||item.state}${item.error?' · '+item.error:''}`);$('results').append(row);}
-  $('batch-status').textContent=`Подтверждено: ${data.results.filter(i=>i.state==='sent').length} из ${data.results.length}.`;
+  for(const item of data.results){
+    const prior=lastItems.find(i=>i.kind===item.kind&&i.id===item.id),parts=[item.kind==='creation'?'Новая операция':item.kind==='operation'?'Тип операции':'Категория'];
+    const day=item.date||prior?.date;if(day)parts.push(dateLabel(day));
+    if(item.amount!==undefined&&item.amount!==null)parts.push(formatMoney(item.amount,item.currency||''));
+    parts.push(item.description||item.payee||prior?.description||prior?.payee||'Без описания',labels[item.state]||item.state);
+    if(item.state==='prepared')parts.push('Ещё не отправлено');if(item.error)parts.push(item.error);
+    $('results').append(el('p',parts.join(' · ')));
+  }
+  const sent=data.results.filter(i=>i.state==='sent').length,prepared=data.results.filter(i=>i.state==='prepared').length;
+  $('batch-status').textContent=prepared?`Подтверждено: ${sent} из ${data.results.length-prepared} отправленных. Подготовлено локально, ещё не отправлено: ${prepared}.`:`Подтверждено: ${sent} из ${data.results.length}.`;
   if(data.message)$('batch-status').textContent=data.message;
 }
 async function run(fn){if(working)return;working=true;$('preview').disabled=$('verify').disabled=$('retry').disabled=true;try{await fn();}catch(e){$('batch-status').textContent=e.message+' Если отправка началась, нажмите «Проверить результат отправки».';}finally{working=false;$('preview').disabled=$('verify').disabled=$('retry').disabled=false;}}
@@ -35,7 +43,7 @@ function review(items){
   send.onclick=()=>{if(send.disabled)return;const chosen=items.filter((_,i)=>selected.has(i)).map(i=>({kind:i.kind,id:i.id,snapshot:i.snapshot}));dialog.close();run(async()=>{$('batch-status').textContent='Отправляем и проверяем результат…';const body={...scope,items:chosen};showResults(await (scope.creations_only?sendNewBatches(body,b=>api('/api/batch/send',b)):api('/api/batch/send',body)));});};
   cancel.onclick=()=>dialog.close();dialog.addEventListener('close',()=>dialog.remove(),{once:true});const footer=el('div');footer.className='pairs-review-footer';footer.append(cancel,send);update();dialog.append(head,list,footer);document.body.append(dialog);dialog.showModal();
 }
-$('preview').onclick=()=>run(async()=>{$('batch-status').textContent='Получаем свежие данные и готовим локальные записи…';const data=await api('/api/batch/preview',scope);$('batch-status').textContent=`Подготовлено изменений: ${data.items.filter(i=>!i.error).length}.`;review(data.items);});
+$('preview').onclick=()=>run(async()=>{$('batch-status').textContent='Получаем свежие данные и готовим локальные записи…';const data=await api('/api/batch/preview',scope);const ready=data.items.filter(i=>!i.error).length,blocked=data.items.length-ready;$('batch-status').textContent=`Готово к отправке: ${ready}.${blocked?` Требуют сверки: ${blocked}.`:''}`;review(data.items);});
 $('retry').onclick=()=>run(async()=>{
   $('batch-status').textContent='Проверяем полную базу ZenMoney. Повтор будет возможен только после просмотра и подтверждения…';
   scope.creations_only=true;scope.include_uncategorized=true;

@@ -1,10 +1,11 @@
 """One explicit mixed write, reusing durable per-record intents and verification."""
 from . import jsoncodec as json
 import time
+from decimal import Decimal
 from fastapi import HTTPException
 from . import category_send, creation, operations
 from .db import transaction, entities
-from .service import fail, get_row, audit
+from .service import fail, get_row, audit, SCALES
 from zenmoney_api import transactions as tx
 
 
@@ -46,12 +47,28 @@ def results(path, scope):
     with transaction(path, read_only=True) as db:
         zen_account = target(db, scope)
         txs = {t['id']:t for t in entities(db,'transaction')}
-        values = [{'kind':'creation','id':r['bank_id'],'state':r['state'],'error':r['error']}
-                  for r in db.execute('SELECT j.* FROM creation_jobs j JOIN bank_transactions b ON b.id=j.bank_id WHERE b.bank_account=?', (scope.account,))]
-        values += [{'kind':'category','id':r['zen_id'],'state':r['state'],'error':r['error']}
-                   for r in category_send.results(db) if txs.get(r['zen_id'],{}).get('incomeAccount') == zen_account]
-        values += [{'kind':'operation','id':r['zen_id'],'state':r['state'],'error':r['error']}
-                   for r in operations.results(db) if zen_account in (txs.get(r['zen_id'],{}).get('incomeAccount'),txs.get(r['zen_id'],{}).get('outcomeAccount'))]
+        instruments={i['id']:i.get('shortTitle','') for i in entities(db,'instrument')}
+        def selected(day):
+            return not ((scope.start and (day or '')<scope.start.isoformat()) or (scope.end and (day or '')>scope.end.isoformat()))
+        values = [{'kind':'creation','id':r['bank_id'],'state':r['state'],'error':r['error'],
+                   'date':r['date'],'description':r['description'] or 'Без описания','currency':r['currency'],
+                   'amount':str(Decimal(r['amount_minor'])/SCALES[r['currency']])}
+                  for r in db.execute('''SELECT j.*,b.date,b.description,b.amount_minor,a.currency FROM creation_jobs j
+                      JOIN bank_transactions b ON b.id=j.bank_id JOIN bank_accounts a ON a.id=b.bank_account
+                      WHERE b.bank_account=?''', (scope.account,)) if selected(r['date'])]
+        if scope.creations_only:return values
+        for kind,table in (('category','zen_category_sends'),('operation','zen_operation_sends')):
+            for r in db.execute('SELECT * FROM '+table):
+                original=json.loads(r['payload'])
+                if zen_account not in (original.get('incomeAccount'),original.get('outcomeAccount')):continue
+                current=txs.get(r['zen_id'],{})
+                actual=current if zen_account in (current.get('incomeAccount'),current.get('outcomeAccount')) else original
+                if not selected(actual.get('date')):continue
+                income=actual.get('incomeAccount')==zen_account and Decimal(str(actual.get('income',0)))>0
+                values.append({'kind':kind,'id':r['zen_id'],'state':r['state'],'error':r['error'],
+                               'date':actual.get('date'),'description':actual.get('comment') or actual.get('payee') or 'Без описания',
+                               'amount':str(operations.signed(actual,zen_account)),
+                               'currency':instruments.get(actual.get('incomeInstrument' if income else 'outcomeInstrument'),'')})
         return values
 
 

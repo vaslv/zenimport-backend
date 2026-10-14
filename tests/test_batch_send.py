@@ -6,6 +6,7 @@ from backend.db import transaction
 from backend.zenmoney import apply_diff, DEMO_ACCOUNT
 from test_creation import setup, draft
 from test_flow import TOKEN
+from test_flow import IMPORT
 
 
 def batch(tmp_path):
@@ -47,6 +48,43 @@ def test_mixed_one_write_and_retry_blocked(tmp_path):
     assert c.post('/api/batch/send',json=body).status_code==409
     assert len(remote.writes)==1
     assert c.post('/api/batch/preview',json=scope).json()['items']==[]
+
+
+def test_results_have_durable_metadata_and_respect_period_and_creation_mode(tmp_path):
+    c,path,remote,scope,body=batch(tmp_path)
+    assert c.post('/api/batch/send',json=body).status_code==200
+    data=copy.deepcopy(IMPORT);data['transactions'][0].update(external_id='waiting',date='2026-10-05',amount_minor=-12345,description='Waiting expense')
+    assert c.post('/api/imports',json=data).status_code==200
+    waiting=next(r['id'] for r in c.get('/api/state').json()['review'] if r['external_id']=='waiting')
+    draft(c,waiting);assert c.post('/api/new-operations/create',json={'bank':'demo'}).status_code==200
+    response=c.post('/api/batch/verify',json=scope);assert response.status_code==200
+    records=response.json()['results'];assert len(records)==3
+    created=next(r for r in records if r['kind']=='creation' and r['state']=='sent')
+    assert created['description']=='Coffee' and created['date']=='2026-10-01' and created['amount']=='-65000' and created['currency']=='VND'
+    pending=next(r for r in records if r['state']=='prepared')
+    assert pending['description']=='Waiting expense' and pending['date']=='2026-10-05' and pending['amount']=='-12345'
+    categories=next(r for r in records if r['kind']=='category')
+    assert categories['date']=='2026-09-01' and categories['amount']=='-100'
+    response=c.post('/api/batch/verify',json={**scope,'creations_only':True})
+    assert len(response.json()['results'])==2 and all(r['kind']=='creation' for r in response.json()['results'])
+    response=c.post('/api/batch/verify',json={**scope,'start':'2026-10-01','end':'2026-10-02'})
+    assert response.json()['results']==[created]
+    with transaction(path) as db:db.execute("UPDATE bank_transactions SET description='' WHERE id=?",(waiting,))
+    response=c.post('/api/batch/verify',json=scope)
+    assert next(r for r in response.json()['results'] if r['state']=='prepared')['description']=='Без описания'
+    assert len(remote.writes)==1
+
+
+def test_missing_remote_record_keeps_last_known_result_description_and_state(tmp_path):
+    c,path,remote,scope,body=batch(tmp_path);remote.behavior='lost_read'
+    c.post('/api/batch/send',json=body);remote.fail_read=False;remote.data['transaction']=[]
+    response=c.post('/api/batch/verify',json=scope)
+    assert response.status_code==200
+    records=response.json()['results'];assert len(records)==2
+    category=next(r for r in records if r['kind']=='category')
+    assert category['date']=='2026-09-01' and category['amount']=='-100' and category['state']=='uncertain'
+    assert next(r for r in records if r['kind']=='creation')['description']=='Coffee'
+    assert len(remote.writes)==1
 
 
 @pytest.mark.parametrize('behavior',['lost_response','lost_read','partial','fail_before'])

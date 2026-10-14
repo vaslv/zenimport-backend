@@ -1737,6 +1737,31 @@ def test_mixed_batch_preview_confirmation_and_verification(browser):
     page.close()
 
 
+@pytest.mark.parametrize('conflict',[False,True])
+def test_cold_batch_verification_explains_prepared_records_and_never_shows_uuid(browser,conflict):
+    context,identifier=browser
+    context.service_workers[0].evaluate("chrome.storage.local.set({baseUrl:'http://127.0.0.1:8000',token:'docker-test-token-not-for-real-data'})")
+    page=context.new_page();calls=[]
+    records=[{'kind':'creation','id':'8656674f-b675-4f8d-af2e-0312cb69713d','date':'2026-10-11','amount':'-123.450000000001','currency':'USD','description':'Sent expense','state':'sent','error':None},
+             {'kind':'creation','id':'13a3e200-5560-4568-8841-44391779301a','date':'2026-10-10','amount':'-65000','currency':'VND','description':'Waiting expense','state':'prepared','error':None}]
+    if conflict:records.append({**records[0],'id':'another-job','state':'conflict','description':'Changed expense','error':'Различается сумма'})
+    def route(request):
+        path=request.request.url.rsplit('/',1)[-1];calls.append(path)
+        request.fulfill(json={'items':[]} if path=='preview' else {'results':records})
+    page.route('http://127.0.0.1:8000/api/batch/**',route)
+    page.goto(f'chrome-extension://{identifier}/batch.html?bank=vietinbank&account=test-account')
+    page.get_by_role('dialog').get_by_role('button',name='Отмена').click()
+    page.locator('#verify').click()
+    expect(page.locator('#batch-status')).to_have_text(f'Подтверждено: 1 из {2 if conflict else 1} отправленных. Подготовлено локально, ещё не отправлено: 1.')
+    expect(page.locator('#results')).to_contain_text('11 октября 2026 · -123,450000000001 USD · Sent expense')
+    expect(page.locator('#results')).to_contain_text('Waiting expense · Подготовлено локально · Ещё не отправлено')
+    for record in records:expect(page.locator('#results')).not_to_contain_text(record['id'])
+    assert calls==['preview','verify']
+    if conflict:expect(page.locator('#results')).to_contain_text('Различается сумма')
+    else:page.screenshot(path='/results/batch-verification-readable.png',full_page=True)
+    page.close()
+
+
 @pytest.mark.parametrize('mode',['categorized','all'])
 def test_new_only_batch_modes_preview_and_confirmation(browser,mode):
     context,identifier=browser

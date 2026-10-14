@@ -298,3 +298,16 @@ def test_existing_type_verification_accepts_exact_original_payee_copy(tmp_path):
     result=api.post('/api/operation-updates/verify',json={})
     assert result.json()['results'][0]['state']=='sent' and not model(api,bank_id)['draft']
     assert len(remote.writes)==1
+
+
+def test_typed_result_describes_bank_side_of_foreign_transfer(tmp_path):
+    api,path,remote,bank_id=setup(tmp_path,existing=True)
+    assert save(api,bank_id,definition('transfer','foreign')).status_code==200
+    scope={'bank':'demo','account':api.get('/api/state').json()['bank_accounts'][0]['id']}
+    items=api.post('/api/batch/preview',json=scope).json()['items']
+    response=api.post('/api/batch/send',json={**scope,'items':[{k:i[k] for k in ('kind','id','snapshot')} for i in items]})
+    result=response.json()['results'][0]
+    assert result['kind']=='operation' and result['state']=='sent' and result['description']=='Coffee'
+    assert result['date']=='2026-10-01' and result['amount']=='-65000' and result['currency']=='VND'
+    assert api.post('/api/batch/verify',json={**scope,'creations_only':True}).json()['results']==[]
+    assert len(remote.writes)==1
