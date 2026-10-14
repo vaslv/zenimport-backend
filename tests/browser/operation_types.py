@@ -46,6 +46,9 @@ def test_bank_workspace_save_review_cancel_confirm(browser,kind,positive,existin
     dialog.get_by_role('button',name='Отмена',exact=True).click();assert not remote(context)['writes']
     page.locator('#operation-send').click();dialog.get_by_role('button',name='Отправить в ZenMoney · 1',exact=True).click()
     expect(page.locator('#status')).to_contain_text('1 успешно, 0 требуют внимания')
+    for _ in range(60):
+        if remote(context)['writes']:break
+        bank.wait_for_timeout(100)
     result=remote(context);assert len(result['writes'])==1 and len(result['writes'][0])==1
     p=result['writes'][0][0]
     if existing:assert p['id']=='existing' and p['created']==10
@@ -54,9 +57,9 @@ def test_bank_workspace_save_review_cancel_confirm(browser,kind,positive,existin
     if kind in ('lend','borrow','repay','collect'):assert p['payee']=='Test person' and 'debt' in (p['incomeAccount'],p['outcomeAccount'])
     page.close()
 
-def inline_pages(browser,existing=False,uncategorized=False,payee=None):
+def inline_pages(browser,existing=False,uncategorized=False,payee=None,candidate=False,positive=False):
     context,identifier=browser
-    response=context.request.post(BASE+'/api/test/reset',headers=AUTH,data={'existing':existing,'uncategorized':uncategorized,'payee':payee});assert response.ok
+    response=context.request.post(BASE+'/api/test/reset',headers=AUTH,data={'existing':existing,'uncategorized':uncategorized,'payee':payee,'candidate':candidate,'positive':positive});assert response.ok
     worker=context.service_workers[0];worker.evaluate("chrome.storage.local.set({inlineEnabled:false})")
     page=open_app(browser);connect(page,BASE);expect(page.locator('#status')).to_have_text('Данные обновлены.')
     popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
@@ -68,18 +71,18 @@ def inline_pages(browser,existing=False,uncategorized=False,payee=None):
 @pytest.mark.parametrize('existing',[False,True])
 def test_bank_inline_transfer_new_staged_existing_immediate(browser,existing):
     context,page,popup,bank=inline_pages(browser,existing)
-    editor=bank.locator('zenimport-operation .operation-editor').first;editor.locator('summary').click()
+    editor=bank.locator('zenimport-operation .operation-editor').first
     editor.get_by_label('Тип операции',exact=True).select_option('transfer');editor.get_by_label('Второй счёт').select_option('foreign')
     editor.get_by_label('Сумма на втором счёте').fill('2.500000000001');editor.get_by_label('Сумма на втором счёте').press('Tab')
     if existing:
-        expect(bank.locator('zenimport-operation').first.locator('strong').first).to_have_class('good')
+        expect(bank.locator('zenimport-operation').first.locator('.status-icon')).to_have_class('status-icon good')
         for _ in range(60):
             if remote(context)['writes']:break
             bank.wait_for_timeout(100)
         writes=remote(context)['writes'];assert len(writes)==1 and writes[0][0]['id']=='existing'
         assert writes[0][0]['incomeAccount']=='foreign' and str(writes[0][0]['income'])=='2.500000000001'
     else:
-        expect(bank.locator('zenimport-operation .operation-editor').first).to_contain_text('сохранён локально')
+        expect(bank.locator('zenimport-operation .operation-editor').first).to_have_attribute('data-operation-draft','true')
         assert not remote(context)['writes']
         bank.bring_to_front();popup.locator('#send-new').click()
         expect(popup.locator('#send-status')).to_contain_text('Добавлено в ZenMoney: 2.')
@@ -105,7 +108,7 @@ def test_minimal_popup_toggle_and_visible_default_creation(browser):
     result=remote(context);assert len(result['writes'])==1 and len(result['writes'][0])==2
     assert sorted(p['income']-p['outcome'] for p in result['writes'][0])==[-65000,100000]
     assert all(not p['tag'] for p in result['writes'][0])
-    expect(bank.locator('tbody zenimport-operation').first).to_contain_text('Нужна категория')
+    expect(bank.locator('tbody zenimport-operation').first.get_by_role('combobox',name='Категория для типа операции')).to_have_text('Выберите категорию')
     popup.reload();expect(popup.locator('#send-new')).to_be_disabled()
     assert len(remote(context)['writes'])==1
     popup.screenshot(path='/results/minimal-popup.png')
@@ -115,9 +118,12 @@ def test_minimal_popup_toggle_and_visible_default_creation(browser):
 def test_existing_inline_category_is_sent_once_and_forgery_denied(browser):
     context,page,popup,bank=inline_pages(browser,True,True)
     card=bank.locator('tbody zenimport-operation').first
-    card.get_by_role('combobox',name='Категория',exact=True).click()
+    card.get_by_role('combobox',name='Категория для типа операции',exact=True).click()
     card.get_by_role('option',name='Продукты',exact=True).click()
-    expect(card.locator('strong').first).to_have_class('good')
+    expect(card.locator('.status-icon')).to_have_class('status-icon good')
+    for _ in range(60):
+        if remote(context)['writes']:break
+        bank.wait_for_timeout(100)
     result=remote(context);assert len(result['writes'])==1 and len(result['writes'][0])==1
     assert result['writes'][0][0]['id']=='existing' and result['writes'][0][0]['tag']==['food']
     forged=popup.evaluate("chrome.runtime.sendMessage({type:'inline-category',account:'111122223333',id:'existing',category:'food'})")
@@ -129,11 +135,11 @@ def test_inline_lost_reply_blocks_blind_repeat(browser):
     context,page,popup,bank=inline_pages(browser,True,True)
     assert context.request.post(BASE+'/api/test/behavior',headers=AUTH,data={'behavior':'lost_read'}).ok
     card=bank.locator('tbody zenimport-operation').first
-    card.get_by_role('combobox',name='Категория',exact=True).click();card.get_by_role('option',name='Продукты',exact=True).click()
+    card.get_by_role('combobox',name='Категория для типа операции',exact=True).click();card.get_by_role('option',name='Продукты',exact=True).click()
     expect(bank.locator('#zenimport-status')).to_contain_text('не подтверждено')
-    expect(card).to_contain_text('Нужно проверить результат отправки')
+    expect(card.locator('.status-icon')).to_have_attribute('title','Проверьте результат отправки')
     assert len(remote(context)['writes'])==1
-    bank.reload();expect(card).to_contain_text('Нужно проверить результат отправки')
+    bank.reload();expect(card.locator('.status-icon')).to_have_attribute('title','Проверьте результат отправки')
     assert len(remote(context)['writes'])==1
     popup.close();bank.close();page.close()
 
@@ -155,14 +161,17 @@ def test_new_popup_verifies_partial_or_lost_creation_without_retry(browser,behav
 
 def test_inline_debt_requires_explicit_person_not_previous_shop(browser):
     context,page,popup,bank=inline_pages(browser,True,payee='Previous shop')
-    editor=bank.locator('zenimport-operation .operation-editor').first;editor.locator('summary').click()
-    type_select=editor.get_by_label('Тип операции',exact=True);type_select.focus();type_select.press('ArrowDown');type_select.press('ArrowDown');expect(type_select).to_have_value('lend')
+    editor=bank.locator('zenimport-operation .operation-editor').first
+    type_select=editor.get_by_label('Тип операции',exact=True);type_select.focus();type_select.press('ArrowDown');type_select.press('ArrowDown');expect(type_select).to_have_value('debt')
     expect(editor.get_by_label('Человек для долга')).to_have_value('')
     expect(editor).to_contain_text('Укажите человека для долга.')
     assert not remote(context)['writes']
     editor.get_by_label('Человек для долга').fill('Test person');editor.get_by_label('Человек для долга').press('Tab')
-    expect(bank.locator('tbody zenimport-operation').first.locator('strong').first).to_have_class('good')
-    expect(bank.locator('tbody zenimport-operation').first.locator('summary')).to_contain_text('Тип операции · Дать в долг')
+    expect(bank.locator('tbody zenimport-operation').first.locator('.status-icon')).to_have_class('status-icon good')
+    expect(bank.locator('tbody zenimport-operation').first.get_by_label('Действие с долгом')).to_have_value('lend')
+    for _ in range(60):
+        if remote(context)['writes']:break
+        bank.wait_for_timeout(100)
     p=remote(context)['writes'][0][0];assert p['id']=='existing' and p['payee']=='Test person' and p['incomeAccount']=='debt'
     popup.close();bank.close();page.close()
 
@@ -215,7 +224,7 @@ def test_inline_reports_actual_poll_error_and_recovers(browser):
     };}""")
     def advance():
         worker.evaluate("""async()=>{const tabs=await chrome.tabs.query({url:'https://ipay.vietinbank.vn/*'});
-          await chrome.scripting.executeScript({target:{tabId:tabs[0].id},func:()=>{const previous=Date.now;Date.now=()=>previous()+20000;}});
+          await chrome.scripting.executeScript({target:{tabId:tabs.at(-1).id},func:()=>{const previous=Date.now;Date.now=()=>previous()+20000;}});
         }""")
     try:
         advance()
@@ -235,12 +244,63 @@ def test_invalidated_content_context_requests_bank_reload(browser):
     context,page,popup,bank=inline_pages(browser)
     worker=context.service_workers[0]
     worker.evaluate("""async()=>{const tabs=await chrome.tabs.query({url:'https://ipay.vietinbank.vn/*'});
-      await chrome.scripting.executeScript({target:{tabId:tabs[0].id},func:()=>{
+      await chrome.scripting.executeScript({target:{tabId:tabs.at(-1).id},func:()=>{
         chrome.runtime.sendMessage=async()=>{throw Error('Extension context invalidated.');};
         const previous=Date.now;Date.now=()=>previous()+20000;
       }});
     }""")
     expect(bank.locator('#zenimport-status')).to_contain_text('Расширение обновлено. Обновите страницу банка.')
     expect(bank.locator('#zenimport-status')).not_to_contain_text('Нет связи')
+    assert not remote(context)['writes']
+    popup.close();bank.close();page.close()
+
+
+def test_compact_layout_and_candidate_can_be_resolved_inline(browser):
+    context,page,popup,bank=inline_pages(browser,candidate=True)
+    bank.add_style_tag(content='table{width:100%;border-collapse:collapse}td{padding:12px}body{font-family:system-ui}')
+    card=bank.locator('tbody zenimport-operation').first
+    expect(card.locator('summary')).to_have_count(0)
+    expect(card.get_by_label('Тип операции',exact=True).locator('option')).to_have_count(4)
+    expect(card.get_by_label('Тип операции',exact=True)).to_be_enabled()
+    expect(card.locator('.status-icon')).to_have_text('?')
+    bounds=card.bounding_box();kind=card.get_by_label('Тип операции',exact=True).bounding_box();category=card.get_by_role('combobox',name='Категория для типа операции').bounding_box()
+    assert bounds['height']<=50 and abs(kind['y']-category['y'])<=2
+    card.get_by_role('combobox',name='Категория для типа операции').click();card.get_by_role('option',name='Продукты',exact=True).click()
+    expect(card.locator('.operation-editor')).to_have_attribute('data-operation-draft','true')
+    assert not remote(context)['writes']
+    card.locator('.status-icon').click()
+    card.get_by_role('button',name='2026-10-06 · CT DI:TEST0001 Coffee · Продукты',exact=True).click()
+    expect(card.locator('.status-icon')).to_have_text('✓')
+    assert not remote(context)['writes']
+    bank.screenshot(path='/results/compact-bank-rows.png',full_page=True)
+    popup.close();bank.close();page.close()
+
+
+@pytest.mark.parametrize('positive,action',[(False,'lend'),(False,'repay'),(True,'borrow'),(True,'collect')])
+def test_compact_debt_action_preserves_direction(browser,positive,action):
+    context,page,popup,bank=inline_pages(browser,positive=positive)
+    editor=bank.locator('tbody zenimport-operation').nth(1 if positive else 0).locator('.operation-editor')
+    editor.get_by_label('Тип операции',exact=True).select_option('debt')
+    editor.get_by_label('Действие с долгом').select_option(action)
+    expect(editor.get_by_label('Действие с долгом').locator('option')).to_have_count(2)
+    editor.get_by_label('Человек для долга').fill('Test person');editor.get_by_label('Человек для долга').press('Tab')
+    expect(editor).to_have_attribute('data-operation-draft','true')
+    state=context.request.get(BASE+'/api/state',headers=AUTH).json()
+    row=next(r for r in state['review'] if r['amount_minor']==(100000 if positive else -65000))
+    assert row['operation_edit']['definition']['kind']==action
+    assert not remote(context)['writes']
+    popup.close();bank.close();page.close()
+
+
+def test_compact_income_refund_keeps_expense_category(browser):
+    context,page,popup,bank=inline_pages(browser,positive=True)
+    editor=bank.locator('tbody zenimport-operation').nth(1).locator('.operation-editor')
+    expect(editor.get_by_label('Тип операции',exact=True)).to_have_value('income')
+    editor.get_by_label('Вид поступления').select_option('refund')
+    editor.get_by_role('combobox',name='Категория для типа операции').click();editor.get_by_role('option',name='Продукты',exact=True).click()
+    expect(editor).to_have_attribute('data-operation-draft','true')
+    state=context.request.get(BASE+'/api/state',headers=AUTH).json()
+    row=next(r for r in state['review'] if r['amount_minor']==100000)
+    assert row['operation_edit']['definition']['kind']=='refund' and row['operation_edit']['definition']['category_id']=='food'
     assert not remote(context)['writes']
     popup.close();bank.close();page.close()

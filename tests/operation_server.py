@@ -29,7 +29,7 @@ def reset(options:dict):
               'raw':{'reference':'TEST0001','date':'06/10/2026 12:01:00','balance':'935000','amount':'-65000','description':'CT DI:TEST0001 Coffee'}},
              {'external_id':'TEST0002','date':'2026-10-05','amount_minor':100000,'description':'CT DEN:TEST0002 Transfer',
               'raw':{'reference':'TEST0002','date':'05/10/2026 10:30:00','balance':'1000000','amount':'100000','description':'CT DEN:TEST0002 Transfer'}}]
-    if existing:
+    if existing or options.get('candidate'):
         r=records[chosen]
         remote.data['transaction']=[(tx.income if positive else tx.expense)(user=1,id='existing',date=r['date'],now=10,account='cash',instrument=1,amount=abs(r['amount_minor']),categories=[] if options.get('uncategorized') else ['salary' if positive else 'food'],comment=r['description'],payee=options.get('payee'))]
     with transaction(path) as db:
