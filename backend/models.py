@@ -135,6 +135,7 @@ class CategorySend(StrictModel):
 
 
 class NewOperationScope(StrictModel):
+    bank_ids: list[str] | None = Field(default=None, min_length=1, max_length=200)
     include_uncategorized: bool = False
     bank: str = Field(pattern=r'^[a-z0-9_-]{1,40}$')
     account: str | None = None

@@ -15,6 +15,7 @@ from .zenstore import complete_creation
 def selected(row, accounts, scope):
     return (accounts[row['bank_account']]['bank'] == scope.bank and
             (not scope.account or row['bank_account'] == scope.account) and
+            (scope.bank_ids is None or row['id'] in scope.bank_ids) and
             (not scope.start or row['date'] >= str(scope.start)) and
             (not scope.end or row['date'] <= str(scope.end)))
 
