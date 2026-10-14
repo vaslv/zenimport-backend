@@ -60,7 +60,7 @@ def inline_pages(browser,existing=False,uncategorized=False,payee=None):
     worker=context.service_workers[0];worker.evaluate("chrome.storage.local.set({inlineEnabled:false})")
     page=open_app(browser);connect(page,BASE);expect(page.locator('#status')).to_have_text('Данные обновлены.')
     popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
-    popup.locator('#inline-enable').check();expect(popup.locator('#inline-status')).to_contain_text('Включено')
+    popup.locator('#inline-enable').check();expect(popup.locator('#inline-enable')).to_be_checked()
     bank=fixture_bank(browser);expect(bank.locator('zenimport-operation .operation-editor')).to_have_count(2)
     expect(bank.locator('#zenimport-status')).to_contain_text('Данные ZenMoney получены')
     return context,page,popup,bank

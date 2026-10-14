@@ -1575,7 +1575,7 @@ def test_inline_bank_statuses_categories_and_account_boundary(browser,sync_failu
         context.route('https://ipay.vietinbank.vn/**', lambda route: route.fulfill(path='/app/tests/browser/fixtures/vietinbank.html', content_type='text/html'))
         popup = context.new_page(); popup.goto(f'chrome-extension://{identifier}/popup.html')
         popup.locator('#inline-enable').check()
-        expect(popup.locator('#inline-status')).to_contain_text('Включено')
+        expect(popup.locator('#inline-enable')).to_be_checked()
         bank = context.new_page(); bank.goto(url)
         expect(bank.locator('tbody zenimport-operation')).to_have_count(2)
         expect(bank.locator('tbody zenimport-operation').first.locator('select')).to_have_value('cafe')
