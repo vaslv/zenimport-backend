@@ -1,10 +1,11 @@
 """One explicit mixed write, reusing durable per-record intents and verification."""
-import json
+from . import jsoncodec as json
 import time
 from fastapi import HTTPException
 from . import category_send, creation
 from .db import transaction, entities
 from .service import fail, get_row, audit
+from zenmoney_api import transactions as tx
 
 
 def target(db, scope):
@@ -67,7 +68,7 @@ def send(path, client, scope):
             else:
                 draft = db.execute('SELECT * FROM zen_category_drafts WHERE zen_id=?',(item.id,)).fetchone()
                 before = txs[item.id]
-                payload = {**before,'tag':[draft['category_id']],'changed':max(int(time.time()),before.get('changed',0)+1)}
+                payload = tx.update(before, tag=[draft['category_id']], now=max(int(time.time()),before.get('changed',0)+1))
                 db.execute('INSERT OR REPLACE INTO zen_category_sends VALUES (?,?,?,?,?,?,NULL)',
                            (item.id,draft['category_id'],draft['updated_at'],json.dumps(before),json.dumps(payload),'uncertain'))
                 audit(db,'category_send_intent',{'zen_id':item.id,'before':before,'payload':payload})
@@ -76,7 +77,7 @@ def send(path, client, scope):
             fail('Идентификатор повторяется в общей отправке')
         cursor = int(db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()[0])
     try:
-        client.write_transactions(creations, changes, cursor)
+        client.upsert('transaction', creations + [payload for before, payload in changes], cursor)
     except Exception as exc:
         creation.record_write_failure(path,exc,[item.id for item in scope.items if item.kind=='creation'])
     for verify in (creation.refresh,category_send.refresh):

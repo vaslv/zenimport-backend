@@ -1,5 +1,8 @@
-import json
+from . import jsoncodec as json
 import sqlite3
+from pathlib import Path
+from datetime import datetime, timezone
+from uuid import uuid4
 from contextlib import contextmanager, closing
 
 SCHEMA = '''
@@ -18,9 +21,6 @@ CREATE TABLE IF NOT EXISTS bank_transactions (
  description TEXT NOT NULL, raw TEXT NOT NULL,
  state TEXT NOT NULL DEFAULT 'pending', linked_id TEXT,
  UNIQUE(bank_account, external_id));
-CREATE TABLE IF NOT EXISTS zen_entities (
- kind TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL,
- PRIMARY KEY(kind,id));
 CREATE TABLE IF NOT EXISTS outbox (
  bank_transaction TEXT PRIMARY KEY REFERENCES bank_transactions(id),
  zen_id TEXT NOT NULL UNIQUE, payload TEXT NOT NULL,
@@ -38,15 +38,33 @@ def connect(path):
     return conn
 
 
+SCHEMA_VERSION = 11
+
+
+def backup(db, path):
+    destination = Path(str(path) + '.pre-v11-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S') + '-' + uuid4().hex[:8] + '.sqlite3')
+    destination.touch(mode=0o600, exist_ok=False)
+    try:
+        with closing(sqlite3.connect(destination)) as target:
+            db.backup(target)
+    except Exception:
+        destination.unlink()
+        raise
+    return destination
+
+
 def initialize(path, mode):
     with closing(connect(path)) as db, db:
         version = db.execute('PRAGMA user_version').fetchone()[0]
-        if version > 10:
+        if version > SCHEMA_VERSION:
             raise RuntimeError('Database schema is newer than this application')
-        db.executescript(SCHEMA)
-        previous = db.execute("SELECT value FROM meta WHERE key='mode'").fetchone()
+        has_meta = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='meta'").fetchone()
+        previous = db.execute("SELECT value FROM meta WHERE key='mode'").fetchone() if has_meta else None
         if previous and previous['value'] != mode:
             raise RuntimeError('Use a separate database for demo and live mode')
+        if has_meta and version < SCHEMA_VERSION:
+            backup(db, path)
+        db.executescript(SCHEMA)
         db.execute('BEGIN IMMEDIATE')
         db.execute("INSERT OR IGNORE INTO meta VALUES ('mode',?)", (mode,))
         from .zenstore import migrate
@@ -62,7 +80,7 @@ def initialize(path, mode):
         db.execute('CREATE TABLE IF NOT EXISTS creation_drafts (bank_id TEXT PRIMARY KEY REFERENCES bank_transactions(id), category_id TEXT, source TEXT NOT NULL, updated_at INTEGER NOT NULL)')
         db.execute('CREATE TABLE IF NOT EXISTS creation_jobs (bank_id TEXT PRIMARY KEY REFERENCES bank_transactions(id), zen_id TEXT NOT NULL UNIQUE, payload TEXT NOT NULL, state TEXT NOT NULL, error TEXT)')
         db.execute('CREATE TABLE IF NOT EXISTS recipient_rules (bank TEXT NOT NULL, name TEXT NOT NULL, direction TEXT NOT NULL, category_id TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(bank,name,direction))')
-        db.execute('PRAGMA user_version=10')
+        db.execute(f'PRAGMA user_version={SCHEMA_VERSION}')
 
 
 @contextmanager
@@ -82,5 +100,6 @@ def transaction(path, *, read_only=False):
 
 
 def entities(db, kind):
+    from .zenstore import TABLES
     return [json.loads(r['data']) for r in db.execute(
-        'SELECT data FROM zen_entities WHERE kind=?', (kind,))]
+        f'SELECT data FROM {TABLES[kind]} ORDER BY rowid')]

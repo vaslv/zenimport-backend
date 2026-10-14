@@ -1,6 +1,7 @@
 import copy
 import json
 import uuid
+from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 from backend.app import create_app
@@ -12,7 +13,8 @@ from test_category_send import Remote
 
 
 class CreationRemote(Remote):
-    def create_transactions(self, transactions, cursor):
+    def upsert(self, kind, transactions, cursor=0):
+        assert kind == 'transaction'
         self.writes.append(copy.deepcopy(transactions))
         if self.behavior=='fail_before': raise TimeoutError()
         self.data['transaction'].extend(copy.deepcopy(transactions[:1] if self.behavior=='partial' else transactions))
@@ -139,7 +141,7 @@ def test_exact_foreign_currency_income_and_expense(tmp_path,amount):
     with transaction(path) as db:db.execute('UPDATE bank_transactions SET amount_minor=?',(amount,))
     draft(c,id);body=request(c)
     assert c.post('/api/new-operations/send',json=body).json()['results'][0]['state']=='sent'
-    tx=remote.writes[0][0];assert tx['income' if amount>0 else 'outcome']==123.45
+    tx=remote.writes[0][0];assert tx['income' if amount>0 else 'outcome']==Decimal('123.45')
 
 
 def test_missing_category_does_not_default_to_adjustment(tmp_path):
@@ -284,12 +286,12 @@ def test_uncategorized_explicit_preview_send_and_retry(tmp_path,remote_tag):
     body={**scope,'items':[{'bank_id':identifier,'snapshot':items[0]['snapshot']}]}
     assert c.post('/api/new-operations/send',json={**body,'include_uncategorized':False}).status_code==409
     assert not remote.writes
-    original=remote.create_transactions
-    def write(transactions,cursor):
-        result=original(transactions,cursor)
+    original=remote.upsert
+    def write(kind,transactions,cursor):
+        result=original(kind,transactions,cursor)
         remote.data['transaction'][-1]['tag']=remote_tag
         return result
-    remote.create_transactions=write
+    remote.upsert=write
     assert c.post('/api/new-operations/send',json=body).json()['results'][0]['state']=='sent'
     assert remote.writes[0][0]['tag'] is None
     assert c.post('/api/new-operations/send',json=body).status_code==409

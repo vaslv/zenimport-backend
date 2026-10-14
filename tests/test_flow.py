@@ -5,8 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 from backend.app import create_app
 from backend.db import transaction, entities
-from backend.zenmoney import ZenMoney, DEMO_ACCOUNT, apply_diff
-from zenimport_zenmoney import ResponseError
+from backend.zenmoney import DemoClient, DEMO_ACCOUNT, apply_diff
+from zenmoney_api import ResponseError
 
 TOKEN = 'test-token-that-is-long-enough'
 IMPORT = {'bank': 'demo', 'adapter_version': '1', 'account': 'bank-001', 'currency': 'VND',
@@ -124,14 +124,15 @@ def test_currency_mismatch_and_mapping_freeze(setup):
     assert client.put(f'/api/accounts/{account}/mapping', json={'zenmoney_account': DEMO_ACCOUNT}).status_code == 409
 
 
-class LostResponse(ZenMoney):
+class LostResponse(DemoClient):
     def __init__(self):
-        super().__init__('demo', '')
+        super().__init__()
         self.remote = {}
         self.writes = 0
 
-    def diff(self, payload):
-        result = super().diff(payload)
+    def diff(self, server_timestamp=0, *, changes=None, force_fetch=None):
+        result = super().diff(server_timestamp, changes=changes, force_fetch=force_fetch)
+        payload = changes or {}
         if payload.get('transaction'):
             self.writes += 1
             for item in payload['transaction']:
@@ -176,7 +177,7 @@ def test_diff_deletions_and_bad_cursor_roll_back(setup):
 def test_mode_isolation(setup):
     _, path = setup
     with pytest.raises(RuntimeError):
-        create_app(path, TOKEN, 'live', ZenMoney('demo', ''))
+        create_app(path, TOKEN, 'live', DemoClient())
 
 
 def test_reopen_queued_but_never_uncertain(setup):
@@ -199,7 +200,9 @@ def test_live_http_contract(monkeypatch):
         captured.append(request)
         return httpx.Response(200, json={'serverTimestamp': 123, 'account': [], 'transaction': []})
     monkeypatch.setattr(httpx, 'Client', lambda **kwargs: client_type(**{**kwargs, 'transport': httpx.MockTransport(remote)}))
-    result = ZenMoney('live', 'server-only-secret').diff({'currentClientTimestamp': 100, 'serverTimestamp': 0})
+    from zenmoney_api import Client
+    with Client('server-only-secret') as api:
+        result = api.read_diff(0)
     assert result['serverTimestamp'] == 123
     assert str(captured[0].url) == 'https://api.zenmoney.ru/v8/diff/'
     assert captured[0].headers['Authorization'] == 'Bearer server-only-secret'

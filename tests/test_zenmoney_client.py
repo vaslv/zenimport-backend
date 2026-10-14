@@ -1,13 +1,13 @@
 """Application boundaries around the independently installed API client."""
 import pytest
-from backend.zenmoney import ZenMoney
+from zenmoney_api import Client
 from backend.creation import matches
-from zenimport_zenmoney import CREATION_DEFAULTS
+from zenmoney_api.transactions import CREATION_DEFAULTS
 
 
 def test_read_wrapper_rejects_writes():
     with pytest.raises(ValueError):
-        ZenMoney('live', 'secret').diff({'serverTimestamp': 0, 'transaction': []})
+        Client('secret').read_diff({'serverTimestamp': 0, 'transaction': []})
 
 
 def test_creation_verification_accepts_wire_defaults():

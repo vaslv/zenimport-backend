@@ -1,5 +1,5 @@
 """Local category edits owned by ZenMoney transactions; never change the mirror."""
-import json
+from . import jsoncodec as json
 import time
 from .service import get_entity, fail, audit
 

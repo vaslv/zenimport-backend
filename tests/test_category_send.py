@@ -12,10 +12,13 @@ from test_flow import TOKEN
 class Remote:
     def __init__(self, data):
         self.data=copy.deepcopy(data);self.writes=[];self.behavior='ok';self.fail_read=False
-    def diff(self, request):
+    def read_diff(self, server_timestamp=0, *, force_fetch=None):
         if self.fail_read:raise TimeoutError()
-        return {'serverTimestamp':max(10,request['serverTimestamp']),**copy.deepcopy(self.data)}
-    def update_categories(self, changes, cursor):
+        return {'serverTimestamp':max(10,server_timestamp),**copy.deepcopy(self.data)}
+    def upsert(self, kind, payloads, cursor=0):
+        assert kind == 'transaction'
+        existing = {t['id']:t for t in self.data['transaction']}
+        changes = [(existing[p['id']], p) for p in payloads]
         self.writes.append(copy.deepcopy(changes))
         if self.behavior=='fail_before':raise TimeoutError()
         for index,(before,payload) in enumerate(changes):

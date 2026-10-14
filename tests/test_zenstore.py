@@ -3,7 +3,7 @@ import sqlite3
 from datetime import date, timedelta
 import pytest
 from fastapi.testclient import TestClient
-from zenimport_zenmoney import Diff, KINDS
+from zenmoney_api.protocol import Diff, KINDS
 from backend.app import create_app
 from backend.db import initialize, transaction, entities, SCHEMA
 from backend.zenmoney import apply_diff, request_diff
@@ -44,7 +44,9 @@ def test_all_entities_and_lossless_archive(path):
 def test_increment_updates_deletions_and_retry(path):
     seen = []
     class Remote:
-        def diff(self, payload):
+        def read_diff(self, server_timestamp=0, *, force_fetch=None):
+            payload = {'serverTimestamp': server_timestamp}
+            if force_fetch is not None: payload['forceFetch'] = force_fetch
             seen.append(payload)
             if len(seen) == 1:
                 return {'serverTimestamp': 10, 'transaction': [tx('a'), tx('b')]}
@@ -93,6 +95,7 @@ def test_migration_preserves_v1_and_mode(tmp_path):
     path = tmp_path / 'old'
     with sqlite3.connect(path) as db:
         db.executescript(SCHEMA)
+        db.execute('CREATE TABLE zen_entities (kind TEXT,id TEXT,data TEXT,PRIMARY KEY(kind,id))')
         db.execute("INSERT INTO meta VALUES ('mode','demo')")
         db.execute("INSERT INTO meta VALUES ('cursor','100')")
         db.execute('INSERT INTO zen_entities VALUES (?,?,?)', ('transaction', 'old', json.dumps(tx('old'))))
@@ -104,7 +107,7 @@ def test_migration_preserves_v1_and_mode(tmp_path):
         assert history(db)['total'] == 1
         assert db.execute('SELECT count(*) FROM bank_accounts').fetchone()[0] == 1
         assert db.execute('SELECT count(*) FROM zen_sync_runs').fetchone()[0] == 1
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 10
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 11
         assert db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()[0] == '100'
     with pytest.raises(RuntimeError):
         initialize(path, 'live')
@@ -148,7 +151,9 @@ def test_migrated_mirror_requests_all_collections_and_retries_flag(path):
         db.execute("INSERT INTO meta VALUES ('needs_full_sync','1')")
     seen = []
     class Remote:
-        def diff(self, payload):
+        def read_diff(self, server_timestamp=0, *, force_fetch=None):
+            payload = {'serverTimestamp': server_timestamp}
+            if force_fetch is not None: payload['forceFetch'] = force_fetch
             seen.append(payload)
             if len(seen) == 1:
                 raise TimeoutError()

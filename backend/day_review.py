@@ -1,6 +1,6 @@
 """Exact-day proposals built from the complete local mirrors, never UI filters."""
 import hashlib
-import json
+from . import jsoncodec as json
 from collections import Counter, defaultdict
 from datetime import date, datetime
 from decimal import Decimal

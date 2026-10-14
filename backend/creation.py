@@ -1,5 +1,5 @@
 """Local new-operation drafts and explicit, at-most-once remote creation attempts."""
-import json
+from . import jsoncodec as json
 import time
 import uuid
 from decimal import Decimal
@@ -9,6 +9,8 @@ from .service import review, get_row, get_entity, mapped_account, fail, audit, S
 from .reconciliation import recipient, recipient_profiles, normalized
 from .category_send import fingerprint
 from .zenmoney import apply_diff
+from zenmoney_api import transactions as tx
+from .zenstore import complete_creation
 
 
 def selected(row, accounts, scope):
@@ -144,7 +146,7 @@ def preview(db, scope, local=False):
                 expected = payload_for(db, get_row(db,'bank_transactions',row['id']), draft['category_id'])
                 expected['id'] = job['zen_id']
                 if not matches(expected,payload): fail('Локальная запись не соответствует текущим данным')
-                if db.execute("SELECT 1 FROM zen_entities WHERE kind='transaction' AND id=?",(job['zen_id'],)).fetchone(): fail('Идентификатор уже существует в ZenMoney')
+                if db.execute('SELECT 1 FROM zen_transaction WHERE id=?',(job['zen_id'],)).fetchone(): fail('Идентификатор уже существует в ZenMoney')
         except HTTPException as exc: error = exc.detail
         target_fields = {k:target.get(k) for k in ('id','user','instrument','archive','deleted','type','title')}
         items.append({'bank_id':row['id'], 'date':row['date'], 'amount_minor':row['amount_minor'], 'currency':row['currency'],
@@ -182,17 +184,16 @@ def reopen(db, identifier):
 def payload_for(db, row, category):
     account = get_row(db,'bank_accounts',row['bank_account']);target = mapped_account(db,account)
     amount = Decimal(abs(row['amount_minor'])) / SCALES[account['currency']]
-    if Decimal(str(float(amount))) != amount: fail('Сумма не может быть точно представлена для API')
     raw = json.loads(row['raw']);payee = (raw.get('details') or {}).get('corresponsiveName') or None
-    now = int(time.time())
-    return {'id':str(uuid.uuid4()),'user':target['user'],'created':now,'changed':now,'deleted':False,'hold':False,
-            'date':row['date'],'incomeAccount':target['id'],'outcomeAccount':target['id'],
-            'incomeInstrument':target['instrument'],'outcomeInstrument':target['instrument'],
-            'income':float(amount) if row['amount_minor']>0 else 0,'outcome':float(amount) if row['amount_minor']<0 else 0,
-            'tag':[category] if category else None,'payee':payee,'comment':row['description']}
+    builder = tx.income if row['amount_minor'] > 0 else tx.expense
+    return builder(user=target['user'], date=row['date'], account=target['id'], instrument=target['instrument'],
+                   amount=amount, categories=[category] if category else None,
+                   payee=payee, comment=row['description'])
 
 
 def matches(expected, actual):
+    from .category_send import content
+    expected, actual = content(expected), content(actual)
     # Compare every field we authored except server-adjusted timestamps; server may add defaults.
     return all((actual.get(k) or None) == (value or None) if k == 'tag' else actual.get(k) == value
                for k,value in expected.items() if k not in ('created','changed'))
@@ -203,11 +204,10 @@ def refresh(path, client, *, full=False):
         cursor = db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()
         cursor = int(cursor[0]) if cursor and not full else 0
         try:
-            result = client.diff({'serverTimestamp':cursor,'currentClientTimestamp':int(time.time()),
-                                  'forceFetch':['transaction','account','tag','instrument']})
+            result = client.read_diff(cursor, force_fetch=['transaction','account','tag','instrument'])
             if any(k not in result for k in ('transaction','account','tag','instrument')):
                 raise ValueError('Incomplete authoritative response')
-            apply_diff(db,result,cursor)
+            apply_diff(db,result,cursor,full_collections=['transaction','account','tag','instrument'])
         except Exception: fail('Не удалось получить свежие данные ZenMoney. Создание не подтверждено.',502)
         remote = {t['id']:t for t in result['transaction']}
         for job in db.execute("SELECT * FROM creation_jobs WHERE state NOT IN ('sent','prepared')").fetchall():
@@ -249,7 +249,7 @@ def send(path, client, scope):
             audit(db,'creation_intent',{'bank_id':identifier,'payload':payload})
         cursor = int(db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()[0])
     try:
-        client.create_transactions(payloads,cursor)
+        client.upsert('transaction', payloads, cursor)
     except Exception as exc:
         record_write_failure(path,exc,ids)
     try: refresh(path,client)
@@ -258,7 +258,7 @@ def send(path, client, scope):
 
 
 def record_write_failure(path, exc, identifiers):
-    from zenimport_zenmoney import HTTPError, TransportError, ResponseError
+    from zenmoney_api import HTTPError, TransportError, ResponseError
     if isinstance(exc, HTTPError): reason = f'ZenMoney вернул HTTP {exc.status_code}'
     elif isinstance(exc, TransportError): reason = 'сбой соединения с ZenMoney'
     elif isinstance(exc, ResponseError): reason = 'не удалось проверить ответ ZenMoney'
@@ -280,8 +280,9 @@ def retry_preview(path, client, scope):
         for row in db.execute("SELECT b.* FROM bank_transactions b JOIN creation_jobs j ON j.bank_id=b.id WHERE j.state='uncertain'").fetchall():
             if not selected(row,accounts,scope): continue
             job=db.execute('SELECT * FROM creation_jobs WHERE bank_id=?',(row['id'],)).fetchone()
-            if db.execute("SELECT 1 FROM zen_entities WHERE kind='transaction' AND lower(id)=lower(?)",(job['zen_id'],)).fetchone(): continue
-            db.execute("UPDATE creation_jobs SET state='prepared',error=NULL WHERE bank_id=?",(row['id'],))
+            if db.execute('SELECT 1 FROM zen_transaction WHERE lower(id)=lower(?)',(job['zen_id'],)).fetchone(): continue
+            db.execute("UPDATE creation_jobs SET state='prepared',error=NULL,payload=? WHERE bank_id=?",
+                       (json.dumps(complete_creation(json.loads(job['payload']))), row['id']))
             audit(db,'creation_retry_prepared',{'bank_id':row['id'],'zen_id':job['zen_id']})
             recovered.append(row['id'])
         return [item for item in preview(db,scope) if item['bank_id'] in recovered]

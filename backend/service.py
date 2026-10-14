@@ -1,10 +1,12 @@
-import json
+from . import jsoncodec as json
 import time
 import uuid
 from datetime import date
 from decimal import Decimal
 from fastapi import HTTPException
 from .db import entities
+from zenmoney_api import transactions as tx
+from .zenstore import TABLES
 
 SCALES = {'VND': 1, 'USD': 100, 'EUR': 100}
 
@@ -27,7 +29,7 @@ def get_row(db, table, identifier):
 
 
 def get_entity(db, kind, identifier):
-    row = db.execute('SELECT data FROM zen_entities WHERE kind=? AND id=?', (kind, identifier)).fetchone()
+    row = db.execute(f'SELECT data FROM {TABLES[kind]} WHERE id=?', (identifier,)).fetchone()
     if row is None:
         fail('Сначала синхронизируйте ZenMoney; объект не найден')
     return json.loads(row['data'])
@@ -163,16 +165,11 @@ def confirm(db, identifier, decision, *, index=None):
             get_entity(db, 'tag', decision.category)
         now = int(time.time())
         amount = Decimal(abs(row['amount_minor'])) / SCALES[account['currency']]
-        if Decimal(str(float(amount))) != amount:
-            fail('Сумма не может быть точно представлена для API')
         zen_id = str(uuid.uuid4())
-        payload = {'id': zen_id, 'user': target['user'], 'created': now, 'changed': now,
-                   'deleted': False, 'hold': False, 'date': row['date'],
-                   'incomeAccount': target['id'], 'outcomeAccount': target['id'],
-                   'incomeInstrument': target['instrument'], 'outcomeInstrument': target['instrument'],
-                   'income': float(amount) if row['amount_minor'] > 0 else 0,
-                   'outcome': float(amount) if row['amount_minor'] < 0 else 0,
-                   'comment': row['description'], 'tag': [decision.category] if decision.category else None}
+        builder = tx.income if row['amount_minor'] > 0 else tx.expense
+        payload = builder(id=zen_id, user=target['user'], now=now, date=row['date'],
+                          account=target['id'], instrument=target['instrument'], amount=amount,
+                          comment=row['description'], categories=[decision.category] if decision.category else None)
         db.execute('INSERT INTO outbox(bank_transaction,zen_id,payload) VALUES (?,?,?)',
                    (identifier, zen_id, json.dumps(payload)))
         db.execute("UPDATE bank_transactions SET state='queued', linked_id=? WHERE id=?", (zen_id, identifier))

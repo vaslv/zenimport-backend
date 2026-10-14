@@ -17,7 +17,11 @@ def batch(tmp_path):
         account=db.execute('SELECT id FROM bank_accounts').fetchone()[0]
     draft(c,identifier)
     assert c.put('/api/zenmoney/transactions/historical/category',json={'category_id':'food','expected_tags':[]}).status_code==200
-    def write(creations,changes,cursor):
+    def write(kind,payloads,cursor=0):
+        assert kind == 'transaction'
+        existing={t['id']:t for t in remote.data['transaction']}
+        creations=[p for p in payloads if p['id'] not in existing]
+        changes=[(existing[p['id']],p) for p in payloads if p['id'] in existing]
         remote.writes.append(copy.deepcopy(creations+[p for _,p in changes]))
         if remote.behavior=='fail_before':raise TimeoutError()
         if remote.behavior!='partial':remote.data['transaction'].extend(copy.deepcopy(creations))
@@ -25,7 +29,7 @@ def batch(tmp_path):
             remote.data['transaction']=[copy.deepcopy(payload) if t['id']==payload['id'] else t for t in remote.data['transaction']]
         if remote.behavior=='lost_read':remote.fail_read=True
         if remote.behavior=='lost_response':raise TimeoutError()
-    remote.write_transactions=write
+    remote.upsert=write
     scope={'bank':'demo','account':account}
     response=c.post('/api/batch/preview',json=scope)
     assert response.status_code==200,response.text
@@ -94,11 +98,11 @@ def test_creation_only_batch_excludes_category_changes_and_respects_mode(tmp_pat
 
 
 def test_failed_write_diagnostic_survives_verification_and_explicit_retry_keeps_uuid(tmp_path):
-    from zenimport_zenmoney import HTTPError
+    from zenmoney_api import HTTPError
     c,path,remote,scope,body=batch(tmp_path)
-    original=remote.write_transactions
+    original=remote.upsert
     def rejected(*args):raise HTTPError(400)
-    remote.write_transactions=rejected
+    remote.upsert=rejected
     response=c.post('/api/batch/send',json=body)
     created=next(r for r in response.json()['results'] if r['kind']=='creation')
     assert 'HTTP 400' in created['error']
@@ -107,9 +111,11 @@ def test_failed_write_diagnostic_survives_verification_and_explicit_retry_keeps_
     with transaction(path,read_only=True) as db:
         before=dict(db.execute('SELECT * FROM creation_jobs').fetchone())
     assert c.post('/api/batch/retry-preview',json=scope).status_code==422
-    requests=[];old_diff=remote.diff
-    def diff(request):requests.append(request);return old_diff(request)
-    remote.diff=diff
+    requests=[];old_diff=remote.read_diff
+    def read(cursor=0, *, force_fetch=None):
+        requests.append({'serverTimestamp':cursor, 'forceFetch':force_fetch})
+        return old_diff(cursor, force_fetch=force_fetch)
+    remote.read_diff=read
     retry_scope={**scope,'creations_only':True,'include_uncategorized':True}
     response=c.post('/api/batch/retry-preview',json=retry_scope)
     assert response.status_code==200,response.text
@@ -118,7 +124,7 @@ def test_failed_write_diagnostic_survives_verification_and_explicit_retry_keeps_
     with transaction(path,read_only=True) as db:
         after=dict(db.execute('SELECT * FROM creation_jobs').fetchone())
         assert before['zen_id']==after['zen_id'] and before['payload']==after['payload']
-    remote.write_transactions=original
+    remote.upsert=original
     response=c.post('/api/batch/send',json={**retry_scope,'items':[{k:items[0][k] for k in ('kind','id','snapshot')}]})
     assert response.json()['results'][0]['state']=='sent'
     assert len(remote.writes)==1 and remote.writes[0][0]['id']==before['zen_id']

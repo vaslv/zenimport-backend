@@ -1,14 +1,15 @@
 """Explicit category-only writes, durable intent, and independent remote verification."""
 import hashlib
-import json
+from . import jsoncodec as json
 import time
 from .db import transaction, entities
 from .service import fail, audit
 from .zenmoney import apply_diff
+from zenmoney_api import transactions as tx
 
 
 def fingerprint(value):
-    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(json.canonical(value), sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()).hexdigest()
 
 
 def content(tx):
@@ -31,8 +32,10 @@ def refresh(path, client):
         row = db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()
         cursor = int(row[0]) if row else 0
         try:
-            result = client.diff({'serverTimestamp': cursor, 'currentClientTimestamp': int(time.time()), 'forceFetch': ['transaction', 'tag', 'account']})
-            apply_diff(db, result, cursor)
+            result = client.read_diff(cursor, force_fetch=['transaction', 'tag', 'account'])
+            if any(kind not in result for kind in ('transaction', 'tag', 'account')):
+                raise ValueError('Incomplete authoritative response')
+            apply_diff(db, result, cursor, full_collections=['transaction', 'tag', 'account'])
         except Exception:
             fail('Не удалось проверить свежие данные ZenMoney. Отправка не подтверждена.', 502)
         # Verify against the actual fresh response, never a stale mirror entry.
@@ -103,7 +106,7 @@ def send(path, client, items):
         for identifier in ids:
             draft = db.execute('SELECT * FROM zen_category_drafts WHERE zen_id=?',(identifier,)).fetchone()
             before = txs[identifier]
-            payload = {**before, 'tag':[draft['category_id']], 'changed':max(int(time.time()), before.get('changed',0)+1)}
+            payload = tx.update(before, tag=[draft['category_id']], now=max(int(time.time()), before.get('changed',0)+1))
             db.execute('INSERT OR REPLACE INTO zen_category_sends VALUES (?,?,?,?,?,?,NULL)',
                        (identifier,draft['category_id'],draft['updated_at'],json.dumps(before),json.dumps(payload),'uncertain'))
             audit(db, 'category_send_intent', {'zen_id':identifier,'before':before,'payload':payload})
@@ -111,7 +114,7 @@ def send(path, client, items):
         cursor = int(db.execute("SELECT value FROM meta WHERE key='cursor'").fetchone()[0])
     try:
         # Write response is deliberately not used as the verification or sync cursor.
-        client.update_categories(changes,cursor)
+        client.upsert('transaction', [payload for before, payload in changes], cursor)
     except Exception:
         with transaction(path) as db:
             for identifier in ids:

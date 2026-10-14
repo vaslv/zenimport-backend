@@ -3,6 +3,7 @@ from datetime import date
 from decimal import Decimal
 from backend import service
 from backend.db import initialize, transaction
+from backend.zenstore import project
 
 
 def legacy(rows, bank, account):
@@ -27,16 +28,16 @@ def test_index_matches_legacy_for_transfers_dates_precision_and_flags(tmp_path):
         for inc,out in [('a','a'),('a','b'),('b','a'),('b','b')]:
             for income,outcome in [('1.01','0'),('0','1.01'),('1.01','1.00'),('0.001','0')]:
                 for flags in [{},{'deleted':True},{'hold':True}]:
-                    rows.append({'id':str(len(rows)),'date':f'2026-10-{day:02}','incomeAccount':inc,'outcomeAccount':out,'income':income,'outcome':outcome,**flags})
+                    rows.append({'id':str(len(rows)),'date':f'2026-10-{day:02}','incomeAccount':inc,'outcomeAccount':out,'income':Decimal(income),'outcome':Decimal(outcome),**flags})
     with transaction(path) as db:
-        db.executemany('INSERT INTO zen_entities VALUES (?,?,?)',[('transaction',t['id'],json.dumps(t)) for t in rows])
+        for row in rows: project(db, 'transaction', row, None)
         stored=service.entities(db,'transaction');index=service.candidate_index(db,accounts)
         for account in accounts:
             for value in [-101,101,1,-1]:
                 bank={'date':'2026-10-04','amount_minor':value}
                 assert [t['id'] for t in service.candidates(db,bank,account,index)]==legacy(stored,bank,account)
         # New requests/confirmation must not retain stale matches after sync.
-        db.execute("DELETE FROM zen_entities WHERE kind='transaction'")
+        db.execute("DELETE FROM zen_transaction")
         assert service.candidates(db,{'date':'2026-10-04','amount_minor':101},accounts[0])==[]
 
 

@@ -32,7 +32,7 @@ def test_local_link_live_is_reversible_and_cannot_write(tmp_path):
     assert state['outbox']==[] and state['capabilities']['write'] is False
     assert client.post('/api/outbox/send',json={}).status_code==403
     add_candidate(path,'another')
-    with transaction(path) as db:db.execute("DELETE FROM zen_entities WHERE kind='transaction' AND id='existing'")
+    with transaction(path) as db:db.execute("DELETE FROM zen_transaction WHERE id='existing'")
     assert client.get('/api/state').json()['review'][0]['reconciliation_status']=='conflict'
     assert client.delete(url).status_code==200
     assert client.get('/api/state').json()['review'][0]['state']=='pending'
@@ -197,7 +197,7 @@ def test_bulk_stale_or_ambiguous_day_rejects_entire_batch(tmp_path):
     assert client.post('/api/review-days/confirm',json={'days':[body['days'][0]]*2}).status_code==409
     assert client.post('/api/review-days/confirm',json={'days':[]}).status_code==422
     with transaction(path) as db:
-        tx=json.loads(db.execute("SELECT data FROM zen_entities WHERE kind='transaction' AND id='2026-10-01-0'").fetchone()[0])
+        tx=json.loads(db.execute("SELECT data FROM zen_transaction WHERE id='2026-10-01-0'").fetchone()[0])
         tx['comment']='Changed after preview'
         apply_diff(db,{'serverTimestamp':2,'transaction':[tx]})
     assert client.post('/api/review-days/confirm',json=body).status_code==409
