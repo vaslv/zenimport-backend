@@ -31,7 +31,7 @@ def reset(options:dict):
               'raw':{'reference':'TEST0002','date':'05/10/2026 10:30:00','balance':'1000000','amount':'100000','description':'CT DEN:TEST0002 Transfer'}}]
     if existing:
         r=records[chosen]
-        remote.data['transaction']=[(tx.income if positive else tx.expense)(user=1,id='existing',date=r['date'],now=10,account='cash',instrument=1,amount=abs(r['amount_minor']),categories=['salary' if positive else 'food'],comment=r['description'])]
+        remote.data['transaction']=[(tx.income if positive else tx.expense)(user=1,id='existing',date=r['date'],now=10,account='cash',instrument=1,amount=abs(r['amount_minor']),categories=[] if options.get('uncategorized') else ['salary' if positive else 'food'],comment=r['description'],payee=options.get('payee'))]
     with transaction(path) as db:
         for table in ('reconciliation_bank_members','reconciliation_zen_members','reconciliation_groups','zen_operation_sends','zen_operation_drafts','bank_operation_drafts','creation_jobs','creation_drafts','zen_category_sends','zen_category_drafts','reconciliation_exclusions','outbox','bank_transactions','imports','bank_accounts'):
             db.execute('DELETE FROM '+table)
@@ -44,6 +44,11 @@ def reset(options:dict):
             identifier=db.execute('SELECT id FROM bank_transactions WHERE external_id=?',(records[chosen]['external_id'],)).fetchone()[0]
             insert(db,[identifier],['existing'],'single','test')
     return {'chosen':chosen}
+
+@app.post('/api/test/behavior')
+def behavior(options:dict):
+    remote.behavior=options.get('behavior','ok');remote.fail_read=False
+    return {'ok':True}
 
 @app.get('/api/test/remote')
 def result():

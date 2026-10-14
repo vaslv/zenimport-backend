@@ -63,7 +63,7 @@ def test_installed_extension_end_to_end(browser):
     bank = context.new_page()
     bank.goto(BASE + '/demo-bank')
     popup = context.new_page()
-    popup.goto(f'chrome-extension://{identifier}/popup.html')
+    popup.goto(f'chrome-extension://{identifier}/tools.html')
     bank.bring_to_front()
     popup.locator('#diagnostics > summary').click();popup.locator('#legacy-tools > summary').click();popup.locator('#extract').click()
     expect(popup.locator('#status')).to_contain_text('3 операций')
@@ -119,7 +119,7 @@ def test_connection_errors_validation_and_recovery(browser):
 def test_popup_unknown_page_and_storage_boundary(browser):
     context, identifier = browser
     unknown = context.new_page();unknown.goto(BASE + '/docs')
-    popup = context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+    popup = context.new_page();popup.goto(f'chrome-extension://{identifier}/tools.html')
     unknown.bring_to_front();popup.locator('#diagnostics > summary').click();popup.locator('#legacy-tools > summary').click();popup.locator('#extract').click()
     expect(popup.locator('#status')).to_contain_text('Банк пока не поддерживается')
     expect(popup.locator('#import')).to_be_hidden()
@@ -176,7 +176,7 @@ def test_vietinbank_period_popup_and_import(browser):
     context, identifier = browser
     bank = fixture_bank(browser)
     popup = context.new_page()
-    popup.goto(f'chrome-extension://{identifier}/popup.html')
+    popup.goto(f'chrome-extension://{identifier}/tools.html')
     bank.bring_to_front()
     popup.locator('#diagnostics > summary').click();popup.locator('#legacy-tools > summary').click();popup.locator('#collect').click()
     expect(popup.locator('#status')).to_contain_text('3 операций')
@@ -348,7 +348,7 @@ def test_vietinbank_json_response_capture(browser,transport):
     bank.route(endpoint,lambda route:route.fulfill(content_type='application/json',headers={'Access-Control-Allow-Origin':'*'},body=json.dumps(source)))
     bank.goto('https://ipay.vietinbank.vn/payment-history')
     bank.evaluate('()=>{window.savedOpen=XMLHttpRequest.prototype.open;}')
-    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/tools.html')
     bank.bring_to_front();popup.locator('#diagnostics').evaluate('(el)=>el.open=true');popup.locator('#manual-capture').click()
     expect(popup.locator('#status')).to_contain_text('Ожидаю новый ответ')
     popup.close()
@@ -359,7 +359,7 @@ def test_vietinbank_json_response_capture(browser,transport):
     else:
         returned=bank.evaluate('''url=>new Promise((resolve,reject)=>{const x=new XMLHttpRequest();x.open('GET',url);x.onload=()=>resolve(JSON.parse(x.responseText));x.onerror=reject;x.send();})''',endpoint)
     assert returned['sessionId']=='PRIVATE-SESSION', 'Bank response must remain intact'
-    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/tools.html')
     expect(popup.locator('#status')).to_contain_text('Строки 1–1 из 2')
     expect(popup.locator('#status')).to_contain_text('Это часть истории')
     stored=popup.evaluate('()=>chrome.storage.session.get("bankCapture")')
@@ -376,7 +376,7 @@ def test_vietinbank_json_response_capture(browser,transport):
 
 def test_json_file_preview_and_invalid_file_clears_import(browser):
     context,identifier=browser
-    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/tools.html')
     data={'error':False,'accountNo':'777722223333','currentPage':0,'nextPage':0,'pageSize':100,'totalRecords':1,
           'transactions':[{'currency':'VND','remark':'Synthetic file','amount':'100','balance':'1000','trxId':'',
                            'processDate':'01-10-2026 00:00:00','dorC':'C'}]}
@@ -391,7 +391,7 @@ def test_json_file_preview_and_invalid_file_clears_import(browser):
 
 def test_compact_popup_period_choices_and_review_destination(browser):
     context,identifier=browser
-    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/tools.html')
     expect(popup.locator('#history-period')).to_have_value('1')
     expect(popup.locator('#capture')).to_have_text('Получить историю')
     expect(popup.locator('#extract')).to_be_hidden()
@@ -430,7 +430,7 @@ def test_live_review_shows_candidates_without_enabling_writes(browser):
 def test_capture_failure_keeps_visible_diagnostic_steps(browser):
     context,identifier=browser
     other=context.new_page();other.goto(BASE+'/health')
-    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/tools.html')
     other.bring_to_front();popup.locator('#diagnostics').evaluate('(el)=>el.open=true');popup.locator('#manual-capture').click()
     expect(popup.locator('#status')).to_contain_text('Откройте историю счёта')
     expect(popup.locator('#capture-steps')).to_contain_text('Запуск принят')
@@ -465,7 +465,7 @@ def test_automatic_history_background_pagination_and_dedup(browser,continuation_
                                        'pageSize':100,'totalRecords':0 if continuation_zero and page else 103,'transactions':rows,'sessionId':'DO-NOT-LOG'}))
     context.route('https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions', response)
     bank = context.new_page();bank.goto('https://ipay.vietinbank.vn/payment-history?accountNo='+account)
-    popup = context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+    popup = context.new_page();popup.goto(f'chrome-extension://{identifier}/tools.html')
     worker = context.service_workers[0]
     previous=worker.evaluate("async()=>(await chrome.storage.local.get('autoJob')).autoJob?.id")
     popup.locator('#history-period').select_option('6');bank.bring_to_front();popup.locator('#capture').click()
@@ -488,7 +488,7 @@ def test_automatic_history_background_pagination_and_dedup(browser,continuation_
         assert job['responses'][-1]['counters']['totalRecords']['value']==0
         assert job['responses'][-1]['rowCount']==3
     assert 'DO-NOT-LOG' not in json.dumps(job)
-    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/tools.html')
     expect(popup.locator('#auto-status')).to_contain_text('Весь период сохранён')
     bank.bring_to_front();popup.locator('#capture').click()
     expect(popup.locator('#auto-status')).to_contain_text(f'уже были: {expected}',timeout=90000)
@@ -526,7 +526,7 @@ def test_automatic_history_failures_are_persisted(browser,failure):
     endpoint='https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions'
     context.route(endpoint,respond)
     bank=context.new_page();bank.goto(url)
-    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+    popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/tools.html')
     previous=popup.evaluate("async()=>(await chrome.storage.local.get('autoJob')).autoJob?.id")
     popup.locator('#history-period').select_option('1');bank.bring_to_front();popup.locator('#capture').click()
     for _ in range(100):
@@ -1574,7 +1574,7 @@ def test_inline_bank_statuses_categories_and_account_boundary(browser,sync_failu
     try:
         context.route('https://ipay.vietinbank.vn/**', lambda route: route.fulfill(path='/app/tests/browser/fixtures/vietinbank.html', content_type='text/html'))
         popup = context.new_page(); popup.goto(f'chrome-extension://{identifier}/popup.html')
-        popup.locator('#inline-enable').click()
+        popup.locator('#inline-enable').check()
         expect(popup.locator('#inline-status')).to_contain_text('Включено')
         bank = context.new_page(); bank.goto(url)
         expect(bank.locator('tbody zenimport-operation')).to_have_count(2)
