@@ -1240,3 +1240,30 @@ popup/toggle). Лог: /tmp/zenimport-connection-test2.log. Версия в mani
   Документация: docs/bank-inline.md и docs/bank-inline-workflow.md.
   Backend/SDK/схема БД не изменены; для пользователя Reload в chrome://extensions,
   обновление банковской страницы и кнопка «Синхронизировать».
+
+## 2026-10-14 — SPA-контекст банка и причины недоступности, 0.16.1
+
+- Скриншот пользователя: история открыта, нижняя полоса сообщает «Банковский счёт
+  или страница изменились», popup отключает синхронизацию без причины.
+- bank-context.js проверяет origin отправителя, runtime ID, верхний frame,
+  актуальный URL/accountNo вкладки и синхронный ответ content script того же
+  documentId. sender.url используется только для origin: банковская SPA меняет
+  маршрут без создания нового документа. Перед mutation guard повторяется после
+  await scoped(). Добавлен inline-context probe, не читающий финансовые данные.
+- full-sync возвращает unavailableReason, popup показывает причину и очищает
+  устаревший текст при восстановлении. Новых разрешений или изменений БД/SDK нет.
+- context_regressions.py: 9 новых сценариев — SPA вход, local/remote edits,
+  stale account, token/HTTP500/unmapped/page и recovery, смена счёта во время
+  scoped read. Dockerfile включает новый модуль. Синтетический helper поддерживает
+  /home → pushState(/payment-history) без reload.
+- Docker полный прогон: backend 241 и parser 19 прошли; browser 120 прошли,
+  два теста потребовали исправления тестовых ожиданий/перехватчика. Workspace
+  transfer теперь ждёт enabled toolbar до редактирования, race перехватчик
+  вызывает native fetch с globalThis (вызов как object method давал Illegal
+  invocation). Production code из-за этих тестовых ошибок не меняли.
+- Повторно: 8 context tests прошли, race отдельно 1 прошёл, все operation_types
+  37 прошли. Все 382 уникальных проверки покрыты успешными Docker-запусками.
+  HTTP smoke/recreate/idempotency также прошли. Реальный ZenMoney не изменяли.
+- Логи: /tmp/zenimport-context-focused.log, /tmp/zenimport-spa-context-full.log,
+  /tmp/zenimport-context-race-fixed.log. Пользователю Reload расширения и страницы
+  банка для загрузки нового content script.

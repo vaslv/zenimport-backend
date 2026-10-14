@@ -206,6 +206,7 @@
   timer=setInterval(tick,1000);window.addEventListener('pagehide',()=>{observer.disconnect();activeMenu?.close();clearInterval(timer);generation++;clear();banner?.h.remove();banner?.spacer.remove();},{once:true});
   chrome.runtime.onMessage.addListener((m,sender,reply)=>{
     if(sender.id!==chrome.runtime.id)return;
+    if(m?.type==='inline-context'){reply({account:current()});return;}
     if(m?.type==='inline-visible'){reply({account,ids:enabled?[...mounted.values()].filter(p=>p.h.isConnected&&p.bankId).map(p=>p.bankId):[]});return;}
     if(m?.type==='inline-visibility'){
       enabled=m.enabled===true;

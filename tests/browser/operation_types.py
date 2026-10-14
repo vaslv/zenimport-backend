@@ -33,6 +33,7 @@ def test_bank_workspace_save_review_cancel_confirm(browser,kind,positive,existin
     expect(page.locator('#status')).to_have_text('Данные обновлены.')
     page.goto(page.url.split('#')[0]+'#banks/vietinbank')
     expect(page.locator('#review .operation-editor')).to_have_count(2)
+    expect(page.locator('#refresh')).to_be_enabled()
     editor=page.locator('#review .operation-editor').nth(1 if positive else 0)
     editor.locator('summary').click();choose(editor,kind)
     expect(page.locator('#status')).to_have_text('Данные обновлены.')
@@ -59,7 +60,7 @@ def test_bank_workspace_save_review_cancel_confirm(browser,kind,positive,existin
     if kind in ('lend','borrow','repay','collect'):assert p['payee']=='Test person' and 'debt' in (p['incomeAccount'],p['outcomeAccount'])
     page.close()
 
-def inline_pages(browser,existing=False,uncategorized=False,payee=None,candidate=False,positive=False):
+def inline_pages(browser,existing=False,uncategorized=False,payee=None,candidate=False,positive=False,spa=False):
     context,identifier=browser
     response=context.request.post(BASE+'/api/test/reset',headers=AUTH,data={'existing':existing,'uncategorized':uncategorized,'payee':payee,'candidate':candidate,'positive':positive});assert response.ok
     worker=context.service_workers[0];worker.evaluate("chrome.storage.local.set({inlineEnabled:false})")
@@ -71,7 +72,8 @@ def inline_pages(browser,existing=False,uncategorized=False,payee=None,candidate
     html=Path('/app/tests/browser/fixtures/vietinbank.html').read_text()
     html=html.replace('<input readonly placeholder="Choose time range" value="01/09/2026 - 06/10/2026">','')
     html+=Path('/app/tests/browser/auto-bank.html').read_text()
-    bank=fixture_bank(browser,html)
+    bank=fixture_bank(browser,html,url='https://ipay.vietinbank.vn/home?accountNo=111122223333' if spa else None)
+    if spa:bank.evaluate("history.pushState({},'', '/payment-history?accountNo=111122223333')")
     bank.route('https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions',lambda r:r.fulfill(
         content_type='application/json',headers={'Access-Control-Allow-Origin':'*'},
         body=json.dumps({'error':False,'accountNo':'111122223333','currentPage':0,'pageSize':100,'totalRecords':0,'transactions':[]})))

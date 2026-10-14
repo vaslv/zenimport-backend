@@ -1,13 +1,13 @@
 import {api} from './api.js';
 import {parseVietinBankJson} from './vietinbank-json.js';
 import {activeJob} from './auto-plan.js';
+import {bankContext} from './bank-context.js';
 import {startSync,syncStatus,installSync} from './full-sync.js';
 const origin='https://ipay.vietinbank.vn';
 const ids=['inline-history-ui','inline-history-observer'];
 let registration=Promise.resolve(),work=Promise.resolve(),syncing,logs=Promise.resolve();
 function log(action,ok,ms){logs=logs.catch(()=>{}).then(async()=>{const {inlineDiagnostics=[]}=await chrome.storage.local.get('inlineDiagnostics');await chrome.storage.local.set({inlineDiagnostics:[...inlineDiagnostics.slice(-119),{at:Date.now(),action,ok,ms}]});});}
 const totals=new Map();
-function accountOf(url){try{const u=new URL(url);return u.origin===origin&&u.pathname==='/payment-history'&&/^\d{6,30}$/.test(u.searchParams.get('accountNo')||'')?u.searchParams.get('accountNo'):null;}catch{return null;}}
 async function register(){
   const {inlineEnabled}=await chrome.storage.local.get('inlineEnabled');
   const allowed=await chrome.permissions.contains({origins:[origin+'/*']});
@@ -45,8 +45,7 @@ async function handle(m,sender){
     await chrome.storage.local.set({inlineEnabled:true});await register();return {};
   }
   if(sender.frameId!==0||!sender.tab)throw Error('Недоступно');
-  const account=accountOf(sender.url),tab=await chrome.tabs.get(sender.tab.id);
-  if(!account||account!==accountOf(tab.url)||account!==m.account)throw Error('Банковский счёт или страница изменились.');
+  const account=await bankContext(sender,m.account);
   if(!(await chrome.storage.local.get('inlineEnabled')).inlineEnabled)throw Error('Включите работу на странице банка в меню ZenImport.');
   if(m.type==='inline-session-status'){
     if(!['active','paused','waiting','unsupported','signed-out','refreshing','extended','error','inactive'].includes(m.status))throw Error('Неизвестный статус');
@@ -56,13 +55,14 @@ async function handle(m,sender){
     if(!syncing)syncing=api('/api/zenmoney/sync',{}).finally(()=>{syncing=null;});
     await syncing;
     const state=await scoped(account);
-    if(state.account)await api('/api/new-operations/prepare',{bank:'vietinbank',account:state.account.id});
+    if(state.account){await bankContext(sender,account);await api('/api/new-operations/prepare',{bank:'vietinbank',account:state.account.id});}
     return scoped(account);
   }
   if(m.type==='inline-state')return scoped(account);
   if(m.type==='inline-link'){
     const state=await scoped(account),row=state.rows.find(r=>r.id===m.id);
     if(!row||row.state!=='pending'||!row.mapped||!row.candidates.some(c=>c.id===m.zen_id))throw Error('Совпадение недоступно.');
+    await bankContext(sender,account);
     await api(`/api/review/${encodeURIComponent(row.id)}/link`,{action:'link',match_id:m.zen_id,reviewed_candidates:m.candidates});return scoped(account);
   }
   if(m.type==='inline-operation'){
@@ -71,7 +71,7 @@ async function handle(m,sender){
     const model=m.zen_id?part?.operation_edit:row?.operation_edit;
     if(!model?.editable||model.definition.account_id!==state.account?.zenmoney_account||m.edit?.definition?.account_id!==model.definition.account_id)throw Error('Операция или банковский счёт недоступны.');
     const path=model.source==='bank'?`/api/new-operations/${encodeURIComponent(row.id)}/operation`:`/api/zenmoney/transactions/${encodeURIComponent(model.id)}/operation`;
-    await api(path,m.edit,'PUT');
+    await bankContext(sender,account);await api(path,m.edit,'PUT');
     if(model.source==='zen')await sendEdit('operation',model.id);
     return scoped(account);
   }
@@ -83,13 +83,14 @@ async function handle(m,sender){
     if(d.currentPage===0){totals.delete(key);if(Number.isSafeInteger(d.totalRecords))totals.set(key,{total:d.totalRecords,next:1,at:Date.now()});}
     else if(d.totalRecords===0){const prior=totals.get(key);if(!prior||prior.next!==d.currentPage||Date.now()-prior.at>600000)throw Error('Нет первой страницы ответа. Повторите Search в банке.');d={...d,totalRecords:prior.total};prior.next++;}
     if(d.currentPage===0&&d.totalRecords===0&&Array.isArray(d.transactions)&&!d.transactions.length)return scoped(account);
-    const payload=await parseVietinBankJson(d);await api('/api/imports',payload);
-    const state=await scoped(account);if(state.account)await api('/api/new-operations/prepare',{bank:'vietinbank',account:state.account.id});
+    const payload=await parseVietinBankJson(d);await bankContext(sender,account);await api('/api/imports',payload);
+    const state=await scoped(account);if(state.account){await bankContext(sender,account);await api('/api/new-operations/prepare',{bank:'vietinbank',account:state.account.id});}
     return scoped(account);
   }
   if(m.type==='inline-category'){
     const state=await scoped(account),row=state.rows.find(r=>r.id===m.id);
     if(!row||!state.categories.some(c=>c.id===m.category))throw Error('Операция или категория недоступна.');
+    await bankContext(sender,account);
     if(row.state==='pending'&&row.mapped&&!row.candidates?.length&&!state.days.some(d=>(d.split_candidates||[]).some(p=>p.bank_id===row.id))){
       await api(`/api/new-operations/${encodeURIComponent(row.id)}/category`,{category_id:m.category},'PUT');
     }else if(row.linked&&row.group?.kind==='single'){

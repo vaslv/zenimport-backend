@@ -163,12 +163,12 @@ def test_history_filter_and_paging(browser):
     page.close()
 
 
-def fixture_bank(browser, html=None):
+def fixture_bank(browser, html=None, url=None):
     context, identifier = browser
     bank = context.new_page()
     source = html or Path('/app/tests/browser/fixtures/vietinbank.html').read_text()
     bank.route('https://ipay.vietinbank.vn/**', lambda route: route.fulfill(body=source, content_type='text/html'))
-    bank.goto('https://ipay.vietinbank.vn/payment-history?accountNo=111122223333')
+    bank.goto(url or 'https://ipay.vietinbank.vn/payment-history?accountNo=111122223333')
     return bank
 
 

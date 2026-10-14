@@ -20,10 +20,10 @@ async function context(){
 }
 export async function syncStatus(){
   const job=await get(),busy=syncActive(job);
-  let available=false,count=0;
-  try{const c=await context();available=true;count=c.state.review.filter(r=>r.bank_account===c.accountId&&(r.state==='pending'||r.creation_job?.state==='prepared')).length;}catch{}
+  let available=false,count=0,unavailableReason='';
+  try{const c=await context();available=true;count=c.state.review.filter(r=>r.bank_account===c.accountId&&(r.state==='pending'||r.creation_job?.state==='prepared')).length;}catch(e){unavailableReason=e.message;}
   const {inlineSendNotice}=await chrome.storage.session.get('inlineSendNotice');
-  return {available,busy,count,notice:job?.notice||inlineSendNotice||''};
+  return {available,busy,count,unavailableReason,notice:busy?job.notice:unavailableReason||inlineSendNotice||job?.notice||''};
 }
 export async function startSync(){
   const old=await get();if(syncActive(old))return {notice:old.notice};
