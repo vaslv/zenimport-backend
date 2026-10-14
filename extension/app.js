@@ -1,3 +1,4 @@
+import {reviewChanges} from './operation-review.js';
 import {sendNewBatches} from './send-new-batches.js';
 import {dateLabel} from './date-format.js';
 import {creationDialog} from './new-operations.js';
@@ -26,7 +27,7 @@ function controls() {
   $('save').disabled=busy; $('url').disabled=busy; $('token').disabled=busy;
   categoryControls();
   const creationRows=state&&bankWorkspace()?bankScope(state,selectedBank()).review.filter(r=>(!reviewAccount||r.bank_account===reviewAccount)&&(!$('review-start').value||r.date>=$('review-start').value)&&(!$('review-end').value||r.date<=$('review-end').value)):[];
-  const newRows=creationRows.filter(r=>r.state==='pending'&&r.creation_draft?.valid);
+  const newRows=creationRows.filter(r=>r.state==='pending'&&(r.operation_ready||r.creation_draft?.valid));
   const prepared=creationRows.filter(r=>r.creation_job?.state==='prepared');
   $('creation-create').hidden=!state?.capabilities?.create||!bankWorkspace();
   $('creation-create').textContent=`Создать локальные записи · ${newRows.length}`;
@@ -36,6 +37,10 @@ function controls() {
   $('creation-send').disabled=busy||!connected||!(newRows.length||prepared.length);
   $('creation-send-all').hidden=$('creation-send').hidden;
   $('creation-send-all').disabled=busy||!connected||!creationRows.some(r=>r.state==='pending'||r.creation_job?.state==='prepared');
+  $('operation-send').hidden=!state?.capabilities?.create||location.hash==='#banks';
+  $('operation-send').disabled=busy||!connected||(!(state?.operation_draft_count||state?.category_draft_count||newRows.length||prepared.length));
+  $('operation-verify').hidden=!state?.capabilities?.create||!(state.operation_sends||[]).some(s=>s.state!=='sent');
+  $('operation-verify').disabled=busy||!connected;
   $('creation-verify').hidden=!state?.capabilities?.create||!creationRows.some(r=>r.creation_job&&!['sent','prepared'].includes(r.creation_job.state));
 
   $('send').disabled=busy||!connected||!state?.capabilities?.write||!state?.outbox?.some(x=>['queued','uncertain'].includes(x.state));
@@ -178,9 +183,9 @@ async function refresh() {
   state={...result,zenmoney_transactions:historyPage.items}; connected=true; render();
 }
 async function run(fn) {
-  if(busy)return;busy=true;controls();feedback('Выполняется…');
-  try {const result=await fn();await refresh();feedback(result?.message|| (result?.results?`Отправка завершена: ${result.results.filter(x=>x.state==='sent').length} успешно, ${result.results.filter(x=>x.state!=='sent').length} требуют внимания.`:'Данные обновлены.'));}
-  catch(error){connected=false;feedback(error.message,true);}
+  if(busy)return {error:'Дождитесь окончания текущего действия'};busy=true;controls();feedback('Выполняется…');
+  try {const result=await fn();await refresh();feedback(result?.message|| (result?.results?`Отправка завершена: ${result.results.filter(x=>x.state==='sent').length} успешно, ${result.results.filter(x=>x.state!=='sent').length} требуют внимания.`:'Данные обновлены.'));return {ok:true};}
+  catch(error){connected=false;feedback(error.message,true);return {error:error.message};}
   finally{busy=false;controls();}
 }
 $('settings').onsubmit=async event=>{
@@ -229,3 +234,16 @@ window.addEventListener('hashchange',navigate);
 const config=await settings();$('url').value=config.baseUrl;$('token').value=config.token;
 if(!config.token)location.hash='settings';navigate();render();
 if(config.token)await run(async()=>{});
+
+$('operation-send').onclick=()=>run(async()=>{
+  if(bankWorkspace()){
+    const available=bankScope(state,selectedBank()).bank_accounts.filter(a=>a.zenmoney_account),account=reviewAccount|| (available.length===1?available[0].id:null);
+    if(!account)throw Error('Выберите банковский счёт перед общей отправкой.');
+    const scope={...creationScope(),account};const preview=await api('/api/batch/preview',scope);
+    reviewChanges(preview.items,items=>run(()=>api('/api/batch/send',{...scope,items:items.map(i=>({kind:i.kind,id:i.id,snapshot:i.snapshot}))})));
+  }else{
+    const preview=await api('/api/operation-updates/preview',{});
+    reviewChanges(preview.items,items=>run(()=>api('/api/operation-updates/send',{items:items.map(i=>({zen_id:i.zen_id,snapshot:i.snapshot}))})));
+  }
+});
+$('operation-verify').onclick=()=>run(()=>api('/api/operation-updates/verify',{}));

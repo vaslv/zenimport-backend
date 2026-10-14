@@ -1,3 +1,4 @@
+import {operationEditor} from './operation-editor.js';
 import {dateLabel} from './date-format.js';
 import {exclusionButton} from './exclusions-view.js';
 // Decimal strings stay decimal strings: formatting never rounds them through Number.
@@ -77,7 +78,9 @@ export function renderHistory(container,items,state,selectedAccount,onAction){
     if(transfer)fields.push(['Списано',formatMoney(outcome,currency(tx.outcomeInstrument??lookup.accounts.get(String(tx.outcomeAccount))?.instrument,lookup))],['Зачислено',formatMoney(income,currency(tx.incomeInstrument??lookup.accounts.get(String(tx.incomeAccount))?.instrument,lookup))]);
     for(const [label,value] of fields)if(value){dl.append(node('dt',label),node('dd',String(value)));}
     if(onAction&&state.capabilities?.local_review){const excluded=(state.excluded_zen_ids||[]).includes(tx.id);if(excluded)badges.append(node('span','Не требует сведения','badge'));const linked=state.review.some(r=>(r.group?.zen_ids||r.split_ids||[]).includes(tx.id)||r.linked_id===tx.id)||state.outbox.some(o=>o.zen_id===tx.id);if(!linked)details.append(exclusionButton('zenmoney',tx.id,excluded,onAction));}
-    details.append(dl);content.append(details);row.append(content,sums);list.append(row);
+    details.append(dl);content.append(details);
+    if(onAction){const editor=operationEditor(tx.operation_edit,state,onAction);if(editor)content.append(editor);}
+    row.append(content,sums);list.append(row);
   }
   if(!items.length)container.append(node('p','Операций по выбранным условиям нет.','empty'));
 }

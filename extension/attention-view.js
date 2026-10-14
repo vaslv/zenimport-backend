@@ -7,6 +7,7 @@ import {categoryNeedsWork,zenRowsById,bankNeedsCategory,linkedIds} from './categ
 import {reviewPairs} from './pairs-review-dialog.js';
 import {exclusionButton} from './exclusions-view.js';
 import {formatMoney} from './zenmoney-view.js';
+import {operationEditor} from './operation-editor.js';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 export function attentionDays(container,state,days,onAction,{hideReconciled=false,hideCategorized=false,includePending=false}={}){
   const saveButton=(label,selected,mass=false)=>{
@@ -22,7 +23,7 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
   }
   const bankMap=new Map(state.review.map(r=>[r.id,r]));
   const zenRows=zenRowsById(state);
-  const pending=z=>includePending&&(z.category_draft||(state.category_sends||[]).some(s=>s.zen_id===z.id&&s.state!=='sent'));
+  const pending=z=>includePending&&(z.category_draft||z.operation_edit?.draft||[...(state.category_sends||[]),...(state.operation_sends||[])].some(s=>s.zen_id===z.id&&s.state!=='sent'));
   const settled=b=>!(b?linkedIds(b):[]).some(id=>pending(zenRows.get(id)||{}))&&b&&['linked','sent'].includes(b.state)&&b.linked&&!bankNeedsCategory(b,zenRows);
   let visibleDays=0;
   for(const d of [...days].sort((a,b)=>b.date.localeCompare(a.date)||a.bank_account.localeCompare(b.bank_account))){
@@ -36,7 +37,7 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
     if(d.split_search_limited)section.append(el('p','Поиск комбинаций ограничен из-за количества вариантов. Показанный список может быть неполным.'));
     const allBanks=(d.bank_ids||[]).map(id=>bankMap.get(id)).filter(Boolean),allZen=d.zen_rows||[];
     const proposed=new Set([...(d.preview_pairs||[]).map(p=>p.bank_id),...(d.split_candidates||[]).map(p=>p.bank_id)]);
-    const categorized=b=>hideCategorized&&b.creation_draft?.valid===true&&b.mapped&&!b.candidates?.length&&!proposed.has(b.id)&&
+    const categorized=b=>hideCategorized&&(b.operation_edit?.draft?b.operation_ready:b.creation_draft?.valid===true)&&b.mapped&&!b.candidates?.length&&!proposed.has(b.id)&&
       (b.state==='pending'||(b.state==='queued'&&b.creation_job?.state==='prepared'));
     const banks=allBanks.filter(b=>(!hideReconciled||(b.state!=='ignored'&&!settled(b)))&&!categorized(b));
     const zs=allZen.filter(z=>{const b=bankMap.get(z.linked_bank_id);return !hideReconciled||(!z.excluded&&(!settled(b)||!(b.split_ids?.length?b.split_ids:[b.linked_id]).includes(z.id)));});
@@ -115,15 +116,19 @@ export function attentionDays(container,state,days,onAction,{hideReconciled=fals
       const item=el('div',undefined,'attention-item');item.append(row);
       if(state.capabilities?.local_review)for(const b of g.banks)if(['pending','ignored'].includes(b.state)){const actions=el('div',undefined,'inline-exclusion');if(g.banks.length>1)actions.append(el('span',b.description+' '));actions.append(exclusionButton('bank',b.id,b.state==='ignored',onAction));item.append(actions);}
       if(g.zen.some(z=>z.category_draft?.valid===true))item.append(el('p','Категория выбрана · ожидает отправки в ZenMoney','pending-category'));
-      if(state.capabilities?.local_review)for(const z of g.zen)if(!z.excluded&&!z.transfer&&(!z.categories?.length||z.category_draft)){
+      if(state.capabilities?.local_review)for(const z of g.zen)if(!z.excluded&&!z.operation_edit?.draft&&!z.transfer&&(!z.categories?.length||z.category_draft)){
         const picker=categoryPicker(z,state,onAction);picker.classList.add('inline-category-picker','tw:m-4');
         if(g.zen.length>1)picker.querySelector('h3').textContent=`Категория ZenMoney · ${z.amount_minor} ${currency} · ${z.payee||z.comment||z.id}`;
         item.append(picker);
       }
       for(const b of g.banks){
-        if(state.capabilities?.create&&b.state==='pending'&&!g.zen.length){const picker=newOperationPicker(b,state,onAction);picker.classList.add('tw:m-4');item.append(picker);}
+        if(state.capabilities?.create&&b.state==='pending'&&!g.zen.length&&!b.operation_edit?.draft){const picker=newOperationPicker(b,state,onAction);picker.classList.add('tw:m-4');item.append(picker);}
         if(b.creation_job?.state==='prepared')item.append(localRecord(b,onAction));
     if(b.creation_job&&!['sent','prepared'].includes(b.creation_job.state))item.append(el('p',b.creation_job.error||'Создание ожидает проверки результата в ZenMoney.','notice'));
+      }
+      if(state.capabilities?.local_review){
+        for(const b of g.banks)if(!g.zen.length){const editor=operationEditor(b.operation_edit,state,onAction,b.creation_ranking||[]);if(editor){editor.classList.add('tw:m-4');item.append(editor);}}
+        for(const z of g.zen)if(!z.excluded){const editor=operationEditor(z.operation_edit,state,onAction,z.category_ranking||[]);if(editor){editor.classList.add('tw:m-4');item.append(editor);}}
       }
       section.append(item);
     }

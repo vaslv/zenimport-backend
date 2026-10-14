@@ -12,7 +12,7 @@ async function register(){
   const allowed=await chrome.permissions.contains({origins:[origin+'/*']});
   const existing=await chrome.scripting.getRegisteredContentScripts({ids});
   if(!inlineEnabled||!allowed){if(existing.length)await chrome.scripting.unregisterContentScripts({ids:existing.map(s=>s.id)});return;}
-  const scripts=[{id:ids[0],js:['inline-content.js'],world:'ISOLATED'}, {id:ids[1],js:['inline-observer-init.js','bank-observer.js','bank-session.js'],world:'MAIN'}];
+  const scripts=[{id:ids[0],js:['operation-form.js','inline-content.js'],world:'ISOLATED'}, {id:ids[1],js:['inline-observer-init.js','bank-observer.js','bank-session.js'],world:'MAIN'}];
   for(const s of scripts){const spec={...s,matches:[origin+'/*'],runAt:'document_start',persistAcrossSessions:true};if(existing.some(e=>e.id===s.id))await chrome.scripting.updateContentScripts([spec]);else await chrome.scripting.registerContentScripts([spec]);}
 }
 function install(){registration=registration.then(register).catch(()=>{});}
@@ -21,10 +21,10 @@ chrome.permissions.onRemoved.addListener(install);install();
 async function scoped(account){
   const state=await api('/api/state');
   const a=state.bank_accounts.find(a=>a.bank==='vietinbank'&&a.account===account);
-  return {account:a||null,categories:state.categories.filter(c=>!c.deleted).map(c=>({id:c.id,title:c.title})),
+  return {account:a||null,categories:state.categories.filter(c=>!c.deleted),operation_catalog:state.operation_catalog,
     rows:a?state.review.filter(r=>r.bank_account===a.id):[],
     days:a?state.day_review.filter(d=>d.bank_account===a.id):[],
-    sends:state.category_sends||[],last_sync:state.last_sync};
+    sends:state.category_sends||[],operation_sends:state.operation_sends||[],last_sync:state.last_sync};
 }
 async function handle(m,sender){
   if(sender.id!==chrome.runtime.id)throw Error('Недоступно');
@@ -50,6 +50,14 @@ async function handle(m,sender){
     return scoped(account);
   }
   if(m.type==='inline-state')return scoped(account);
+  if(m.type==='inline-operation'){
+    const state=await scoped(account),row=state.rows.find(r=>r.id===m.id);
+    const part=m.zen_id&&row?.linked&&(row.group?.zen_ids||[]).includes(m.zen_id)?state.days.flatMap(d=>d.zen_rows||[]).find(z=>z.id===m.zen_id):null;
+    const model=m.zen_id?part?.operation_edit:row?.operation_edit;
+    if(!model?.editable||model.definition.account_id!==state.account?.zenmoney_account||m.edit?.definition?.account_id!==model.definition.account_id)throw Error('Операция или банковский счёт недоступны.');
+    const path=model.source==='bank'?`/api/new-operations/${encodeURIComponent(row.id)}/operation`:`/api/zenmoney/transactions/${encodeURIComponent(model.id)}/operation`;
+    await api(path,m.edit,'PUT');return scoped(account);
+  }
   if(m.type==='inline-import'){
     const {autoJob}=await chrome.storage.local.get('autoJob');
     if(activeJob(autoJob))return scoped(account); // The existing collector owns this response.
@@ -78,7 +86,7 @@ async function handle(m,sender){
 }
 chrome.tabs.onRemoved.addListener(id=>{for(const k of totals.keys())if(k.startsWith(id+':'))totals.delete(k);});
 chrome.runtime.onMessage.addListener((m,sender,reply)=>{
-  if(!['inline-enable','inline-sync','inline-state','inline-import','inline-category','inline-session-status'].includes(m?.type))return;
+  if(!['inline-enable','inline-sync','inline-state','inline-import','inline-category','inline-operation','inline-session-status'].includes(m?.type))return;
   // Serialize imports and local edits; no content-script action can send to ZenMoney.
   const started=Date.now();
   const run=()=>handle(m,sender);

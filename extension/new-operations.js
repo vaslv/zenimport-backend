@@ -1,3 +1,4 @@
+import {changeSummary} from './operation-review.js';
 import {dateLabel} from './date-format.js';
 import {categoryPicker} from './category-picker.js';
 import {formatMoney} from './zenmoney-view.js';
@@ -8,7 +9,7 @@ export function newOperationPicker(row,state,onAction){
 export function creationDialog(items,scope,send){
   if(document.querySelector('.creation-dialog'))return;
   const dialog=el('dialog');dialog.className='pairs-review-dialog creation-dialog';dialog.setAttribute('aria-label','Создание новых операций');
-  const header=el('div');header.className='pairs-review-header';header.append(el('h2','Отправить новые записи в ZenMoney'),el('p','Будут созданы новые доходы или расходы на указанных счетах. Тип операции можно изменить позже в ZenMoney. После подтверждения весь выбранный список будет отправлен пакетами по 20 операций.'));
+  const header=el('div');header.className='pairs-review-header';header.append(el('h2','Отправить новые записи в ZenMoney'),el('p','Будут созданы операции выбранных типов. Проверьте счета, валюты, суммы и человека перед отправкой. После подтверждения весь выбранный список будет отправлен пакетами по 20 операций.'));
   const list=el('div');list.className='pairs-review-list';const selected=new Set();
   const confirm=el('button'),cancel=el('button','Отмена');cancel.autofocus=true;
   const update=()=>{confirm.textContent=`Отправить в ZenMoney · ${selected.size}`;confirm.disabled=!selected.size;};
@@ -18,6 +19,7 @@ export function creationDialog(items,scope,send){
     const sum=Number(item.amount_minor)/(item.currency==='VND'?1:100);
     label.append(check,document.createTextNode(` ${dateLabel(item.date)} · ${item.account} · ${sum>0?'+':''}${formatMoney(String(sum),item.currency)}`));
     card.append(label,el('p',item.description),el('p',`Категория: ${item.category||'без категории'}${item.source==='auto'?' · автоматически по истории':''}`));
+    if(item.details)card.append(el('p',changeSummary(item)));
     if(item.error)card.append(el('p',item.error));list.append(card);
   }
   if(!items.length)list.append(el('p','Нет новых операций в выбранном банке и периоде.'));

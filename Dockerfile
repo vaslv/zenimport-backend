@@ -56,7 +56,7 @@ RUN python -m pip install --no-cache-dir -r requirements.lock.txt playwright==1.
 COPY extension ./extension
 COPY tests/browser ./tests/browser
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-CMD ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests/browser/extension_flow.py"]
+CMD ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests/browser/extension_flow.py", "tests/browser/operation_types.py"]
 
 # Default builds produce the application, not a test image.
 FROM runtime AS final

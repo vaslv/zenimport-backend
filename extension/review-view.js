@@ -9,6 +9,7 @@ import {exclusionButton,excludedRecords} from './exclusions-view.js';
 import {attentionDays} from './attention-view.js';
 import {dayComparison} from './day-comparison.js';
 import {formatMoney} from './zenmoney-view.js';
+import {operationEditor} from './operation-editor.js';
 const node=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const labels={synced:'Уже в ZenMoney',possible:'Проверить совпадение',new:'Новая',unmapped:'Выберите счёт',conflict:'Связь изменилась',queued:'В очереди',sent:'Отправлена',ignored:'Не требует сведения'};
 export const reviewStatus=t=>t.reconciliation_status||(['linked','sent'].includes(t.state)?'synced':t.state!=='pending'?t.state:!t.mapped?'unmapped':t.candidates.length?'possible':'new');
@@ -30,7 +31,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
     if(reviewStatus(t)!=='synced'||bankNeedsCategory(t,zenRows))needsWork.add(key(t.bank_account,t.date));
   }
   for(const d of state.day_review||[]){
-    if((!d.equal&&!d.resolved)||(d.zen_rows||[]).some(z=>!z.excluded&&(!z.linked_bank_id||categoryNeedsWork(z)||(includePending&&(z.category_draft||(state.category_sends||[]).some(s=>s.zen_id===z.id&&s.state!=='sent'))))))needsWork.add(key(d.bank_account,d.date));
+    if((!d.equal&&!d.resolved)||(d.zen_rows||[]).some(z=>!z.excluded&&(!z.linked_bank_id||categoryNeedsWork(z)||(includePending&&(z.category_draft||z.operation_edit?.draft||[...(state.category_sends||[]),...(state.operation_sends||[])].some(s=>s.zen_id===z.id&&s.state!=='sent'))))))needsWork.add(key(d.bank_account,d.date));
   }
   const showDay=(account,date)=>!workDays||!attentionOnly||needsWork.has(key(account,date));
   if(workDays){status='all';query='';limit=Infinity;}
@@ -120,12 +121,12 @@ export function renderReview(container,state,{account='',status='all',query='',s
     if(state.capabilities?.local_review&&linked){
       const ids=t.group?.zen_ids||(t.split_ids?.length?t.split_ids:[t.linked_id]);
       const zs=new Map((state.day_review||[]).flatMap(d=>d.zen_rows||[]).map(z=>[z.id,z]));
-      for(const id of ids){const z=zs.get(id);if(z&&!z.excluded&&!z.transfer&&(!z.categories?.length||z.category_draft))detail.append(categoryPicker(z,state,onAction));}
+      for(const id of ids){const z=zs.get(id);if(z&&!z.excluded&&!z.operation_edit?.draft&&!z.transfer&&(!z.categories?.length||z.category_draft))detail.append(categoryPicker(z,state,onAction));}
     }
     if(t.creation_job?.state==='prepared')detail.append(localRecord(t,onAction));
     if(t.creation_job&&!['sent','prepared'].includes(t.creation_job.state))detail.append(node('p',t.creation_job.error||'Создание ожидает проверки результата.','notice'));
     if(t.state==='pending'){
-      if(state.capabilities?.create&&!t.candidates.length)detail.append(newOperationPicker(t,state,onAction));
+      if(state.capabilities?.create&&!t.candidates.length&&!t.operation_edit?.draft)detail.append(newOperationPicker(t,state,onAction));
       const picker=node('select');picker.append(new Option('Без категории',''));
       for(const c of state.categories||[])if(!c.deleted)picker.append(new Option(c.title,c.id));
       if(state.capabilities?.write)detail.append(picker);
@@ -146,6 +147,7 @@ export function renderReview(container,state,{account='',status='all',query='',s
         detail.append(button('Подтвердить создание',()=>{if(t.candidates.length&&!confirm('Есть похожие операции. Создать отдельную?'))return null;return {path:`/api/review/${t.id}/confirm`,body:{action:'create',category:picker.value||null,reviewed_candidates:t.candidates.map(c=>c.id)}};}));
       }
     }
+    if(state.capabilities?.local_review){const editor=operationEditor(t.operation_edit,state,onAction,t.creation_ranking||t.category_ranking||[]);if(editor)detail.append(editor);}
     const raw=node('details',undefined,'raw-details');raw.append(node('summary','Исходные данные банка'),node('pre',JSON.stringify(t.raw,null,2)));detail.append(raw);item.append(detail);group.append(item);
   }
   if(workDays&&!rows.length&&!comparisonDays.length)container.append(node('p','Нет дней, требующих внимания, в выбранном счёте и периоде.','empty'));

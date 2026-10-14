@@ -54,8 +54,9 @@
     if(row.state==='ignored')return {label:'Игнорируется'};
     const ids=row.group?.zen_ids||(row.split_ids?.length?row.split_ids:[row.linked_id]);
     const zs=state.days.flatMap(d=>d.zen_rows||[]).filter(z=>ids.includes(z.id));
-    const uncertain=row.creation_job&&['uncertain','conflict'].includes(row.creation_job.state)||state.sends.some(s=>ids.includes(s.zen_id)&&['uncertain','conflict'].includes(s.state));
+    const uncertain=row.creation_job&&['uncertain','conflict'].includes(row.creation_job.state)||[...state.sends,...(state.operation_sends||[])].some(s=>ids.includes(s.zen_id)&&(s.state==='uncertain'||s.state==='conflict'&&!row.operation_edit?.draft));
     if(uncertain)return {label:'Нужно проверить результат отправки',tone:'error'};
+    if(row.operation_edit?.draft)return {label:`${row.operation_edit.label} · параметры сохранены локально`,tone:row.operation_edit.error?'error':'pending',needsCategory:!!row.operation_edit.error,editable:false};
     if(row.linked&&['linked','sent'].includes(row.state)){
       const pending=zs.some(z=>z.category_draft);
       const complete=zs.length===ids.length&&zs.every(z=>z.transfer||z.categories?.length);
@@ -100,6 +101,15 @@
       search.oninput=fill;menu.append(search,options);picker.append(select,trigger,menu);
       if(ranked.length){hints.append(document.createTextNode('Подходят: '));ranked.forEach((r,i)=>{if(i)hints.append(document.createTextNode(', '));const c=categories.find(c=>c.id===r.id),b=el('button',c.title);b.title=`Подтверждённых примеров: ${r.count}`;b.onclick=e=>{if(e.isTrusted)save(c.id);};hints.append(b);});}
       panel.box.append(hints,picker);
+    }
+    const models=row.operation_edit?.editable?[row.operation_edit]:row.linked?state.days.flatMap(d=>d.zen_rows||[]).filter(z=>(row.group?.zen_ids||[]).includes(z.id)).map(z=>z.operation_edit).filter(m=>m?.editable):[];
+    if(globalThis.ZenImportOperationForm)for(const model of models){
+      const editor=globalThis.ZenImportOperationForm.render(model,state.operation_catalog,state.categories,async edit=>{
+        if(busy)throw Error('Дождитесь окончания текущего действия');busy=true;const g=generation;let failure;
+        try{const result=await rpc('inline-operation',{id:row.id,...(model.source==='zen'?{zen_id:model.id}:{}),edit});if(g===generation){state=result;signature='';}}
+        catch(e){failure=e;throw e;}finally{busy=false;if(g===generation){signature='';render();if(failure)status(failure.message,true);}}
+      },{ranking:row.creation_ranking||row.category_ranking||[]});
+      if(editor){editor.style.gridColumn='1 / -1';panel.box.append(editor);}
     }
     panel.h.addEventListener('click',e=>e.stopPropagation());return panel;
   }
