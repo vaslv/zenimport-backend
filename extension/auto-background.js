@@ -25,16 +25,17 @@ async function attach(j){
   await chrome.scripting.executeScript({target:{tabId:j.tabId},func:config=>{globalThis.__zenImportAutoConfig=config;},args:[{id:j.id,account:j.account,parts:j.parts}]});
   await chrome.scripting.executeScript({target:{tabId:j.tabId},files:['auto-content.js']});
 }
-async function start(months){
+export async function startHistory(months,selection=null){
   const previous=await get();if(activeJob(previous))throw Error('Загрузка уже выполняется. Сначала остановите её.');
   // Preserve the preceding diagnostic run without accumulating financial payloads.
   if(previous)await chrome.storage.local.set({previousAutoJob:previous});
-  const plan=planHistory(months),j={id:crypto.randomUUID(),status:'starting',startedAt:Date.now(),updatedAt:Date.now(),...plan,part:0,added:0,duplicates:0,completed:[],events:[]};
+  const plan=planHistory(months),j={id:selection?.captureId||crypto.randomUUID(),status:'starting',startedAt:Date.now(),updatedAt:Date.now(),...plan,part:0,added:0,duplicates:0,completed:[],events:[]};
   log(j,'start');await put(j);await chrome.storage.session.remove('autoSeen');
   try{
     const [active]=await chrome.tabs.query({active:true,currentWindow:true});
+    if(selection){const selected=new URL((await chrome.tabs.get(selection.tabId)).url);if(selected.origin!==origin||selected.pathname!=='/payment-history'||selected.searchParams.get('accountNo')!==selection.account)throw Error('Банковский счёт изменился.');}
     const banks=await chrome.tabs.query({url:origin+'/*'});
-    let tab=active?.url?.startsWith(origin+'/')?active:banks[0];
+    let tab=selection?await chrome.tabs.get(selection.tabId):active?.url?.startsWith(origin+'/')?active:banks[0];
     let account=tab?.url?.startsWith(origin+'/payment-history')?new URL(tab.url).searchParams.get('accountNo'):null;
     if(!account){const state=await api('/api/state');const accounts=state.bank_accounts.filter(a=>a.bank==='vietinbank');if(accounts.length!==1)throw Error('Откройте историю нужного счёта в банке для первого запуска.');account=accounts[0].account;}
     if(!/^\d{6,30}$/.test(account))throw Error('Неверный номер банковского счёта.');
@@ -46,12 +47,12 @@ async function start(months){
     if(!tab)tab=await chrome.tabs.create({url:'about:blank',active:true});
     j.tabId=tab.id;j.status='navigating';log(j,'navigation');await put(j);
     await chrome.tabs.update(tab.id,{url:j.url,active:true});
-    return {ok:true};
+    return {ok:true,job:j};
   }catch(e){await stop(j,e.message);throw e;}
 }
 async function handle(message,sender){
   const trusted=sender.id===chrome.runtime.id&&sender.url?.startsWith(chrome.runtime.getURL(''));
-  if(message.type==='auto-start'){if(!trusted)throw Error('Недоступно');return start(message.months);}
+  if(message.type==='auto-start'){if(!trusted)throw Error('Недоступно');return startHistory(message.months);}
   let j=await get();
   if(message.type==='auto-status'){if(!trusted)throw Error('Недоступно');if(activeJob(j)&&Date.now()-j.updatedAt>90000)await stop(j,'Более 90 секунд нет прогресса. Запустите загрузку снова; сохранённые строки не продублируются.');return {ok:true,job:j};}
   if(message.type==='auto-cancel'){if(!trusted)throw Error('Недоступно');if(activeJob(j))await stop(j,'Остановлено пользователем. Уже сохранённые страницы остаются в базе.','cancelled');return {ok:true};}
@@ -132,3 +133,9 @@ chrome.tabs.onRemoved.addListener(tabId=>{queue=queue.catch(()=>{}).then(async()
 chrome.runtime.onStartup.addListener(()=>{queue=queue.catch(()=>{}).then(async()=>{const j=await get();if(activeJob(j))await stop(j,'Браузер перезапущен. Запустите загрузку снова; повторы не добавятся.');});});
 
 chrome.runtime.onInstalled.addListener(()=>{queue=queue.catch(()=>{}).then(async()=>{const j=await get();if(activeJob(j))await stop(j,'Расширение обновлено. Запустите загрузку снова; повторы не добавятся.');});});
+
+// The full-sync controller cancels only the collector it owns.
+export function stopHistory(id,error){
+  queue=queue.catch(()=>{}).then(async()=>{const j=await get();if(j?.id===id&&activeJob(j))await stop(j,error);});
+  return queue;
+}

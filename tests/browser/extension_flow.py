@@ -1816,3 +1816,113 @@ def test_retry_preview_requires_new_confirmation(browser):
     dialog.get_by_role('button',name='Отмена',exact=True).click()
     assert calls==['preview','retry-preview']
     page.close()
+
+@pytest.mark.parametrize('mode',['success','uncertain','bank-error','sync-error'])
+def test_popup_full_sync_collects_six_months_and_sends_all_stored_rows(browser,mode):
+    context,identifier=browser
+    worker=context.service_workers[0]
+    account='555566667777'
+    fixture=Path(__file__).with_name('auto-bank.html').read_text()
+    requests=[]
+    def history(route):
+        body=json.loads(route.request.post_data);requests.append(body)
+        date='-'.join(reversed(body['from'].split('-')))
+        row={'currency':'VND','remark':'Synthetic complete sync','amount':'1000','balance':'9000',
+             'trxId':'full-'+body['from'],'processDate':date+' 12:00:00','dorC':'D'}
+        route.fulfill(content_type='application/json',headers={'Access-Control-Allow-Origin':'*'},body=json.dumps({
+            'error':mode=='bank-error','accountNo':account,'currentPage':0,'pageSize':100,'totalRecords':1,'transactions':[row]}))
+    context.route('https://ipay.vietinbank.vn/payment-history?accountNo='+account,lambda r:r.fulfill(content_type='text/html',body=fixture))
+    context.route('https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions',history)
+    worker.evaluate('''async ({account,mode})=>{
+      const uncertain=mode==='uncertain';
+      globalThis.fullSyncTest={original:fetch,requests:[],sent:[],syncs:0};
+      const t=fullSyncTest;
+      t.uncertain=uncertain;
+      t.rows=Array.from({length:205},(_,n)=>({id:'historical-'+n,bank_account:'full-account',state:'pending'}));
+      t.rows.push({id:'other-bank-row',bank_account:'other-account',state:'pending'});
+      t.state=()=>({bank_accounts:[{id:'full-account',bank:'vietinbank',account,zenmoney_account:'full-zen'}],review:t.rows,categories:[],day_review:[],operation_catalog:{},category_sends:[],operation_sends:[]});
+      globalThis.fetch=async (url,options={})=>{
+        const path=new URL(url).pathname,body=options.body?JSON.parse(options.body):{};
+        const reply=data=>new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json'}});
+        if(path==='/api/state')return reply(t.state());
+        if(path==='/api/zenmoney/sync'){t.syncs++;if(mode==='sync-error')return new Response(JSON.stringify({detail:'Synthetic ZenMoney outage'}),{status:503,headers:{'Content-Type':'application/json'}});return reply({status:'synced'});}
+        if(path==='/api/new-operations/prepare')return reply({status:'prepared'});
+        if(path==='/api/imports'){
+          let added=0;
+          for(const row of body.transactions){if(!t.rows.some(r=>r.id===row.external_id)){t.rows.push({id:row.external_id,bank_account:'full-account',state:'pending'});added++;}}
+          return reply({added,duplicates:body.transactions.length-added});
+        }
+        if(path==='/api/batch/preview'){
+          t.requests.push({path,body});
+          return reply({items:t.rows.filter(r=>r.bank_account===body.account&&body.bank_ids.includes(r.id)&&r.state==='pending').map(r=>({id:r.id,snapshot:'a'.repeat(64)}))});
+        }
+        if(path==='/api/batch/send'){
+          t.requests.push({path,body});
+          const results=body.items.map(i=>{const row=t.rows.find(r=>r.id===i.id);t.sent.push(i.id);row.state=t.uncertain?'queued':'linked';row.creation_job={state:t.uncertain?'uncertain':'sent'};return {id:i.id,state:row.creation_job.state};});
+          return reply({results});
+        }
+        if(path==='/api/batch/verify')return reply({results:[]});
+        return t.original(url,options);
+      };
+      await chrome.storage.local.set({baseUrl:'http://127.0.0.1:8000',token:'docker-test-token-not-for-real-data',inlineEnabled:false,fullSyncJob:null});
+    }''',{'account':account,'mode':mode})
+    bank=popup=None
+    try:
+        popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
+        popup.locator('#inline-enable').check();expect(popup.locator('#inline-enable')).to_be_checked()
+        bank=context.new_page();bank.goto('https://ipay.vietinbank.vn/payment-history?accountNo='+account);bank.bring_to_front()
+        expect(popup.locator('#send-new')).to_be_enabled()
+        popup.locator('#send-new').click()
+        # Closing the popup does not cancel collection or writes.
+        popup.close();popup=None
+        for _ in range(450):
+            job=worker.evaluate("async()=>(await chrome.storage.local.get('fullSyncJob')).fullSyncJob")
+            if job and job['stage'] in ['done','error']:break
+            bank.wait_for_timeout(200)
+        assert job['stage']==('done' if mode=='success' else 'error'),job
+        assert requests and all(r['account']==account for r in requests)
+        test=worker.evaluate('({sent:fullSyncTest.sent,requests:fullSyncTest.requests,syncs:fullSyncTest.syncs,rows:fullSyncTest.rows})')
+        writes=[r['body'] for r in test['requests'] if r['path']=='/api/batch/send']
+        if mode in ['bank-error','sync-error']:
+            assert not writes and not test['sent']
+            assert worker.evaluate("async()=>(await chrome.storage.local.get('autoJob')).autoJob.status") not in ['running','saving']
+            return
+        assert len(requests)>=6
+        assert test['syncs']>=1 and writes
+        assert all(b['account']=='full-account' and b['include_uncategorized'] and b['creations_only'] for b in writes)
+        assert all(len(b['items'])<=20 and set(b['bank_ids'])=={i['id'] for i in b['items']} for b in writes)
+        assert len(test['sent'])==len(set(test['sent']))
+        assert 'other-bank-row' not in test['sent']
+        if mode=='uncertain':
+            assert len(writes)==1 and job['inflight']
+            assert 'повтор заблокирован' in job['notice']
+            # Simulate a persisted in-flight checkpoint after worker termination:
+            # the remote has accepted these UUIDs, but the local checkpoint was not advanced.
+            worker.evaluate("""async()=>{
+              const t=fullSyncTest;t.uncertain=false;
+              for(const id of t.sent){const row=t.rows.find(r=>r.id===id);row.state='linked';row.creation_job.state='sent';}
+              const {fullSyncJob:j}=await chrome.storage.local.get('fullSyncJob');j.stage='sending';
+              await chrome.storage.local.set({fullSyncJob:j});
+              await chrome.alarms.create('zenimport-full-sync',{when:Date.now()+10});
+            }""")
+            for _ in range(450):
+                recovered=worker.evaluate("async()=>(await chrome.storage.local.get('fullSyncJob')).fullSyncJob")
+                if recovered['stage'] in ['done','error']:break
+                bank.wait_for_timeout(200)
+            assert recovered['stage']=='done',recovered
+            sent=worker.evaluate('fullSyncTest.sent')
+            assert len(sent)==len(set(sent))==205+len({r['from'] for r in requests})
+            assert recovered['sent']==len(sent)
+        else:
+            assert set(test['sent'])=={r['id'] for r in test['rows'] if r['bank_account']=='full-account'}
+            assert job['sent']==205+len({r['from'] for r in requests})
+            # Empty backlog still permits a fresh bank collection.
+            popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html');bank.bring_to_front()
+            expect(popup.locator('#send-new')).to_be_enabled()
+            expect(popup.locator('#send-new')).to_have_text('Синхронизировать')
+    finally:
+        if popup:popup.close()
+        if bank:bank.close()
+        worker.evaluate('''async()=>{fetch=fullSyncTest.original;delete globalThis.fullSyncTest;await chrome.alarms.clear('zenimport-full-sync');await chrome.storage.local.set({inlineEnabled:false,fullSyncJob:null});}''')
+        context.unroute('https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions',history)
+        context.unroute('https://ipay.vietinbank.vn/payment-history?accountNo='+account)

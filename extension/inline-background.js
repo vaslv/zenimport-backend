@@ -1,6 +1,7 @@
 import {api} from './api.js';
 import {parseVietinBankJson} from './vietinbank-json.js';
 import {activeJob} from './auto-plan.js';
+import {startSync,syncStatus,installSync} from './full-sync.js';
 const origin='https://ipay.vietinbank.vn';
 const ids=['inline-history-ui','inline-history-observer'];
 let registration=Promise.resolve(),work=Promise.resolve(),syncing,logs=Promise.resolve();
@@ -33,11 +34,10 @@ async function handle(m,sender){
   if(['inline-popup-state','inline-new-send','inline-toggle'].includes(m.type)){
     if(!trusted)throw Error('Недоступно');
     if(m.type==='inline-toggle'){await toggle(m.enabled===true);return {};}
-    if(m.type==='inline-new-send'){try{return await sendVisible();}catch(e){await notice(e.message);throw e;}}
+    if(m.type==='inline-new-send'){try{return await startSync();}catch(e){await notice(e.message);throw e;}}
     const {inlineEnabled}=await chrome.storage.local.get('inlineEnabled');
-    let count=0;try{const s=await visible();count=s.ids.length;}catch{}
-    const {inlineSendNotice}=await chrome.storage.session.get('inlineSendNotice');
-    return {enabled:!!inlineEnabled,count,notice:inlineSendNotice||''};
+    const status=await syncStatus();
+    return {enabled:!!inlineEnabled,...status};
   }
   if(m.type==='inline-enable'){
     if(!trusted&&!toolsPage)throw Error('Недоступно');
@@ -136,42 +136,5 @@ async function toggle(enabled){
     }catch{ /* Navigation may remove a tab between enumeration and injection. */ }
   }
 }
-async function visible(){
-  const [tab]=await chrome.tabs.query({active:true,currentWindow:true}),account=accountOf(tab?.url);
-  if(!account)throw Error('Откройте историю нужного счёта VietinBank.');
-  if(!(await chrome.storage.local.get('inlineEnabled')).inlineEnabled)throw Error('Включите интерфейс на странице банка.');
-  const page=await chrome.tabs.sendMessage(tab.id,{type:'inline-visible'});
-  if(page?.account!==account||!Array.isArray(page.ids)||page.ids.length>200)throw Error('Дождитесь загрузки операций на странице.');
-  const state=await scoped(account);
-  if(!state.account?.zenmoney_account)throw Error('Свяжите банковский счёт с ZenMoney в настройках.');
-  const ids=state.rows.filter(r=>page.ids.includes(r.id)&&(r.state==='pending'||r.creation_job?.state==='prepared')).map(r=>r.id);
-  return {tabId:tab.id,account,ids,scope:{bank:'vietinbank',account:state.account.id,bank_ids:ids,include_uncategorized:true,creations_only:true}};
-}
 async function notice(value){await chrome.storage.session.set({inlineSendNotice:value});return value;}
-async function sendVisible(){
-  const selection=await visible();if(!selection.ids.length)return {notice:await notice('Новых операций на этой странице нет.')};
-  // IDs are captured once. Navigation never expands the user's authorized selection.
-  const pending=new Set(selection.ids);let sent=0,blocked=0;
-  while(pending.size){
-    await assertSelection(selection);
-    const preview=await api('/api/batch/preview',selection.scope);
-    const candidates=preview.items.filter(i=>pending.has(i.id));
-    const ready=candidates.filter(i=>!i.error).slice(0,20);
-    if(!ready.length){blocked+=pending.size;break;}
-    await assertSelection(selection);
-    await notice(`Отправляем: подтверждено ${sent} из ${selection.ids.length}…`);
-    const result=await api('/api/batch/send',{...selection.scope,items:ready.map(i=>({kind:'creation',id:i.id,snapshot:i.snapshot}))});
-    const confirmed=new Set((result.results||[]).filter(r=>r.state==='sent').map(r=>r.id));
-    for(const item of ready)if(confirmed.has(item.id)){sent++;pending.delete(item.id);}
-    if(ready.some(i=>!confirmed.has(i.id))){blocked+=pending.size;break;}
-  }
-  try{await chrome.tabs.sendMessage(selection.tabId,{type:'inline-refresh'});}catch{}
-  return {notice:await notice(`Добавлено в ZenMoney: ${sent}.`+(blocked?` Требуют проверки: ${blocked}. Повторная отправка неподтверждённых записей заблокирована.`:''))};
-}
-
-async function assertSelection(selection){
-  const tab=await chrome.tabs.get(selection.tabId);
-  if(accountOf(tab.url)!==selection.account)throw Error('Счёт изменился. Отправка остановлена.');
-  const page=await chrome.tabs.sendMessage(selection.tabId,{type:'inline-visible'});
-  if(page.account!==selection.account||selection.ids.some(id=>!page.ids.includes(id)))throw Error('Страница операций изменилась. Отправка остановлена.');
-}
+installSync(run=>{work=work.catch(()=>{}).then(run);return work;});

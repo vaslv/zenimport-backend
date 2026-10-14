@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "ZenImport",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Локальный разбор банковских операций и проверка перед отправкой в ZenMoney",
   "permissions": [
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "alarms"
   ],
   "host_permissions": [
     "http://127.0.0.1/*",

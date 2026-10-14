@@ -212,6 +212,7 @@
       if(!enabled){generation++;account=null;state=null;clear();banner?.h.remove();banner?.spacer.remove();banner=null;}
       else tick();reply({ok:true});
     }
+    if(m?.type==='inline-sync-progress'&&enabled&&m.account===account&&typeof m.message==='string'){status(m.message,m.error===true);reply({ok:true});}
     if(m?.type==='inline-refresh'&&enabled){refreshAt=0;signature='';tick();reply({ok:true});}
   });
   tick();

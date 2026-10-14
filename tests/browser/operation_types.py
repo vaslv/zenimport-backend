@@ -1,4 +1,6 @@
 """Installed extension + actual HTTP backend, synthetic SDK remote only."""
+from pathlib import Path
+import json
 import pytest
 from playwright.sync_api import expect
 from extension_flow import browser,open_app,connect,fixture_bank,TOKEN
@@ -64,7 +66,16 @@ def inline_pages(browser,existing=False,uncategorized=False,payee=None,candidate
     page=open_app(browser);connect(page,BASE);expect(page.locator('#status')).to_have_text('Данные обновлены.')
     popup=context.new_page();popup.goto(f'chrome-extension://{identifier}/popup.html')
     popup.locator('#inline-enable').check();expect(popup.locator('#inline-enable')).to_be_checked()
-    bank=fixture_bank(browser);expect(bank.locator('zenimport-operation .operation-editor')).to_have_count(2)
+    # The full-sync button now uses the real calendar collector. These tests start
+    # with two stored operations and an empty synthetic historical response.
+    html=Path('/app/tests/browser/fixtures/vietinbank.html').read_text()
+    html=html.replace('<input readonly placeholder="Choose time range" value="01/09/2026 - 06/10/2026">','')
+    html+=Path('/app/tests/browser/auto-bank.html').read_text()
+    bank=fixture_bank(browser,html)
+    bank.route('https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions',lambda r:r.fulfill(
+        content_type='application/json',headers={'Access-Control-Allow-Origin':'*'},
+        body=json.dumps({'error':False,'accountNo':'111122223333','currentPage':0,'pageSize':100,'totalRecords':0,'transactions':[]})))
+    expect(bank.locator('zenimport-operation .operation-editor')).to_have_count(2)
     expect(bank.locator('#zenimport-status')).to_contain_text('Данные ZenMoney получены')
     return context,page,popup,bank
 
@@ -85,13 +96,16 @@ def test_bank_inline_transfer_new_staged_existing_immediate(browser,existing):
         expect(bank.locator('zenimport-operation .operation-editor').first).to_have_attribute('data-operation-draft','true')
         assert not remote(context)['writes']
         bank.bring_to_front();popup.locator('#send-new').click()
-        expect(popup.locator('#send-status')).to_contain_text('Добавлено в ZenMoney: 2.')
+        try:expect(popup.locator('#send-status')).to_contain_text('Добавлено в ZenMoney: 2.',timeout=45000)
+        except AssertionError as exc:
+            diagnostic=popup.evaluate("async()=>{const {autoJob:j,fullSyncJob:s}=await chrome.storage.local.get(['autoJob','fullSyncJob']);return {sync:s,capture:j&&{status:j.status,error:j.error,events:j.events.slice(-8)}}}")
+            raise AssertionError(str(exc)+'; '+str(diagnostic)) from exc
         result=remote(context);assert len(result['writes'])==1 and len(result['writes'][0])==2
     bank.screenshot(path='/results/minimal-inline-transfer.png',full_page=True)
     popup.close();bank.close();page.close()
 
 
-def test_minimal_popup_toggle_and_visible_default_creation(browser):
+def test_minimal_popup_toggle_and_full_account_default_creation(browser):
     context,page,popup,bank=inline_pages(browser)
     assert popup.locator('button').count()==2
     assert not remote(context)['writes']
@@ -104,12 +118,12 @@ def test_minimal_popup_toggle_and_visible_default_creation(browser):
     assert bank.url==original and not remote(context)['writes']
     # Ordinary new debits/credits are created without inventing a category.
     bank.bring_to_front();popup.locator('#send-new').click()
-    expect(popup.locator('#send-status')).to_contain_text('Добавлено в ZenMoney: 2.')
+    expect(popup.locator('#send-status')).to_contain_text('Добавлено в ZenMoney: 2.',timeout=90000)
     result=remote(context);assert len(result['writes'])==1 and len(result['writes'][0])==2
     assert sorted(p['income']-p['outcome'] for p in result['writes'][0])==[-65000,100000]
     assert all(not p['tag'] for p in result['writes'][0])
     expect(bank.locator('tbody zenimport-operation').first.get_by_role('combobox',name='Категория для типа операции')).to_have_text('Выберите категорию')
-    popup.reload();expect(popup.locator('#send-new')).to_be_disabled()
+    popup.reload();bank.bring_to_front();expect(popup.locator('#send-new')).to_be_enabled()
     assert len(remote(context)['writes'])==1
     popup.screenshot(path='/results/minimal-popup.png')
     popup.close();bank.close();page.close()
@@ -149,12 +163,12 @@ def test_new_popup_verifies_partial_or_lost_creation_without_retry(browser,behav
     context,page,popup,bank=inline_pages(browser)
     assert context.request.post(BASE+'/api/test/behavior',headers=AUTH,data={'behavior':behavior}).ok
     bank.bring_to_front();popup.locator('#send-new').click()
-    expect(popup.locator('#send-status')).to_contain_text(f'Добавлено в ZenMoney: {confirmed}.')
+    expect(popup.locator('#send-status')).to_contain_text(f'Добавлено в ZenMoney: {confirmed}.',timeout=90000)
     result=remote(context);assert len(result['writes'])==1 and len(result['transactions'])==confirmed
     if confirmed<2:
-        expect(popup.locator('#send-status')).to_contain_text('Повторная отправка')
+        expect(popup.locator('#send-status')).to_contain_text('повтор заблокирован')
     popup.reload();bank.bring_to_front()
-    expect(popup.locator('#send-new')).to_be_disabled()
+    expect(popup.locator('#send-new')).to_be_enabled()
     assert len(remote(context)['writes'])==1
     popup.close();bank.close();page.close()
 
@@ -186,7 +200,7 @@ def test_new_popup_stops_if_account_changes_during_preview(browser):
     };}""")
     try:
         bank.bring_to_front();popup.locator('#send-new').click()
-        for _ in range(60):
+        for _ in range(900):
             if worker.evaluate('typeof releasePreview')=='function':break
             bank.wait_for_timeout(100)
         assert worker.evaluate('typeof releasePreview')=='function'
