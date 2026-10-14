@@ -8,7 +8,7 @@
   const endpoint='https://api-ipay.vietinbank.vn/ipay/wa/getHistTransactions';
   const keys=['currency','remark','amount','balance','trxId','processDate','dorC','refType','refId','tellerId','corresponsiveAccount','corresponsiveName','channel','serviceBranchId','serviceBranchName','pmtType','sendingBankId','sendingBranchId','sendingBranchName','receivingBankId','receivingBranchId','receivingBranchName'];
   const originalFetch=window.fetch, originalOpen=XMLHttpRequest.prototype.open, originalSend=XMLHttpRequest.prototype.send;
-  const urls=new WeakMap(); let active=true;
+  const urls=new WeakMap(); let active=true,lastHistory=null;
   const matches=url=>{try {const u=new URL(url,location.href);return u.origin+u.pathname===endpoint;}catch{return false;}};
   const emit=data=>{if(!active)return;window.postMessage({source:inline?'zenimport-inline-history':'zenimport-history',...data},location.origin);if(!continuous)stop();};
   const receive=(value,startedAt)=>{
@@ -19,6 +19,7 @@
       for(const key of ['error','accountNo','currentPage','nextPage','pageSize','totalRecords']) clean[key]=value[key];
       clean.transactions=value.transactions.map(row=>Object.fromEntries(keys.filter(k=>Object.hasOwn(row,k)).map(k=>[k,row[k]])));
       if(JSON.stringify(clean).length>1500000)throw Error();
+      if(inline)lastHistory={data:clean,startedAt};
       emit({data:clean,startedAt});
     } catch {emit({startedAt,error:'Ответ истории не удалось прочитать. Повторите захват или загрузите JSON файлом.'});}
   };
@@ -48,9 +49,15 @@
     }catch{emit({startedAt,error:'Не удалось прочитать ответ истории банка.'});}},{once:true});
     return originalSend.apply(this,args);
   }
+  const replay=e=>{
+    if(!inline||!active||!lastHistory||e.source!==window||e.origin!==location.origin||e.data?.source!=='zenimport-inline-replay')return;
+    const u=new URL(location.href);
+    if(u.pathname==='/payment-history'&&u.searchParams.get('accountNo')===e.data.account&&lastHistory.data.accountNo===e.data.account)emit({...lastHistory,replayed:true});
+  };
+  if(inline)window.addEventListener('message',replay);
   const stopMessage=e=>{if(e.source===window&&e.origin===location.origin&&e.data?.source==='zenimport-stop-auto')stop();};
   if(!inline)window.addEventListener('message',stopMessage);
-  function stop(){window.removeEventListener('message',stopMessage);active=false;clearTimeout(timer);if(window.fetch===wrappedFetch)window.fetch=originalFetch;if(XMLHttpRequest.prototype.open===wrappedOpen)XMLHttpRequest.prototype.open=originalOpen;if(XMLHttpRequest.prototype.send===wrappedSend)XMLHttpRequest.prototype.send=originalSend;}
+  function stop(){lastHistory=null;window.removeEventListener('message',replay);window.removeEventListener('message',stopMessage);active=false;clearTimeout(timer);if(window.fetch===wrappedFetch)window.fetch=originalFetch;if(XMLHttpRequest.prototype.open===wrappedOpen)XMLHttpRequest.prototype.open=originalOpen;if(XMLHttpRequest.prototype.send===wrappedSend)XMLHttpRequest.prototype.send=originalSend;}
   const timer=inline?null:setTimeout(()=>{emit({startedAt:Date.now(),error:'Время ожидания истекло. Начните захват заново.'});stop();},continuous?1200000:600000);
   window.fetch=wrappedFetch;XMLHttpRequest.prototype.open=wrappedOpen;XMLHttpRequest.prototype.send=wrappedSend;
   window[stopKey]=stop;

@@ -38,7 +38,7 @@ def test_spa_history_entry_edit_and_popup_do_not_create_records(browser, existin
         bank.bring_to_front()
         expect(popup.locator('#send-new')).to_be_enabled()
         card = bank.locator('tbody zenimport-operation').first
-        expect(card.get_by_label('Тип операции', exact=True)).to_be_enabled()
+        expect(card.get_by_role('radio', name='Расход', exact=True)).to_be_enabled()
         card.get_by_role('combobox', name='Категория для типа операции', exact=True).click()
         card.get_by_role('option', name='Продукты', exact=True).click()
         if existing:
@@ -54,7 +54,7 @@ def test_spa_history_entry_edit_and_popup_do_not_create_records(browser, existin
             assert not remote(context)['writes']
 
         # Changes are local for a new row; an existing row keeps its remote UUID.
-        card.get_by_label('Тип операции', exact=True).select_option('debt')
+        card.get_by_role('radio', name='Долг', exact=True).click()
         card.get_by_label('Человек для долга').fill('Synthetic SPA person')
         card.get_by_label('Человек для долга').press('Tab')
         if existing:
@@ -70,7 +70,7 @@ def test_spa_history_entry_edit_and_popup_do_not_create_records(browser, existin
             )
             # Allow the debounced request to finish, not merely its local select.
             bank.wait_for_timeout(600)
-            expect(card.get_by_label('Тип операции', exact=True)).to_be_enabled()
+            expect(card.get_by_role('radio', name='Долг', exact=True)).to_be_enabled()
             assert not remote(context)['writes']
         assert bank.url == HISTORY
         expect(bank.locator('#zenimport-status')).not_to_contain_text(
