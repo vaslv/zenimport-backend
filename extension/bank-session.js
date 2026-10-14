@@ -4,7 +4,7 @@
   if(window.__zenImportSession)return;window.__zenImportSession=true;
   let runtime,attempted=false,lastActivity=Date.now(),lastRefresh=Date.now(),pending=false,failed=false,lastStatus='';
   const emit=status=>{if(status===lastStatus)return;lastStatus=status;window.postMessage({source:'zenimport-session',status},location.origin);};
-  const active=()=>location.origin==='https://ipay.vietinbank.vn'&&location.pathname==='/payment-history'&&/^\d{6,30}$/.test(new URLSearchParams(location.search).get('accountNo')||'');
+  const active=()=>window.__zenImportInlineEnabled!==false&&location.origin==='https://ipay.vietinbank.vn'&&location.pathname==='/payment-history'&&/^\d{6,30}$/.test(new URLSearchParams(location.search).get('accountNo')||'');
   const activity=e=>{if(e.isTrusted&&document.visibilityState==='visible'&&document.hasFocus())lastActivity=Date.now();};
   for(const event of ['pointerdown','pointermove','keydown','wheel'])document.addEventListener(event,activity,{capture:true,passive:true});
   function client(){

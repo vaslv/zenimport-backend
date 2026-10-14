@@ -1,6 +1,7 @@
 // ISOLATED world: account-scoped UI. Credentials remain in the service worker.
 (() => {
   if(globalThis.__zenImportInlineUI)return;globalThis.__zenImportInlineUI=true;
+  let enabled=true;
   let account=null,generation=0,state=null,fresh=false,busy=false,signature='',timer,refreshAt=0;
   let sessionStatus='',navigationPage='',lastCategoryIndex=-1;
   const sessionLabels={active:'Сессия поддерживается при активности',extended:'Сессия продлена',refreshing:'Продлеваем сессию…',paused:'Продление сессии приостановлено',unsupported:'Продление сессии недоступно: версия банка изменилась',error:'Не удалось продлить сессию', 'signed-out':'Требуется вход в банк'};
@@ -62,7 +63,7 @@
       const complete=zs.length===ids.length&&zs.every(z=>z.transfer||z.categories?.length);
       const single=row.group?.kind==='single'&&zs.length===1&&!zs[0].transfer;
       const z=zs[0];
-      return {label:pending?'Изменения ожидают отправки':complete?'✓ В ZenMoney · '+zs.flatMap(z=>z.categories||[]).join(', '):'Нужна категория',good:!pending&&complete,tone:pending?(zs.every(z=>z.category_draft?z.category_draft.valid:z.transfer||z.categories?.length)?'pending':'error'):complete?'good':'error',
+      return {label:pending?'Изменения ожидают отправки':complete?'✓ В ZenMoney · '+zs.flatMap(z=>z.categories?.length?z.categories:[z.operation_edit?.label||'Перевод']).join(', '):'Нужна категория',good:!pending&&complete,tone:pending?(zs.every(z=>z.category_draft?z.category_draft.valid:z.transfer||z.categories?.length)?'pending':'error'):complete?'good':'error',
         needsCategory:zs.some(z=>!z.transfer&&(z.category_draft?!z.category_draft.valid:!z.categories?.length)),editable:single,selected:z?.category_draft?.valid?z.category_draft.id:z?.tag_ids?.[0]||'',ranking:z?.category_ranking||[]};
     }
     if(row.creation_job?.state==='prepared')return {label:'Создана локально · ожидает отправки',tone:'pending'};
@@ -73,9 +74,10 @@
       selected:row.creation_draft?.valid?row.creation_draft.category_id:'',ranking:row.creation_ranking||[]};
   }
   function card(row){
-    const panel=host(),v=view(row),heading=el('strong',!fresh&&v.good?v.label.replace('✓ В ZenMoney','В ZenMoney по сохранённым данным'):v.label);panel.h.id='zenimport-operation-'+encodeURIComponent(row.id);panel.h.tabIndex=-1;panel.needsCategory=!!v.needsCategory;panel.box.className='operation';heading.className=v.tone==='good'&&!fresh?'':v.tone||'';panel.box.append(heading);
+    const panel=host(),v=view(row),heading=el('strong',!fresh&&v.good?v.label.replace('✓ В ZenMoney','В ZenMoney по сохранённым данным'):v.label);panel.bankId=row.id;panel.h.id='zenimport-operation-'+encodeURIComponent(row.id);panel.h.tabIndex=-1;panel.needsCategory=!!v.needsCategory;panel.box.className='operation';heading.className=v.tone==='good'&&!fresh?'':v.tone||'';panel.box.append(heading);
     if(v.editable){
-      const categories=[...state.categories].sort((a,b)=>a.title.localeCompare(b.title,'ru'));
+      const kind=row.operation_edit?.definition?.kind;
+      const categories=state.categories.filter(c=>kind==='expense'?c.showOutcome!==false:kind==='income'?c.showIncome!==false:kind==='refund'?c.showIncome===false&&c.showOutcome===true:true).sort((a,b)=>a.title.localeCompare(b.title,'ru'));
       const ranked=(v.ranking||[]).filter(r=>categories.some(c=>c.id===r.id)).sort((a,b)=>b.count-a.count);
       const ordered=[...ranked.map(r=>categories.find(c=>c.id===r.id)),...categories.filter(c=>!ranked.some(r=>r.id===c.id))];
       const hints=el('p');hints.className='hints';
@@ -88,9 +90,9 @@
       const close=()=>{menu.hidden=true;trigger.setAttribute('aria-expanded','false');if(activeMenu?.h===panel.h)activeMenu=null;};
       const position=()=>{const r=trigger.getBoundingClientRect();menu.style.left=Math.max(8,Math.min(r.left,innerWidth-r.width-8))+'px';menu.style.width=Math.min(r.width,innerWidth-16)+'px';menu.style.top=Math.max(8,Math.min(r.top,innerHeight-180))+'px';menu.style.maxHeight=Math.max(120,Math.min(320,innerHeight-parseFloat(menu.style.top)-8))+'px';};
       async function save(id){
-        if(!id||busy)return;close();busy=true;let failure;const g=generation;trigger.disabled=true;select.value=id;heading.textContent='Сохраняем…';
+        if(!id||busy)return;close();busy=true;let failure;const g=generation;trigger.disabled=true;select.value=id;heading.className='pending';heading.textContent=row.linked?'Обновляем ZenMoney…':'Сохраняем…';
         try{const result=await rpc('inline-category',{id:row.id,category:id});if(g===generation){state=result;signature='';}}
-        catch(e){if(g===generation)failure=e.message;}
+        catch(e){if(g===generation){failure=e.message;try{state=await rpc('inline-state');}catch{}}}
         finally{busy=false;if(g===generation){signature='';render();if(failure)status(failure,true);}}
       }
       const fill=()=>{options.replaceChildren();for(const c of ordered.filter(c=>c.title.toLocaleLowerCase('ru').includes(search.value.toLocaleLowerCase('ru')))){const option=el('button',c.title);option.type='button';option.setAttribute('role','option');option.setAttribute('aria-selected',String(c.id===v.selected));option.onclick=e=>{if(e.isTrusted)save(c.id);};options.append(option);}if(!options.children.length)options.append(el('p','Категории не найдены'));};
@@ -105,17 +107,17 @@
     const models=row.operation_edit?.editable?[row.operation_edit]:row.linked?state.days.flatMap(d=>d.zen_rows||[]).filter(z=>(row.group?.zen_ids||[]).includes(z.id)).map(z=>z.operation_edit).filter(m=>m?.editable):[];
     if(globalThis.ZenImportOperationForm)for(const model of models){
       const editor=globalThis.ZenImportOperationForm.render(model,state.operation_catalog,state.categories,async edit=>{
-        if(busy)throw Error('Дождитесь окончания текущего действия');busy=true;const g=generation;let failure;
+        if(busy)throw Error('Дождитесь окончания текущего действия');busy=true;heading.className='pending';heading.textContent=model.source==='zen'?'Обновляем ZenMoney…':'Сохраняем…';const g=generation;let failure;
         try{const result=await rpc('inline-operation',{id:row.id,...(model.source==='zen'?{zen_id:model.id}:{}),edit});if(g===generation){state=result;signature='';}}
-        catch(e){failure=e;throw e;}finally{busy=false;if(g===generation){signature='';render();if(failure)status(failure.message,true);}}
-      },{ranking:row.creation_ranking||row.category_ranking||[]});
+        catch(e){failure=e;if(g===generation){try{state=await rpc('inline-state');}catch{}}throw e;}finally{busy=false;if(g===generation){signature='';render();if(failure)status(failure.message,true);}}
+      },{ranking:row.creation_ranking||row.category_ranking||[],automatic:true});
       if(editor){editor.style.gridColumn='1 / -1';panel.box.append(editor);}
     }
     panel.h.addEventListener('click',e=>e.stopPropagation());return panel;
   }
   function rowBackground(tr,cell){const color=getComputedStyle(tr.children[1]).backgroundColor;cell.style.setProperty('background-color',color==='rgba(0, 0, 0, 0)'?getComputedStyle(tr).backgroundColor:color,'important');}
   function render(){
-    if(!account||busy)return;
+    if(!enabled||!account||busy)return;
     const selected=text(document.querySelector('.vt-select__single-value .cus-option'));
     if(!selected.startsWith(account+' - ')||!selected.endsWith(' - Current account')){clear();status('Ожидаем историю выбранного счёта…');return;}
     const tables=[...document.querySelectorAll('table.cms-table')];
@@ -132,7 +134,7 @@
     if(fresh)status(`Данные ZenMoney получены. Опознано строк: ${found} из ${rows.length}.`);else if(loadError)status(loadError,true);else status('Обновляем ZenMoney… Показываем сохранённые данные.');
   }
   window.addEventListener('message',async e=>{
-    if(e.source!==window||e.origin!==location.origin||!account)return;
+    if(!enabled||e.source!==window||e.origin!==location.origin||!account)return;
     if(e.data?.source==='zenimport-session'){if(Object.hasOwn(sessionLabels,e.data.status)){sessionStatus=e.data.status;if(banner)status(banner.message,banner.error);rpc('inline-session-status',{status:sessionStatus}).catch(()=>{});}return;}
     if(e.data?.source!=='zenimport-inline-history')return;
     const g=generation;
@@ -141,6 +143,7 @@
     catch(error){if(g===generation){status(error.message,true);}}
   });
   function tick(){
+    if(!enabled)return;
     const next=current();if(next!==account){account=next;sessionStatus='';generation++;syncGeneration=pollGeneration=0;nextSyncAt=0;retryDelay=30000;fresh=false;state=null;clear();banner?.h.remove();banner?.spacer.remove();banner=null;if(account)start();}
     if(!account)return;
     render();
@@ -158,5 +161,15 @@
   const observer=new MutationObserver(()=>{if(scheduled)return;scheduled=true;queueMicrotask(()=>{scheduled=false;tick();});});
   observer.observe(document,{childList:true,subtree:true,characterData:true});
   timer=setInterval(tick,1000);window.addEventListener('pagehide',()=>{observer.disconnect();activeMenu?.close();clearInterval(timer);generation++;clear();banner?.h.remove();banner?.spacer.remove();},{once:true});
+  chrome.runtime.onMessage.addListener((m,sender,reply)=>{
+    if(sender.id!==chrome.runtime.id)return;
+    if(m?.type==='inline-visible'){reply({account,ids:enabled?[...mounted.values()].filter(p=>p.h.isConnected&&p.bankId).map(p=>p.bankId):[]});return;}
+    if(m?.type==='inline-visibility'){
+      enabled=m.enabled===true;
+      if(!enabled){generation++;account=null;state=null;clear();banner?.h.remove();banner?.spacer.remove();banner=null;}
+      else tick();reply({ok:true});
+    }
+    if(m?.type==='inline-refresh'&&enabled){refreshAt=0;signature='';tick();reply({ok:true});}
+  });
   tick();
 })();

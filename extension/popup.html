@@ -1,29 +1,8 @@
-<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="style.css">
-<title>ZenImport</title><body class="popup"><h1>ZenImport <small id="extension-version" class="muted"></small></h1>
-<button id="inline-enable" class="secondary">Включить ZenImport на странице банка</button><p id="inline-status" role="status"></p>
-<label for="history-period">История VietinBank</label>
-<select id="history-period"><option value="1">Последний месяц</option><option value="6">Последние 6 месяцев</option></select>
-<p id="period-hint" class="muted"></p>
-<button id="capture">Получить историю</button>
-<p id="status" role="status" aria-live="polite">Войдите в VietinBank и нажмите «Получить историю».</p>
-<section id="auto-progress" hidden><p id="auto-status" role="status" aria-live="polite"></p><progress id="auto-meter"></progress><button id="auto-cancel" class="secondary">Остановить</button><details><summary>Журнал действий</summary><ol id="auto-events"></ol></details><p class="muted">Ответы и ошибки автоматически включаются в отчёт без токенов, реквизитов и содержимого операций.</p><button id="auto-export" class="secondary">Скачать отчёт диагностики</button></section>
-<p id="capture-age" class="muted" hidden></p>
-<details id="capture-progress" hidden><summary>Что выполнено</summary><ol id="capture-steps"></ol></details>
-<button id="import" hidden>Сохранить для проверки</button>
-<button id="new-categorized">Отправить новые с категорией</button><button id="new-all">Отправить все новые, включая без категории</button>
-<button id="batch-open">Отправить обновления в ZenMoney</button><p id="batch-count" class="muted" role="status"></p>
-<button id="open" class="secondary">Проверить операции</button>
-<p class="muted">Сначала история сохраняется локально. Отправка в ZenMoney — только отдельным действием после проверки.</p>
-<details id="diagnostics"><summary>Если загрузка не работает</summary>
-<p>Откройте DevTools → Network в банковской вкладке и повторите поиск с изменённым периодом. Можно также загрузить сохранённый ответ банка.</p>
-<button id="manual-capture" class="secondary">Ручной захват одного ответа</button>
-<button id="diagnose-request" class="secondary">Собрать схему запроса</button><button id="export-contract" class="secondary" hidden>Скачать схему запроса</button>
-<p>Схема нужна для настройки автоматической загрузки. Значения сессии, токенов и счёта в неё не входят. Требуется открытая вкладка Network.</p>
-<label>Файл ответа <input id="json-file" type="file" accept=".json,.txt,application/json,text/plain"></label>
-<button id="clear-capture" class="secondary" hidden>Сбросить ожидание</button>
-<button id="debug" class="secondary" hidden>Скачать данные для диагностики</button>
-<details id="legacy-tools"><summary>Старый способ: чтение таблицы</summary>
-<p>Резервный способ без подробностей JSON. Для всех страниц: страница 1, Filter открыт, Search применён. Держите окно расширения открытым.</p>
-<button id="extract" class="secondary">Считать текущую страницу</button><button id="collect" class="secondary">Собрать страницы таблицы</button>
-</details></details>
-<script type="module" src="popup-batch.js"></script><script type="module" src="popup.js"></script></body></html>
+<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="popup-minimal.css"><title>ZenImport</title>
+<body class="popup minimal"><header><h1>ZenImport</h1><button id="settings" class="secondary" aria-label="Настройки">⚙</button></header>
+<label class="toggle"><span>На странице банка</span><input id="inline-enable" type="checkbox" role="switch"><span class="track" aria-hidden="true"></span></label>
+<p id="inline-status" role="status" aria-live="polite"></p>
+<button id="send-new" disabled>Добавить новые операции</button>
+<p id="send-status" role="status" aria-live="polite"></p>
+<script type="module" src="popup-minimal.js"></script></body></html>
