@@ -204,3 +204,43 @@ def test_zenmoney_history_type_editor_and_foreign_currency_review(browser):
     expect(page.locator('#status')).to_contain_text('1 успешно, 0 требуют внимания')
     assert remote(context)['writes'][0][0]['id']=='existing'
     page.close()
+
+
+def test_inline_reports_actual_poll_error_and_recovers(browser):
+    context,page,popup,bank=inline_pages(browser)
+    worker=context.service_workers[0]
+    worker.evaluate("""()=>{globalThis.originalPollFetch=fetch;globalThis.fetch=async(...args)=>{
+      if(new URL(args[0]).pathname==='/api/state')return new Response(JSON.stringify({detail:'Synthetic expired token'}),{status:401});
+      return originalPollFetch(...args);
+    };}""")
+    def advance():
+        worker.evaluate("""async()=>{const tabs=await chrome.tabs.query({url:'https://ipay.vietinbank.vn/*'});
+          await chrome.scripting.executeScript({target:{tabId:tabs[0].id},func:()=>{const previous=Date.now;Date.now=()=>previous()+20000;}});
+        }""")
+    try:
+        advance()
+        expect(bank.locator('#zenimport-status')).to_contain_text('Неверный API-токен')
+        expect(bank.locator('#zenimport-status')).not_to_contain_text('Нет связи')
+        assert context.request.get(BASE+'/health').ok
+        worker.evaluate('()=>{fetch=originalPollFetch;}')
+        advance()
+        expect(bank.locator('#zenimport-status')).to_contain_text('Данные ZenMoney получены')
+        assert not remote(context)['writes']
+    finally:
+        worker.evaluate('fetch=originalPollFetch;delete globalThis.originalPollFetch')
+        popup.close();bank.close();page.close()
+
+
+def test_invalidated_content_context_requests_bank_reload(browser):
+    context,page,popup,bank=inline_pages(browser)
+    worker=context.service_workers[0]
+    worker.evaluate("""async()=>{const tabs=await chrome.tabs.query({url:'https://ipay.vietinbank.vn/*'});
+      await chrome.scripting.executeScript({target:{tabId:tabs[0].id},func:()=>{
+        chrome.runtime.sendMessage=async()=>{throw Error('Extension context invalidated.');};
+        const previous=Date.now;Date.now=()=>previous()+20000;
+      }});
+    }""")
+    expect(bank.locator('#zenimport-status')).to_contain_text('Расширение обновлено. Обновите страницу банка.')
+    expect(bank.locator('#zenimport-status')).not_to_contain_text('Нет связи')
+    assert not remote(context)['writes']
+    popup.close();bank.close();page.close()

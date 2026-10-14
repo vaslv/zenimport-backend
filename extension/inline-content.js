@@ -1,7 +1,7 @@
 // ISOLATED world: account-scoped UI. Credentials remain in the service worker.
 (() => {
   if(globalThis.__zenImportInlineUI)return;globalThis.__zenImportInlineUI=true;
-  let enabled=true;
+  let enabled=true,needsReload=false,pollError='';
   let account=null,generation=0,state=null,fresh=false,busy=false,signature='',timer,refreshAt=0;
   let sessionStatus='',navigationPage='',lastCategoryIndex=-1;
   const sessionLabels={active:'Сессия поддерживается при активности',extended:'Сессия продлена',refreshing:'Продлеваем сессию…',paused:'Продление сессии приостановлено',unsupported:'Продление сессии недоступно: версия банка изменилась',error:'Не удалось продлить сессию', 'signed-out':'Требуется вход в банк'};
@@ -35,15 +35,26 @@
     if(sessionLabels[sessionStatus])banner.box.append(el('span',' · '+sessionLabels[sessionStatus]));
     banner.box.setAttribute('role','status');banner.box.className=error?'error':'';banner.spacer.style.height=banner.h.getBoundingClientRect().height+'px';
   }
-  async function rpc(type,extra={}){const r=await chrome.runtime.sendMessage({type,account,...extra});if(!r?.ok)throw Error(r?.error||'Перезагрузите страницу после обновления расширения.');return r.data;}
+  async function rpc(type,extra={}){
+    let r;
+    try{r=await chrome.runtime.sendMessage({type,account,...extra});}
+    catch(error){
+      if(/extension context invalidated/i.test(error.message||'')){
+        needsReload=true;nextSyncAt=0;clearInterval(timer);
+        const reason=Error('Расширение обновлено. Обновите страницу банка.');reason.requiresReload=true;throw reason;
+      }
+      throw error;
+    }
+    if(!r?.ok)throw Error(r?.error||'Перезагрузите страницу после обновления расширения.');return r.data;
+  }
   function current(){const u=new URL(location.href);if(u.pathname!=='/payment-history')return null;const a=u.searchParams.get('accountNo');return /^\d{6,30}$/.test(a||'')?a:null;}
   async function start(){
-    const g=++generation;syncGeneration=g;fresh=false;loadError='';nextSyncAt=0;signature='';status('Обновляем данные…');render();
+    const g=++generation;syncGeneration=g;fresh=false;loadError='';pollError='';nextSyncAt=0;signature='';status('Обновляем данные…');render();
     // Read the persisted mirror before the remote sync can take the backend DB lock.
     try{const local=await rpc('inline-state');if(g!==generation||current()!==account)return;state=local;refreshAt=Date.now();signature='';render();}catch{}
     if(g!==generation)return;
     try{const result=await rpc('inline-sync');if(g!==generation||current()!==account)return;state=result;fresh=true;loadError='';retryDelay=30000;refreshAt=Date.now();}
-    catch(e){if(g===generation){loadError='Не удалось обновить ZenMoney; повторим автоматически.';nextSyncAt=Date.now()+retryDelay;retryDelay=Math.min(retryDelay*2,300000);}}
+    catch(e){if(g===generation){loadError=e.requiresReload?e.message:'Не удалось обновить ZenMoney: '+e.message+'; повторим автоматически.';nextSyncAt=e.requiresReload?0:Date.now()+retryDelay;retryDelay=Math.min(retryDelay*2,300000);}}
     finally{if(g===generation){syncGeneration=0;signature='';render();if(loadError)status(loadError,true);}}
   }
   const number=v=>{const s=norm(v).replace(/ VND$/,'').replaceAll(',','');return /^[+-]?\d+$/.test(s)&&Number.isSafeInteger(Number(s))?Number(s):null;};
@@ -124,14 +135,14 @@
     if(tables.length!==1||[...tables[0].querySelectorAll('thead th,thead td')].map(text).join('|')!=='DATE|DESCRIPTION|AMOUNT|BALANCE'){clear();status('Ожидаем таблицу истории DATE / DESCRIPTION / AMOUNT / BALANCE…');return;}
     const rows=[...tables[0].querySelectorAll('tbody tr:not([data-zenimport-row])')].map(tr=>({tr,cells:[...tr.children].filter(n=>n.tagName==='TD').map(td=>{const clone=td.cloneNode(true);clone.querySelectorAll('zenimport-operation').forEach(e=>e.remove());return text(clone);})}));
     const pageKey=JSON.stringify([account,rows.map(r=>r.cells)]);if(pageKey!==navigationPage){navigationPage=pageKey;lastCategoryIndex=-1;}
-    const key=JSON.stringify([fresh,loadError,!!state,syncGeneration===generation,pollGeneration===generation,rows.map(r=>r.cells)]);if(key===signature&&[...mounted].every(([tr,panel])=>tr.isConnected&&panel.container?.isConnected&&panel.container.previousElementSibling===tr)){for(const [tr,panel] of mounted)rowBackground(tr,panel.container.firstElementChild);return;}clear();signature=key;
+    const key=JSON.stringify([fresh,loadError,pollError,!!state,syncGeneration===generation,pollGeneration===generation,rows.map(r=>r.cells)]);if(key===signature&&[...mounted].every(([tr,panel])=>tr.isConnected&&panel.container?.isConnected&&panel.container.previousElementSibling===tr)){for(const [tr,panel] of mounted)rowBackground(tr,panel.container.firstElementChild);return;}clear();signature=key;
     let found=0;
     for(const {tr,cells} of rows){if(cells.length!==4)continue;const matchesRows=state?state.rows.filter(r=>matches(cells,r)):[];let panel;
       if(matchesRows.length===1&&rows.filter(r=>JSON.stringify(r.cells)===JSON.stringify(cells)).length===1){panel=card(matchesRows[0]);found++;}
       else{panel=host();panel.box.className='placeholder';if(matchesRows.length)panel.box.append(el('strong','Неоднозначная строка · нужна сверка'));else if(syncGeneration===generation||pollGeneration===generation){const spinner=el('span');spinner.className='spinner';spinner.setAttribute('role','status');spinner.setAttribute('aria-label','Загрузка данных операции');panel.box.append(spinner);}}
       const container=el('tr'),cell=el('td');container.dataset.zenimportRow='';cell.colSpan=4;cell.style.cssText='padding:0!important;border:0!important;';container.style.setProperty('background','transparent','important');rowBackground(tr,cell);container.append(cell);cell.append(panel.h);tr.after(container);panel.container=container;panel.pageIndex=mounted.size;mounted.set(tr,panel);
     }
-    if(fresh)status(`Данные ZenMoney получены. Опознано строк: ${found} из ${rows.length}.`);else if(loadError)status(loadError,true);else status('Обновляем ZenMoney… Показываем сохранённые данные.');
+    if(pollError)status(pollError,true);else if(fresh)status(`Данные ZenMoney получены. Опознано строк: ${found} из ${rows.length}.`);else if(loadError)status(loadError,true);else status('Обновляем ZenMoney… Показываем сохранённые данные.');
   }
   window.addEventListener('message',async e=>{
     if(!enabled||e.source!==window||e.origin!==location.origin||!account)return;
@@ -143,14 +154,14 @@
     catch(error){if(g===generation){status(error.message,true);}}
   });
   function tick(){
-    if(!enabled)return;
-    const next=current();if(next!==account){account=next;sessionStatus='';generation++;syncGeneration=pollGeneration=0;nextSyncAt=0;retryDelay=30000;fresh=false;state=null;clear();banner?.h.remove();banner?.spacer.remove();banner=null;if(account)start();}
+    if(!enabled||needsReload)return;
+    const next=current();if(next!==account){account=next;sessionStatus='';pollError='';generation++;syncGeneration=pollGeneration=0;nextSyncAt=0;retryDelay=30000;fresh=false;state=null;clear();banner?.h.remove();banner?.spacer.remove();banner=null;if(account)start();}
     if(!account)return;
     render();
     if(nextSyncAt&&Date.now()>=nextSyncAt&&!busy&&syncGeneration!==generation){start();return;}
     if(!busy&&syncGeneration!==generation&&pollGeneration!==generation&&Date.now()-refreshAt>15000){
       refreshAt=Date.now();const g=generation;pollGeneration=g;
-      rpc('inline-state').then(s=>{if(g===generation){const changed=JSON.stringify(state)!==JSON.stringify(s);state=s;if(changed)signature='';}},()=>{if(g===generation)status('Нет связи с локальным сервером. Повторим автоматически.',true);}).finally(()=>{if(g===generation){pollGeneration=0;render();}});
+      rpc('inline-state').then(s=>{if(g===generation){const changed=JSON.stringify(state)!==JSON.stringify(s)||!!pollError;state=s;pollError='';if(changed)signature='';}},error=>{if(g===generation){pollError=error.requiresReload?error.message:error.message+' Повторим автоматически.';signature='';}}).finally(()=>{if(g===generation){pollGeneration=0;render();}});
     }
   }
   document.addEventListener('pointerdown',e=>{if(activeMenu&&!e.composedPath().includes(activeMenu.h))activeMenu.close();},true);
