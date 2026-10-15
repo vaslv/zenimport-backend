@@ -1,0 +1,220 @@
+{
+  "ServerInfo": {
+    "api_version": 1,
+    "service_version": "0.1.0",
+    "zenmoney_state": "ready",
+    "last_zenmoney_refresh": "2026-10-15T05:00:00Z",
+    "max_body_bytes": 2000000,
+    "max_page_records": 500
+  },
+  "DiscoverConnection": {
+    "bank": "vietinbank",
+    "connector_version": "1.0.0",
+    "profile_key": "fixture-profile-1",
+    "profile_identity": "user_selected",
+    "capabilities": {
+      "timezone": "Asia/Ho_Chi_Minh",
+      "currencies": [
+        "VND"
+      ],
+      "max_window_days": 30,
+      "earliest_date": null,
+      "details": "included"
+    },
+    "accounts_complete": true,
+    "accounts": [
+      {
+        "source_key": "fixture-account-vnd",
+        "identity_scope": "profile",
+        "label": "Тестовый текущий счёт",
+        "masked_number": "•• 1234",
+        "currency": "VND",
+        "scale": 0,
+        "supported": true,
+        "unsupported_reason": null
+      },
+      {
+        "source_key": "fixture-account-usd",
+        "identity_scope": "profile",
+        "label": "Тестовый валютный счёт",
+        "masked_number": "•• 5678",
+        "currency": "USD",
+        "scale": 2,
+        "supported": false,
+        "unsupported_reason": "Чтение USD ещё не проверено для этого коннектора"
+      }
+    ]
+  },
+  "AccountSettings": {
+    "expected_version": 0,
+    "selection": "enabled",
+    "zenmoney_account_id": "00000000-0000-4000-8000-000000000010",
+    "import_start": "2026-09-15"
+  },
+  "StartSync": {
+    "connection_id": "00000000-0000-4000-8000-000000000001",
+    "request_id": "00000000-0000-4000-8000-000000000002",
+    "reimport_from": null
+  },
+  "CaptureLeaseRequest": {
+    "worker_id": "00000000-0000-4000-8000-000000000003"
+  },
+  "CaptureLease": {
+    "worker_id": "00000000-0000-4000-8000-000000000003",
+    "epoch": 1,
+    "expires_at": "2026-10-15T05:02:00Z"
+  },
+  "CapturePage": {
+    "worker_id": "00000000-0000-4000-8000-000000000003",
+    "lease_epoch": 1,
+    "page_number": 1,
+    "total_pages": 1,
+    "total_records": 1,
+    "records": [
+      {
+        "external_id": "vib:id:fixture-transaction-1",
+        "identity_kind": "bank",
+        "identity_version": "vib:id:1",
+        "occurred_at": "2026-10-15T10:12:25+07:00",
+        "local_date": "2026-10-15",
+        "direction": "expense",
+        "amount": "125000",
+        "currency": "VND",
+        "description": "Тестовая покупка",
+        "beneficiary_account": "fixture-beneficiary",
+        "beneficiary_name": "FIXTURE SHOP",
+        "balance": "1000000",
+        "details_state": "complete",
+        "details": {
+          "channel": "60"
+        }
+      }
+    ]
+  },
+  "CaptureComplete": {
+    "worker_id": "00000000-0000-4000-8000-000000000003",
+    "lease_epoch": 1,
+    "total_pages": 1,
+    "total_records": 1
+  },
+  "CaptureStatus": {
+    "worker_id": "00000000-0000-4000-8000-000000000003",
+    "lease_epoch": 1,
+    "state": "paused",
+    "code": "bank_login_required"
+  },
+  "PageReceipt": {
+    "page_number": 1,
+    "received_records": 1,
+    "repeated": false
+  },
+  "IntervalView": {
+    "id": "00000000-0000-4000-8000-000000000004",
+    "period": {
+      "start": "2026-09-15",
+      "end": "2026-10-14"
+    },
+    "state": "planned",
+    "received_pages": 0,
+    "received_records": 0
+  },
+  "AccountCatalog": {
+    "refreshed_at": "2026-10-15T05:00:00Z",
+    "accounts": [
+      {
+        "id": "00000000-0000-4000-8000-000000000010",
+        "title": "Тестовый VND",
+        "currency": "VND",
+        "instrument": 3
+      }
+    ]
+  },
+  "ErrorResponse": {
+    "error": {
+      "code": "delivery_uncertain",
+      "message": "Проверяем результат отправки",
+      "retryable": true,
+      "request_id": "00000000-0000-4000-8000-000000000005"
+    }
+  },
+  "AccountView": {
+    "id": "00000000-0000-4000-8000-000000000006",
+    "source_key": "fixture-account-vnd",
+    "label": "Тестовый текущий счёт",
+    "masked_number": "•• 1234",
+    "currency": "VND",
+    "scale": 0,
+    "supported": true,
+    "unsupported_reason": null,
+    "settings_version": 1,
+    "selection": "enabled",
+    "zenmoney_account_id": "00000000-0000-4000-8000-000000000010",
+    "import_start": "2026-09-15",
+    "last_complete_end": null
+  },
+  "ConnectionView": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "bank": "vietinbank",
+    "accounts_complete": true,
+    "accounts": [
+      {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "source_key": "fixture-account-vnd",
+        "label": "Тестовый текущий счёт",
+        "masked_number": "•• 1234",
+        "currency": "VND",
+        "scale": 0,
+        "supported": true,
+        "unsupported_reason": null,
+        "settings_version": 1,
+        "selection": "enabled",
+        "zenmoney_account_id": "00000000-0000-4000-8000-000000000010",
+        "import_start": "2026-09-15",
+        "last_complete_end": null
+      }
+    ]
+  },
+  "JobView": {
+    "id": "00000000-0000-4000-8000-000000000007",
+    "connection_id": "00000000-0000-4000-8000-000000000001",
+    "capture_state": "planned",
+    "delivery_state": "waiting",
+    "end_date": "2026-10-15",
+    "accounts": [
+      {
+        "account_id": "00000000-0000-4000-8000-000000000006",
+        "settings_version": 1,
+        "capture_state": "planned",
+        "intervals": [
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "period": {
+              "start": "2026-09-15",
+              "end": "2026-10-14"
+            },
+            "state": "planned",
+            "received_pages": 0,
+            "received_records": 0
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "period": {
+              "start": "2026-10-15",
+              "end": "2026-10-15"
+            },
+            "state": "planned",
+            "received_pages": 0,
+            "received_records": 0
+          }
+        ]
+      }
+    ],
+    "delivery": {
+      "pending": 0,
+      "delivered": 0,
+      "suppressed": 0,
+      "uncertain": 0
+    },
+    "errors": []
+  }
+}

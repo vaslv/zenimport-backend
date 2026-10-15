@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ZenImport — эскиз меню</title>
+<style>
+*{box-sizing:border-box}body{margin:0;padding:32px;background:#f5f5f5;color:#222;font:15px/1.45 system-ui,sans-serif}h1{font-size:24px;margin:0 0 8px}body>p{color:#555;margin:0 0 28px;max-width:900px}.board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;max-width:1350px}.state h2{font-size:14px;font-weight:500;color:#555;margin:0 0 12px}.popup{padding:22px;border:1px solid #aaa;border-radius:8px;background:white}.brand{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin-bottom:18px}.brand strong{font-size:22px}.brand span{color:#666;font-size:13px}h3{font-size:15px;margin:22px 0 10px}label{display:block;font-size:13px;margin-bottom:6px}.account{margin-bottom:17px}.account small{display:block;color:#666;margin:2px 0 6px}select,input,button{font:inherit;width:100%;min-height:40px;border:1px solid #aaa;border-radius:5px;background:white;color:#222;padding:8px 10px}button.primary{background:#333;color:white;border-color:#333;margin-top:18px;font-weight:600;cursor:pointer}.period{display:flex;gap:8px;margin-bottom:10px}.period button{font-size:13px;cursor:pointer}.period .chosen{background:#eee;border-color:#333}.muted{font-size:12px;color:#666}.notice{font-size:13px;margin:12px 0 0}details{border-top:1px solid #ddd;margin-top:18px;padding-top:13px;font-size:13px}summary{cursor:pointer}details label{margin-top:12px}details .account{margin-top:15px}progress{width:100%;height:7px;accent-color:#555;margin-top:16px}.foot{font-size:12px;color:#666;margin-top:14px}.status{border:1px dashed #aaa;padding:12px;margin:18px 0 0;font-size:13px}.status strong{display:block;margin-bottom:4px}@media(max-width:1000px){.board{grid-template-columns:1fr;max-width:440px}body{padding:20px}}
+</style>
+<h1>Одно меню, три состояния</h1>
+<p>Черновой эскиз. В браузере настраиваются счета и запускается синхронизация. Все операции разбираются в мобильном ZenMoney. Данные ниже демонстрационные.</p>
+<div class="board">
+<section class="state"><h2>1. Первое подключение банка</h2><div class="popup">
+<div class="brand"><strong>ZenImport</strong><span>VietinBank</span></div>
+<h3>Куда загружать операции</h3>
+<!-- Каждый обнаруженный счёт требует явного выбора; «Не загружать» отличается от отсутствия выбора. -->
+<div class="account"><label for="account1">Текущий счёт · •• 1234</label><small>VND</small><select id="account1"><option>Andrei VND VietinBank</option><option>Не загружать</option><option>Выберите счёт ZenMoney</option></select></div>
+<div class="account"><label for="account2">Валютный счёт · •• 5678</label><small>USD</small><select id="account2"><option>Andrei USD VietinBank</option><option>Не загружать</option><option>Выберите счёт ZenMoney</option></select></div>
+<div class="account"><label for="account3">Дополнительный счёт · •• 9012</label><small>VND</small><select id="account3"><option>Не загружать</option><option>Andrei VND VietinBank</option><option>Выберите счёт ZenMoney</option></select></div>
+<h3>Получить историю</h3><div class="period"><button class="chosen" type="button">30 дней</button><button type="button">6 месяцев</button></div><label for="from">Начиная с даты</label><input id="from" type="date" value="2026-09-15" max="2026-10-15">
+<button class="primary" type="button">Синхронизировать</button>
+<details><summary>Настройки подключения</summary><label for="url1">Адрес сервера</label><input id="url1" value="http://127.0.0.1:18791"><label for="token1">Токен подключения</label><input id="token1" type="password" placeholder="Токен нашего сервера"></details>
+</div></section>
+<section class="state"><h2>2. Обычная работа</h2><div class="popup">
+<div class="brand"><strong>ZenImport</strong><span>VietinBank</span></div>
+<p class="muted">Подключено счетов: 2</p><button class="primary" type="button">Синхронизировать</button><p class="notice">Добавлено 12 · Уже обработано 38</p>
+<!-- Здесь нет переключателя встроенного UI, ссылок на SPA и редакторов операций. -->
+<details><summary>Настройки</summary><label for="url2">Адрес сервера</label><input id="url2" value="http://127.0.0.1:18791"><label for="token2">Токен подключения</label><input id="token2" type="password" placeholder="Токен нашего сервера"><h3>Счета</h3><p>Текущий · •• 1234 → Andrei VND VietinBank</p><p>Валютный · •• 5678 → Andrei USD VietinBank</p><p>Дополнительный · •• 9012 → Не загружать</p><label for="older">Разово перечитать историю с</label><input id="older" type="date" max="2026-10-15"><p class="muted">При следующей синхронизации выбранный период будет прочитан заново. Уже сохранённые недоставленные операции включённых счетов также будут отправлены.</p><button type="button">Сохранить настройки</button></details>
+</div><p class="foot">Настройки свёрнуты. Повторная загрузка учитывает успешный период каждого счёта и запас 14 дней.</p></section>
+<section class="state"><h2>3. Синхронизация</h2><div class="popup">
+<div class="brand"><strong>ZenImport</strong><span>VietinBank</span></div>
+<p>Получаем историю · счёт 2 из 2</p><progress value="65" max="100" aria-label="Прогресс демонстрационного задания"></progress><p class="notice">Сохранено 48 · Добавлено в ZenMoney 12</p><button type="button" class="primary">Остановить сбор</button><p class="muted">Меню можно закрыть. Пока идёт сбор, оставьте банковскую вкладку открытой.</p>
+<details><summary>Настройки</summary><p>Настройки подключения и счетов доступны после завершения текущего задания.</p></details>
+</div><div class="status"><strong>При прерванном входе</strong>Войдите в банк и нажмите «Синхронизировать». Уже полученные данные сохранены.</div><p class="foot">После завершения сбора сервер может отправить сохранённые данные без открытого Chrome.</p></section>
+</div>
+</html>

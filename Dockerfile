@@ -38,6 +38,7 @@ RUN python -m pip install --no-cache-dir -r requirements.lock.txt
 COPY pyproject.toml ./
 COPY tests ./tests
 COPY fixtures/import.json ./fixtures/import.json
+COPY fixtures/sync-v1 ./fixtures/sync-v1
 USER 10001:10001
 CMD ["sh", "-c", "python -m pytest -q -p no:cacheprovider && python tests/http_smoke.py"]
 
