@@ -2,6 +2,9 @@
 from datetime import datetime, timezone
 import json
 from uuid import uuid4
+import httpx
+from zenmoney_api import Client
+from zenmoney_api.protocol import KINDS, decode_json, encode_json
 
 from fastapi.testclient import TestClient
 
@@ -17,7 +20,23 @@ NOW = int(datetime(2026, 10, 15, 5, tzinfo=timezone.utc).timestamp())
 class Harness:
     def __init__(self, path):
         self.path, self.now = path, NOW
-        self.app = create_app(Settings(path, TOKEN), clock=lambda: self.now)
+        self.sdk_available = True
+        self.sdk_requests = []
+        def respond(request):
+            body = decode_json(request.content)
+            assert set(body) <= {'serverTimestamp', 'currentClientTimestamp', 'forceFetch'}
+            self.sdk_requests.append(body)
+            if not self.sdk_available:
+                raise httpx.ConnectError('fixture SDK unavailable')
+            result = {'serverTimestamp': body['serverTimestamp'] + 1}
+            if body['serverTimestamp'] == 0:
+                result.update({kind: [] for kind in KINDS})
+                with storage.transaction(path, read_only=True) as db:
+                    for kind, data in db.execute('SELECT kind,data FROM zen_entities WHERE deleted=0'):
+                        result[kind].append(decode_json(data.encode()))
+            return httpx.Response(200, content=encode_json(result))
+        self.app = create_app(Settings(path, TOKEN, 'fixture-read-only-sdk-token'), clock=lambda: self.now,
+            client_factory=lambda token: Client(token, transport=httpx.MockTransport(respond), clock=lambda: self.now))
         self.context = TestClient(self.app)
         self.client = self.context.__enter__()
         self.client.headers['Authorization'] = 'Bearer ' + TOKEN

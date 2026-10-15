@@ -145,7 +145,7 @@ def test_b2_upgrade_preserves_finance_and_private_backup(tmp_path):
     backup = storage.initialize(path)
     assert backup.stat().st_mode & 0o777 == 0o600
     with storage.transaction(path, read_only=True) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 3
+        assert db.execute('PRAGMA user_version').fetchone()[0] == storage.SCHEMA_VERSION
         assert db.execute('SELECT data FROM zen_entities').fetchone()[0] == '{"amount":0.123456789012345678901}'
         assert db.execute("SELECT value FROM service_meta WHERE key='instance_id'").fetchone()[0] == 'fixture-v2-instance'
     with closing(sqlite3.connect(backup)) as db:

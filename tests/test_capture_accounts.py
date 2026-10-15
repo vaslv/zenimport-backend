@@ -84,6 +84,7 @@ def test_stale_catalog_not_claimed_fresh_and_disabled_settings_still_work(h):
     h.seed_mirror()
     identifier = h.discover()['accounts'][0]['id']
     h.now += 301
+    h.sdk_available = False
     assert h.client.get('/api/v1/zenmoney/accounts').status_code == 503
     assert h.configure(identifier).status_code == 503
     assert h.configure(identifier, selection='ignored').status_code == 200

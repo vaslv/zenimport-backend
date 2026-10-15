@@ -9,11 +9,13 @@ import time
 from uuid import uuid4
 
 APPLICATION_ID = 0x5A494231
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 SCHEMA_SQL = Path(__file__).with_name('schema_v2.sql').read_text()
 B3_SQL = Path(__file__).with_name('schema_v3.sql').read_text()
+B4_SQL = Path(__file__).with_name('schema_v4.sql').read_text()
 OBJECTS_V2 = {(kind.lower(), name) for kind, name in re.findall(r'CREATE (TABLE|TRIGGER) (\w+)', SCHEMA_SQL)}
-OBJECTS = OBJECTS_V2 | {(kind.lower(), name) for kind, name in re.findall(r'CREATE (TABLE|TRIGGER) (\w+)', B3_SQL)}
+OBJECTS_V3 = OBJECTS_V2 | {(kind.lower(), name) for kind, name in re.findall(r'CREATE (TABLE|TRIGGER) (\w+)', B3_SQL)}
+OBJECTS = OBJECTS_V3 | {(kind.lower(), name) for kind, name in re.findall(r'CREATE (TABLE|TRIGGER) (\w+)', B4_SQL)}
 MONEY_PATTERN = re.compile(r'(?:0|[1-9][0-9]{0,23})(?:\.[0-9]{1,12})?')
 
 
@@ -41,8 +43,8 @@ def validate_owner(db, *, allow_upgrade=True):
     if app_id == 0 and version == 0 and not objects and allow_upgrade:
         return 0
     base = {('table', 'service_meta')}
-    expected = base if version == 1 else base | (OBJECTS_V2 if version == 2 else OBJECTS)
-    if app_id != APPLICATION_ID or version not in ((1, 2, 3) if allow_upgrade else (3,)) or objects != expected:
+    expected = base if version == 1 else base | {2: OBJECTS_V2, 3: OBJECTS_V3}.get(version, OBJECTS)
+    if app_id != APPLICATION_ID or version not in ((1, 2, 3, 4) if allow_upgrade else (4,)) or objects != expected:
         raise RuntimeError('Database belongs to another application or schema; use the explicit migration procedure')
     return version
 
@@ -85,7 +87,7 @@ def initialize(path: Path):
     if path.exists():
         with closing(connect_readonly(path)) as db:
             previous = validate_owner(db)
-    saved = backup(path) if previous in (1, 2) else None
+    saved = backup(path) if previous in (1, 2, 3) else None
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists():
         try:
@@ -104,6 +106,9 @@ def initialize(path: Path):
             if version < 3:
                 execute_schema(db, B3_SQL)
                 db.execute('INSERT INTO schema_migrations VALUES (?,?,?)', (3, int(time.time()), str(saved) if saved else None))
+            if version < 4:
+                execute_schema(db, B4_SQL)
+                db.execute('INSERT INTO schema_migrations VALUES (?,?,?)', (4, int(time.time()), str(saved) if saved else None))
             db.execute(f'PRAGMA application_id={APPLICATION_ID}')
             db.execute(f'PRAGMA user_version={SCHEMA_VERSION}')
             db.commit()

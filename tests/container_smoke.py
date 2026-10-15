@@ -69,7 +69,7 @@ def capture_smoke(stage):
             api('PUT', prefix + interval['id'] + '/pages/1', {**auth, 'page_number': 1, 'total_pages': 1, 'total_records': 0, 'records': []})
             api('POST', prefix + interval['id'] + '/complete', {**auth, 'total_pages': 1, 'total_records': 0})
         finished = api('GET', '/jobs/' + job['id'])
-        assert finished['capture_state'] == 'complete' and finished['delivery_state'] == 'waiting'
+        assert finished['capture_state'] == 'complete' and finished['delivery_state'] == 'blocked'
         assert finished['delivery']['pending'] == 1
 
 base = os.environ['BASE_URL']

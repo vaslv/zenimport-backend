@@ -15,17 +15,20 @@ from .http import ApiBoundary, error_response
 from .capture_policy import SyncError, MESSAGES
 from .sync_api import router
 from .sync_contracts import ServerInfo
+from .mirror import Mirror
 
 
-def create_app(settings: Settings | None = None, *, clock=None):
+def create_app(settings: Settings | None = None, *, clock=None, client_factory=Client):
     settings = settings or Settings.from_env()
+    clock = clock or (lambda: int(time.time()))
 
     @asynccontextmanager
     async def lifespan(app):
         storage.initialize(settings.database_path)
-        client = Client(settings.zenmoney_token) if settings.zenmoney_token else None
+        client = client_factory(settings.zenmoney_token) if settings.zenmoney_token else None
         app.state.zenmoney = client
         try:
+            app.state.mirror = Mirror(settings.database_path, client, settings.zenmoney_token, clock)
             yield
         finally:
             if client is not None:
@@ -34,7 +37,7 @@ def create_app(settings: Settings | None = None, *, clock=None):
     app = FastAPI(title='ZenImport Backend', version=__version__, lifespan=lifespan,
                   docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(ApiBoundary, token=settings.api_token)
-    app.include_router(router(settings.database_path, clock or (lambda: int(time.time()))))
+    app.include_router(router(settings.database_path, clock, lambda: app.state.mirror))
 
     @app.exception_handler(SyncError)
     async def sync_error(request: Request, exc):
@@ -66,9 +69,6 @@ def create_app(settings: Settings | None = None, *, clock=None):
 
     @app.get('/api/v1/info', response_model=ServerInfo)
     def info():
-        # Configuration does not prove connectivity or a fresh mirror. B4 owns refresh.
-        return ServerInfo(service_version=__version__,
-                          zenmoney_state='unavailable' if settings.zenmoney_token else 'not_configured',
-                          last_zenmoney_refresh=None)
+        return ServerInfo(service_version=__version__, **app.state.mirror.info())
 
     return app
