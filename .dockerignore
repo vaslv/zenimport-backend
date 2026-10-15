@@ -15,6 +15,8 @@
 !fixtures/
 !fixtures/sync-v1/
 !fixtures/sync-v1/*.json
+!fixtures/legacy-v12/
+!fixtures/legacy-v12/*.sql
 **/__pycache__
 **/*.pyc
 **/.env
