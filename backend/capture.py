@@ -74,8 +74,20 @@ def interval_view(db, row):
             'received_pages': count[0], 'received_records': count[1]}
 
 
+def delivery_counts(db, job):
+    # Captured identity stays in this job even if a later unfinished revision
+    # moved the current date. Mutable bank fields cannot erase its progress.
+    return dict(db.execute("""SELECT p.state,count(*) FROM job_accounts a
+        JOIN bank_transactions b ON b.account_id=a.account_id JOIN bank_processing p ON p.bank_id=b.id
+        WHERE a.job_id=? AND ((b.local_date>=a.authorized_start AND b.local_date<=?) OR EXISTS(
+          SELECT 1 FROM captured_records r JOIN capture_intervals i ON i.id=r.interval_id
+          WHERE r.bank_id=b.id AND i.job_id=a.job_id)) GROUP BY p.state""", (job['id'], job['end_date'])))
+
+
 def job_view(db, identifier, now):
     expire(db, str(identifier), now)
+    from .delivery import refresh_status
+    refresh_status(db, now, identifier)
     row = get(db, 'capture_jobs', identifier)
     accounts = []
     for account in db.execute('SELECT * FROM job_accounts WHERE job_id=? ORDER BY account_id', (row['id'],)):
@@ -83,8 +95,7 @@ def job_view(db, identifier, now):
         accounts.append({'account_id': account['account_id'], 'settings_version': account['settings_version'],
                          'capture_state': aggregate([i['state'] for i in intervals]), 'intervals': intervals})
     counts = {'pending': 0, 'delivered': 0, 'suppressed': 0, 'uncertain': 0}
-    for state, count in db.execute('''SELECT p.state,count(*) FROM job_accounts a JOIN bank_transactions b ON b.account_id=a.account_id
-        JOIN bank_processing p ON p.bank_id=b.id WHERE a.job_id=? AND b.local_date>=a.authorized_start AND b.local_date<=? GROUP BY p.state''', (row['id'], row['end_date'])):
+    for state, count in delivery_counts(db, row).items():
         counts['pending' if state == 'prepared' else state] += count
     errors = [{'code': e['code'], 'message': MESSAGES[e['code']], 'retryable': bool(e['retryable']), 'request_id': e['id']}
               for e in db.execute('SELECT * FROM capture_errors WHERE job_id=? AND resolved=0 ORDER BY created_at,id', (row['id'],))]

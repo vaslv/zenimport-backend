@@ -1,5 +1,6 @@
 """Independent backend bootstrap. Business endpoints are implemented in B2–B5."""
 from contextlib import asynccontextmanager
+import asyncio
 import sqlite3
 import time
 
@@ -16,9 +17,10 @@ from .capture_policy import SyncError, MESSAGES
 from .sync_api import router
 from .sync_contracts import ServerInfo
 from .mirror import Mirror
+from .delivery import DeliveryWorker
 
 
-def create_app(settings: Settings | None = None, *, clock=None, client_factory=Client):
+def create_app(settings: Settings | None = None, *, clock=None, client_factory=Client, start_worker=True):
     settings = settings or Settings.from_env()
     clock = clock or (lambda: int(time.time()))
 
@@ -29,7 +31,13 @@ def create_app(settings: Settings | None = None, *, clock=None, client_factory=C
         app.state.zenmoney = client
         try:
             app.state.mirror = Mirror(settings.database_path, client, settings.zenmoney_token, clock)
-            yield
+            app.state.delivery = DeliveryWorker(settings.database_path, app.state.mirror, clock)
+            if start_worker:
+                app.state.delivery.start()
+            try:
+                yield
+            finally:
+                await asyncio.to_thread(app.state.delivery.stop)
         finally:
             if client is not None:
                 client.close()
@@ -37,7 +45,7 @@ def create_app(settings: Settings | None = None, *, clock=None, client_factory=C
     app = FastAPI(title='ZenImport Backend', version=__version__, lifespan=lifespan,
                   docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(ApiBoundary, token=settings.api_token)
-    app.include_router(router(settings.database_path, clock, lambda: app.state.mirror))
+    app.include_router(router(settings.database_path, clock, lambda: app.state.mirror, lambda: app.state.delivery.wake()))
 
     @app.exception_handler(SyncError)
     async def sync_error(request: Request, exc):

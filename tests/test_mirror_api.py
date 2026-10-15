@@ -13,7 +13,7 @@ from mirror_factory import Fixture, snapshot
 def test_catalog_reads_sdk_and_info_only_reports_proved_freshness(tmp_path):
     f = Fixture(tmp_path / 'api.sqlite3')
     try:
-        app = create_app(Settings(f.path, TOKEN, 'fixture-zenmoney-token'), clock=lambda: f.now, client_factory=lambda _: f.client)
+        app = create_app(Settings(f.path, TOKEN, 'fixture-zenmoney-token'), clock=lambda: f.now, client_factory=lambda _: f.client, start_worker=False)
         with TestClient(app) as client:
             headers = {'Authorization': 'Bearer ' + TOKEN}
             assert client.get('/api/v1/info', headers=headers).json()['zenmoney_state'] == 'unavailable'

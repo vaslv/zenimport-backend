@@ -135,7 +135,7 @@ class Mirror:
     def __init__(self, path, client, token, clock, *, sleep=time.sleep):
         self.path, self.client, self.clock, self.sleep = path, client, clock, sleep
         self.source_hash = sha256(token.encode()).hexdigest() if client is not None else None
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         with storage.transaction(path) as db:
             state = db.execute('SELECT * FROM zen_mirror_state WHERE id=1').fetchone()
             if client is None or state['source_hash'] != self.source_hash:
@@ -163,7 +163,7 @@ class Mirror:
                 db.execute("DELETE FROM service_meta WHERE key='zenmoney_refreshed_at'")
                 db.execute('DELETE FROM category_predictions')
 
-    def refresh(self, *, force=False):
+    def refresh(self, *, force=False, transactions=False):
         if self.client is None:
             with storage.transaction(self.path, read_only=True) as db:
                 generation = db.execute('SELECT generation FROM zen_mirror_state WHERE id=1').fetchone()[0]
@@ -175,13 +175,13 @@ class Mirror:
                     state = db.execute('SELECT * FROM zen_mirror_state WHERE id=1').fetchone()
                 if state['source_hash'] != self.source_hash:
                     raise SyncError('zenmoney_unavailable', 503, retryable=True)
-                if self.fresh(state, self.clock()) and (not force or contention):
+                if self.fresh(state, self.clock()) and (not transactions and (not force or contention)):
                     return
                 cursor = 0 if state['needs_full'] else state['cursor']
                 try:
                     for attempt in range(2):
                         try:
-                            diff = self.client.read_diff(cursor, force_fetch=FORCE_FETCH if state['needs_full'] else None)
+                            diff = self.client.read_diff(cursor, force_fetch=FORCE_FETCH if state['needs_full'] else ['transaction'] if transactions else None)
                             break
                         except (TransportError, HTTPError) as exc:
                             temporary = isinstance(exc, TransportError) or exc.status_code == 429 or exc.status_code >= 500

@@ -36,7 +36,7 @@ class Harness:
                         result[kind].append(decode_json(data.encode()))
             return httpx.Response(200, content=encode_json(result))
         self.app = create_app(Settings(path, TOKEN, 'fixture-read-only-sdk-token'), clock=lambda: self.now,
-            client_factory=lambda token: Client(token, transport=httpx.MockTransport(respond), clock=lambda: self.now))
+            client_factory=lambda token: Client(token, transport=httpx.MockTransport(respond), clock=lambda: self.now), start_worker=False)
         self.context = TestClient(self.app)
         self.client = self.context.__enter__()
         self.client.headers['Authorization'] = 'Bearer ' + TOKEN

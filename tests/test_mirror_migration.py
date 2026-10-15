@@ -28,7 +28,7 @@ def test_b3_upgrade_keeps_data_private_backup_and_requires_real_full_refresh(tmp
     backup = storage.initialize(path)
     assert backup.stat().st_mode & 0o777 == 0o600
     with storage.transaction(path, read_only=True) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 4
+        assert db.execute('PRAGMA user_version').fetchone()[0] == storage.SCHEMA_VERSION
         assert db.execute('SELECT data FROM zen_entities').fetchone()[0] == '{"amount":0.123456789012345678901}'
         assert db.execute('SELECT cursor,ready,needs_full FROM zen_mirror_state').fetchone()[:] == (0, 0, 1)
         storage.check_integrity(db)

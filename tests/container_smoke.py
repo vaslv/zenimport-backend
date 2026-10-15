@@ -52,10 +52,16 @@ def capture_smoke(stage):
         api('PUT', prefix + intervals[0]['id'] + '/pages/1', payload)
         api('POST', prefix + intervals[0]['id'] + '/complete', {**auth, 'total_pages': 1, 'total_records': 1})
         api('PUT', prefix + intervals[1]['id'] + '/pages/1', {**auth, 'page_number': 1, 'total_pages': 1, 'total_records': 0, 'records': []})
-        progress_file.write_text(json.dumps({'job': job, 'command': command, 'auth': auth, 'payload': payload}))
+        with transaction(Path('/data/zenimport.sqlite3'), read_only=True) as db:
+            authorization = dict(db.execute('SELECT * FROM delivery_authorizations').fetchone())
+            assert not db.execute('SELECT 1 FROM delivery_attempts').fetchone()
+        progress_file.write_text(json.dumps({'job': job, 'command': command, 'auth': auth, 'payload': payload, 'authorization': authorization}))
     else:
         saved = json.loads(progress_file.read_text())
         job, auth = saved['job'], saved['auth']
+        with transaction(Path('/data/zenimport.sqlite3'), read_only=True) as db:
+            assert dict(db.execute('SELECT * FROM delivery_authorizations').fetchone()) == saved['authorization']
+            assert not db.execute('SELECT 1 FROM delivery_attempts').fetchone()
         replay = api('POST', '/jobs', saved['command'])
         assert replay['id'] == job['id']
         assert replay['accounts'][0]['intervals'][0]['state'] == 'complete'
@@ -114,4 +120,4 @@ elif sys.argv[1] == 'verify':
 else:
     raise AssertionError('Unknown test stage')
 capture_smoke(sys.argv[1])
-print('PASS: HTTP/auth, conversion, capture resume and financial persistence')
+print('PASS: HTTP/auth, conversion, capture resume, delivery authorization and financial persistence')

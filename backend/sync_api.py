@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter
 
-from . import accounts, capture, predictions, storage
+from . import accounts, capture, delivery, predictions, storage
 from .capture_policy import get
 from .capture_policy import SyncError
 from .sync_contracts import (AccountCatalog, AccountSettings, AccountView, CaptureComplete,
@@ -15,7 +15,7 @@ class EmptyRequest(WireModel):
     pass
 
 
-def router(path, clock, mirror):
+def router(path, clock, mirror, wake):
     routes = APIRouter(prefix='/api/v1')
 
     def run(operation, *args):
@@ -60,7 +60,10 @@ def router(path, clock, mirror):
     def start(data: StartSync):
         def command(db, data, now):
             repeated = db.execute('SELECT 1 FROM job_requests WHERE request_id=?', (str(data.request_id),)).fetchone()
-            return capture.start(db, data, now), bool(repeated)
+            job = capture.start(db, data, now)
+            if not repeated:
+                delivery.authorize_job(db, job['id'], now)
+            return job, bool(repeated)
         job, repeated = run(command, data)
         if not repeated:
             try:
@@ -69,6 +72,7 @@ def router(path, clock, mirror):
                 with storage.transaction(path) as db:
                     capture.add_error(db, job['id'], None, 'zenmoney_unavailable', clock(), True)
                     db.execute("UPDATE capture_jobs SET delivery_state='blocked' WHERE id=? AND delivery_state='waiting'", (job['id'],))
+        wake()
         return run(capture.job_view, job['id'])
 
     @routes.get('/jobs/{identifier}', response_model=JobView)
@@ -94,7 +98,13 @@ def router(path, clock, mirror):
 
     @routes.post('/jobs/{job_id}/intervals/{interval_id}/complete', response_model=IntervalView)
     def complete(job_id: UUID, interval_id: UUID, data: CaptureComplete):
-        return run(capture.complete, job_id, interval_id, data)
+        def finish(db, job_id, interval_id, data, now):
+            result = capture.complete(db, job_id, interval_id, data, now)
+            delivery.authorize_job(db, job_id, now)
+            return result
+        result = run(finish, job_id, interval_id, data)
+        wake()
+        return result
 
     @routes.post('/jobs/{identifier}/capture-status', response_model=JobView)
     def status(identifier: UUID, data: CaptureStatus):
