@@ -1,11 +1,15 @@
 services:
   backend:
+    platform: ${TEST_PLATFORM:?Select test platform}
     ports: !reset []
     restart: "no"
     environment:
       ZENMONEY_TOKEN: ""
       DATABASE_PATH: /data/zenimport.sqlite3
   tests:
+    environment:
+      TEST_PLATFORM: ${TEST_PLATFORM:?Select test platform}
+    platform: ${TEST_PLATFORM:?Select test platform}
     profiles: [test]
     build:
       context: .
@@ -15,6 +19,7 @@ services:
     tmpfs:
       - /tmp
   smoke:
+    platform: ${TEST_PLATFORM:?Select test platform}
     profiles: [test]
     build:
       context: .
@@ -28,6 +33,28 @@ services:
     volumes:
       - data:/data
     command: ["python", "tests/container_smoke.py", "seed"]
+
+  lifecycle:
+    profiles: [test]
+    platform: ${TEST_PLATFORM:?Select test platform}
+    build:
+      context: .
+      target: tests
+    environment:
+      API_TOKEN: fixture-backend-token-for-isolated-tests
+      ZENMONEY_TOKEN: fixture-container-sdk-token
+      DATABASE_PATH: ${LIFECYCLE_DATABASE_PATH:-/data/lifecycle.sqlite3}
+    command: ["python", "-m", "uvicorn", "runtime_server:create_app", "--factory", "--app-dir", "/app/tests", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-access-log"]
+    volumes:
+      - data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    init: true
+    restart: "no"
+    stop_grace_period: 30s
 
 networks:
   default:
