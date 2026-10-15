@@ -163,7 +163,7 @@ def test_v1_upgrade_backup_is_private_complete_and_idempotent(tmp_path):
     with storage.transaction(path, read_only=True) as db:
         assert db.execute("SELECT value FROM service_meta WHERE key='instance_id'").fetchone()[0] == 'fixture-instance'
     assert storage.initialize(path) is None
-    assert len(list(tmp_path.glob('*.pre-v2-*'))) == 1
+    assert len(list(tmp_path.glob(f'*.pre-v{storage.SCHEMA_VERSION}-*'))) == 1
 
 
 def test_v1_upgrade_failure_rolls_back_all_schema_changes(tmp_path, monkeypatch):

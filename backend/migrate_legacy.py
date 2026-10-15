@@ -308,7 +308,7 @@ def convert(source_path: Path, destination: Path):
             staged = Path(temporary) / 'converted.sqlite3'
             storage.initialize(staged)
             with storage.transaction(staged) as target:
-                report = {'source_version': 12, 'storage_version': 2, 'archived_rows': sum(counts.values()), 'tables': len(counts), 'repeated': False}
+                report = {'source_version': 12, 'storage_version': storage.SCHEMA_VERSION, 'archived_rows': sum(counts.values()), 'tables': len(counts), 'repeated': False}
                 target.execute('INSERT INTO legacy_imports VALUES (?,?,?,?,?)',
                                (digest, int(time.time()), 12, json.dumps(counts, sort_keys=True), json.dumps(report)))
                 archive.copy_archive(source, target, digest)

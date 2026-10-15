@@ -1,6 +1,7 @@
 """Independent backend bootstrap. Business endpoints are implemented in B2–B5."""
 from contextlib import asynccontextmanager
 import sqlite3
+import time
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -11,10 +12,12 @@ from zenmoney_api import Client
 from . import __version__, storage
 from .config import Settings
 from .http import ApiBoundary, error_response
+from .capture_policy import SyncError, MESSAGES
+from .sync_api import router
 from .sync_contracts import ServerInfo
 
 
-def create_app(settings: Settings | None = None):
+def create_app(settings: Settings | None = None, *, clock=None):
     settings = settings or Settings.from_env()
 
     @asynccontextmanager
@@ -31,6 +34,11 @@ def create_app(settings: Settings | None = None):
     app = FastAPI(title='ZenImport Backend', version=__version__, lifespan=lifespan,
                   docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(ApiBoundary, token=settings.api_token)
+    app.include_router(router(settings.database_path, clock or (lambda: int(time.time()))))
+
+    @app.exception_handler(SyncError)
+    async def sync_error(request: Request, exc):
+        return error_response(request.state.request_id, exc.code, MESSAGES[exc.code], exc.status, retryable=exc.retryable)
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request: Request, exc):
