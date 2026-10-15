@@ -1,94 +1,34 @@
-# Only use with scripts/test-docker.sh: dedicated project and disposable data.
 services:
   backend:
-    environment:
-      API_TOKEN: docker-test-token-not-for-real-data
-      ZENMONEY_MODE: demo
-      ZENMONEY_TOKEN: ""
-    ports: !override
-      - "127.0.0.1:0:8000"
+    ports: !reset []
     restart: "no"
-
-  backend-tests:
+    environment:
+      ZENMONEY_TOKEN: ""
+      DATABASE_PATH: /data/zenimport.sqlite3
+  tests:
     profiles: [test]
     build:
       context: .
-      target: backend-tests
-    read_only: true
-    tmpfs: [/tmp]
+      target: tests
     network_mode: none
-
-  parser-tests:
-    profiles: [test]
-    build:
-      context: .
-      target: parser-tests
     read_only: true
-    tmpfs: [/tmp]
-    network_mode: none
-
+    tmpfs:
+      - /tmp
   smoke:
     profiles: [test]
     build:
       context: .
-      target: backend-tests
+      target: tests
     environment:
-      SMOKE_BASE_URL: http://backend:8000
-      SMOKE_TOKEN: docker-test-token-not-for-real-data
-    depends_on:
-      backend:
-        condition: service_healthy
+      API_TOKEN: ${API_TOKEN:-}
+      BASE_URL: http://backend:8000
     read_only: true
-    tmpfs: [/tmp]
+    tmpfs:
+      - /tmp
+    volumes:
+      - data:/data
     command: ["python", "tests/container_smoke.py", "seed"]
 
-
-  browser-backend:
-    profiles: [test]
-    build:
-      context: .
-      target: runtime
-    environment:
-      API_TOKEN: docker-test-token-not-for-real-data
-      ZENMONEY_MODE: demo
-      DATABASE_PATH: /data/browser.sqlite3
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /data:uid=10001,gid=10001,mode=0700
-
-  operation-backend:
-    profiles: [test]
-    build:
-      context: .
-      target: backend-tests
-    network_mode: service:browser-backend
-    depends_on:
-      browser-backend:
-        condition: service_healthy
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /data:uid=10001,gid=10001,mode=0700
-    command: ["python", "tests/operation_server.py"]
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=2).read()"]
-
-  browser-tests:
-    profiles: [test]
-    build:
-      context: .
-      target: browser-tests
-    network_mode: service:browser-backend
-    depends_on:
-      browser-backend:
-        condition: service_healthy
-      operation-backend:
-        condition: service_healthy
-    shm_size: 1gb
-    volumes:
-      - ./test-results:/results
-
-volumes:
-  data:
-    name: ${COMPOSE_PROJECT_NAME:-zenimport}-test-data
+networks:
+  default:
+    internal: true

@@ -49,6 +49,7 @@ ErrorCode = Literal[
     'account_disabled', 'settings_conflict', 'account_busy', 'capture_busy', 'lease_expired',
     'idempotency_conflict', 'history_incomplete', 'capture_context_changed',
     'zenmoney_unavailable', 'zenmoney_account_unavailable', 'delivery_uncertain', 'not_found',
+    'method_not_allowed', 'internal_error',
 ]
 
 

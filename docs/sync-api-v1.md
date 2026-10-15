@@ -1,7 +1,7 @@
 # Контракт синхронизации v1 — B0
 
-15 октября 2026. Статус: закреплён для реализации B1–E5. В старом приложении эти
-маршруты ещё не подключены. Модели: `backend/sync_contracts.py`; примеры:
+15 октября 2026. Статус: закреплён для реализации B1–E5. В самостоятельном backend на B1
+подключены только /health, /api/v1/info и общий HTTP-контур; бизнес-маршруты — следующие этапы. Модели: `backend/sync_contracts.py`; примеры:
 `fixtures/sync-v1/`. Схемы: `json_schemas()`, JSON Schema 2020-12.
 
 ## Границы и извлечение проектов
@@ -147,7 +147,7 @@ ZenMoney меняют обучающее свидетельство, а не и�
 
 ErrorResponse = `{error:{code,message,retryable,request_id}}`. UUID request_id нужен
 для обезличенной диагностики; message не содержит входное тело/токены/реквизиты.
-401 unauthorized; 404 not_found/unsupported_api_version; 409 конфликты/lease/неполнота;
+401 unauthorized; 404 not_found/unsupported_api_version; 405 method_not_allowed; 500 internal_error; 409 конфликты/lease/неполнота;
 413 payload_too_large; 422 validation_error/unsupported_currency; 502/503 недоступность
 ZenMoney. Статусы неизвестной доставки и истёкшего банковского входа возвращаются
 также в JobView.errors. retryable разрешает повтор чтения/команды по её ключу,
