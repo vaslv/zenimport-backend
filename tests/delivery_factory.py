@@ -19,6 +19,7 @@ class FakeZenMoney:
         self.path, self.cursor = path, 100
         self.transactions, self.deletions, self.writes, self.reads = {}, [], [], []
         self.mode, self.read_failure = 'success', None
+        self.delete_mode, self.delete_writes = 'success', []
         self.before_write, self.before_read = None, None
         self.data = snapshot(account=[{'id': TARGET, 'user': 1, 'instrument': 2, 'type': 'checking', 'title': 'Fixture VND'},
             {'id': 'fixture-other-vnd', 'user': 1, 'instrument': 2, 'type': 'cash', 'title': 'Other VND'}])
@@ -27,6 +28,16 @@ class FakeZenMoney:
         assert request.url.path == '/v8/diff/'
         body = decode_json(request.content)
         self.cursor = max(self.cursor, body['serverTimestamp']) + 1
+        if 'deletion' in body:
+            self.delete_writes.append(deepcopy(body['deletion']))
+            if self.delete_mode == 'timeout_before':
+                raise httpx.ReadTimeout('fixture-delete-response-lost')
+            for item in body['deletion']:
+                self.transactions.pop(item['id'], None)
+                self.deletions.append(item)
+            if self.delete_mode == 'timeout_after':
+                raise httpx.ReadTimeout('fixture-delete-response-lost')
+            return httpx.Response(200, content=encode_json({'serverTimestamp': self.cursor, 'deletion': body['deletion']}))
         if 'transaction' not in body:
             assert set(body) <= {'serverTimestamp', 'currentClientTimestamp', 'forceFetch'}
             self.reads.append(body)

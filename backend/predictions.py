@@ -80,7 +80,9 @@ def rebuild_evidence(db):
     for group, zen in db.execute('SELECT group_id,zen_id FROM link_zen_members'):
         groups[group]['zens'].append(zen)
     receipts = defaultdict(set)
-    for bank, zen in db.execute('SELECT bank_id,zen_id FROM processing_receipts'):
+    # Chronological pairing of repeated equal amounts preserves multiplicity,
+    # but does not prove a particular recipient/category association.
+    for bank, zen in db.execute("SELECT bank_id,zen_id FROM processing_receipts WHERE origin<>'day_amount_order'"):
         receipts[bank].add(zen)
     deliveries = {r['bank_id']: r['zen_id'] for r in db.execute('SELECT bank_id,zen_id FROM deliveries')}
     excluded = {r[0] for r in db.execute('SELECT zen_id FROM zen_exclusions')}

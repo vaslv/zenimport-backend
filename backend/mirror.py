@@ -73,10 +73,19 @@ def save_entity(db, kind, item, run_id):
 
 def reconcile_known(db, now):
     # Only explicit identities; similar dates/amounts never create a confirmed link.
+    # A reviewed cleanup explicitly chooses the original as the canonical UUID.
+    # Retired duplicate deletions must not suppress that surviving bank record.
+    replacements = dict(db.execute('''SELECT b.bank_id,z.zen_id FROM link_groups g
+        JOIN link_bank_members b ON b.group_id=g.id JOIN link_zen_members z ON z.group_id=g.id
+        WHERE g.kind='single' AND g.origin='duplicate_cleanup' '''))
+    db.execute("""UPDATE deliveries SET state='suppressed',updated_at=? WHERE state<>'suppressed'
+        AND EXISTS(SELECT 1 FROM zen_tombstones t WHERE t.kind='transaction' AND t.entity_id=deliveries.zen_id)""", (now,))
     known = db.execute('''SELECT bank_id,zen_id FROM deliveries UNION SELECT bank_id,zen_id FROM delivery_attempts
         UNION SELECT bank_id,zen_id FROM processing_receipts
         UNION SELECT b.bank_id,z.zen_id FROM link_bank_members b JOIN link_zen_members z ON z.group_id=b.group_id''')
     for bank_id, zen_id in list(known):
+        if bank_id in replacements and replacements[bank_id] != zen_id:
+            continue
         deletion = db.execute("SELECT 1 FROM zen_tombstones WHERE kind='transaction' AND entity_id=?", (zen_id,)).fetchone()
         actual = db.execute("SELECT 1 FROM zen_entities WHERE kind='transaction' AND id=? AND deleted=0", (zen_id,)).fetchone()
         state = db.execute('SELECT state FROM bank_processing WHERE bank_id=?', (bank_id,)).fetchone()[0]

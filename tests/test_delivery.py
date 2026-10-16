@@ -199,13 +199,14 @@ def test_newer_unfinished_revision_cannot_replace_complete_revision(h):
     assert h.job(newer)['delivery']['delivered'] == 1
 
 
-def test_semantically_similar_remote_operation_is_not_a_confirmed_identity(h):
+def test_account_day_amount_existing_operation_is_adopted_without_write(h):
     h.capture()
     h.remote.transactions['unrelated-uuid'] = {'id': 'unrelated-uuid', 'date': '2026-09-15', 'income': 0, 'outcome': 100,
         'incomeAccount': TARGET, 'outcomeAccount': TARGET, 'incomeInstrument': 2, 'outcomeInstrument': 2, 'viewed': True, 'tag': None}
     h.worker.run_once()
-    assert len(h.remote.transactions) == 2
-    assert h.remote.writes[0][0]['id'] != 'unrelated-uuid'
+    assert len(h.remote.transactions) == 1
+    assert h.remote.writes == []
+    assert h.states() == ['delivered']
 
 
 def test_one_writer_lock_prevents_concurrent_dispatch(h):
