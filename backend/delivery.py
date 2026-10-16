@@ -12,7 +12,7 @@ from uuid import uuid4
 from zenmoney_api import HTTPError, ResponseError, TransportError
 from zenmoney_api import transactions as tx
 
-from . import accounts, capture, predictions, storage
+from . import accounts, capture, existing, predictions, storage
 from .capture_policy import SyncError, get
 from .mirror import apply_diff, reconcile_known, text
 
@@ -116,11 +116,26 @@ def intent(db, mirror, now):
         AND NOT EXISTS(SELECT 1 FROM link_bank_members l WHERE l.bank_id=q.bank_id)
         AND NOT EXISTS(SELECT 1 FROM bank_exclusions e WHERE e.bank_id=q.bank_id)
         ORDER BY q.authorized_at,q.bank_id'''))
-    payloads, rows = [], []
-    context = predictions.evidence_context(db)
+    payloads, rows, validated = [], [], []
     for row in candidates:
         try:
             bank, account = eligible(db, row, mirror.source_hash, now)
+            validated.append((row, bank, account))
+        except SyncError as exc:
+            capture.add_error(db, row['job_id'], get(db, 'bank_transactions', row['bank_id'])['account_id'], exc.code, now, True)
+        except (KeyError, ValueError, TypeError):
+            capture.add_error(db, row['job_id'], get(db, 'bank_transactions', row['bank_id'])['account_id'], 'zenmoney_account_unavailable', now, True)
+    recognized = existing.matches(db, [(bank, account) for _, bank, account in validated])
+    context = predictions.evidence_context(db)
+    for row, bank, account in validated:
+        try:
+            if bank['id'] in recognized:
+                db.execute('DELETE FROM deliveries WHERE bank_id=? AND ever_attempted=0', (bank['id'],))
+                db.execute('INSERT INTO processing_receipts VALUES (?,?,?,?)',
+                    (bank['id'], recognized[bank['id']], 'bank_reference', now))
+                db.execute("UPDATE bank_processing SET state='delivered',reason='existing_bank_reference',updated_at=? WHERE bank_id=?", (now, bank['id']))
+                db.execute("UPDATE capture_errors SET resolved=1 WHERE job_id=? AND account_id=? AND code IN ('zenmoney_account_unavailable','settings_conflict','account_disabled')", (row['job_id'], bank['account_id']))
+                continue
             prior = db.execute('SELECT * FROM deliveries WHERE bank_id=?', (row['bank_id'],)).fetchone()
             identifier = prior['zen_id'] if prior else str(uuid4())
             # Never reuse a UUID that the mobile user has already deleted.
