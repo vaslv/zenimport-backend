@@ -1,9 +1,11 @@
 """HTTP bindings for B3. Domain work commits before the response is returned."""
 from uuid import UUID
+from datetime import date
 
 from fastapi import APIRouter
 
 from . import accounts, capture, delivery, predictions, storage
+from . import discrepancies
 from .capture_policy import get
 from .capture_policy import SyncError
 from .sync_contracts import (AccountCatalog, AccountSettings, AccountView, CaptureComplete,
@@ -37,6 +39,16 @@ def router(path, clock, mirror, wake):
     def connection(identifier: UUID):
         with storage.transaction(path, read_only=True) as db:
             return accounts.connection_view(db, identifier)
+
+    @routes.get('/connections/{identifier}/discrepancies', response_model=discrepancies.DiscrepancyReport)
+    def differences(identifier: UUID, from_date: date | None = None, to_date: date | None = None,
+                    account_id: UUID | None = None, refresh: bool = False):
+        with storage.transaction(path, read_only=True) as db:
+            get(db, 'connections', identifier)
+        if mirror().client is not None:
+            mirror().refresh(force=refresh)
+        with storage.transaction(path, read_only=True) as db:
+            return discrepancies.build(db, identifier, clock(), from_date=from_date, to_date=to_date, account_id=account_id)
 
     @routes.get('/zenmoney/accounts', response_model=AccountCatalog)
     def catalog():
