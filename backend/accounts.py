@@ -81,9 +81,10 @@ def catalog(db, now):
         instrument = instruments.get(str(value.get('instrument')))
         if value.get('deleted') or value.get('archive') or value.get('type') not in ORDINARY_TYPES or not instrument or instrument.get('deleted'):
             continue
-        if not instrument.get('code') or type(value.get('instrument')) is not int or value['instrument'] <= 0:
+        currency = instrument.get('shortTitle')
+        if not isinstance(currency, str) or not currency or type(value.get('instrument')) is not int or value['instrument'] <= 0:
             continue
-        result.append({'id': row['id'], 'title': value.get('title', ''), 'currency': instrument['code'], 'instrument': value['instrument']})
+        result.append({'id': row['id'], 'title': value.get('title', ''), 'currency': currency, 'instrument': value['instrument']})
     return {'refreshed_at': datetime.fromtimestamp(int(refreshed[0]), timezone.utc), 'accounts': result}
 
 

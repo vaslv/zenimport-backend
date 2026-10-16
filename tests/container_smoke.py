@@ -30,7 +30,7 @@ def capture_smoke(stage):
         end = datetime.fromtimestamp(stamp, ZoneInfo('Asia/Ho_Chi_Minh')).date()
         with transaction(Path('/data/zenimport.sqlite3')) as db:
             db.execute("INSERT INTO service_meta VALUES ('zenmoney_refreshed_at',?)", (str(stamp),))
-            for kind, identifier, data in [('instrument', '2', {'id': 2, 'code': 'VND'}),
+            for kind, identifier, data in [('instrument', '2', {'id': 2, 'shortTitle': 'VND'}),
                 ('account', 'fixture-http-target', {'id': 'fixture-http-target', 'type': 'checking', 'title': 'Fixture', 'instrument': 2, 'user': 1})]:
                 db.execute('INSERT INTO zen_entities VALUES (?,?,?,NULL,0,NULL)', (kind, identifier, json.dumps(data)))
         connection = api('POST', '/connections/discover', {'bank': 'vietinbank', 'connector_version': 'fixture-smoke',

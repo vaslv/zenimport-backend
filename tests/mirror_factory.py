@@ -15,7 +15,7 @@ from capture_factory import NOW
 def snapshot(cursor=100, **changes):
     result = {kind: [] for kind in KINDS}
     result.update(serverTimestamp=cursor,
-        instrument=[{'id': 2, 'code': 'VND'}, {'id': 3, 'code': 'USD'}],
+        instrument=[{'id': 2, 'shortTitle': 'VND'}, {'id': 3, 'shortTitle': 'USD'}],
         user=[{'id': 1, 'login': 'fixture'}],
         account=[{'id': 'zen-vnd', 'user': 1, 'instrument': 2, 'type': 'checking', 'title': 'Fixture VND'}],
         tag=[{'id': 'category-a', 'title': 'A'}, {'id': 'category-b', 'title': 'B'}])

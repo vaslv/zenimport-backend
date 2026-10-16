@@ -129,7 +129,7 @@ def rebuild_evidence(db):
             value = inc if bank['direction'] == 'income' else out
             other = out if bank['direction'] == 'income' else inc
             instrument = instruments.get(str(tx.get('incomeInstrument' if bank['direction'] == 'income' else 'outcomeInstrument')))
-            if value <= 0 or other != 0 or value > Decimal(bank['amount']) or value.as_tuple().exponent < -12 or not instrument or instrument.get('code') != bank['currency']:
+            if value <= 0 or other != 0 or value > Decimal(bank['amount']) or value.as_tuple().exponent < -12 or not instrument or instrument.get('shortTitle') != bank['currency']:
                 valid = False
                 break
             tx_tags = tx.get('tag') or []

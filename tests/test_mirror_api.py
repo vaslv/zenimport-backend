@@ -19,7 +19,9 @@ def test_catalog_reads_sdk_and_info_only_reports_proved_freshness(tmp_path):
             assert client.get('/api/v1/info', headers=headers).json()['zenmoney_state'] == 'unavailable'
             assert f.requests == []
             f.responses.append(snapshot())
-            assert client.get('/api/v1/zenmoney/accounts', headers=headers).status_code == 200
+            catalog = client.get('/api/v1/zenmoney/accounts', headers=headers)
+            assert catalog.status_code == 200
+            assert catalog.json()['accounts'][0]['currency'] == 'VND'
             info = client.get('/api/v1/info', headers=headers).json()
             assert info['zenmoney_state'] == 'ready' and info['last_zenmoney_refresh'] is not None
             assert client.get('/api/v1/zenmoney/accounts', headers=headers).status_code == 200
@@ -79,3 +81,14 @@ def test_identical_settings_retry_and_disabling_do_not_need_live_sdk(tmp_path):
         assert len(h.sdk_requests) == count
     finally:
         h.close()
+
+
+def test_catalog_uses_official_instrument_short_title(tmp_path):
+    f = Fixture(tmp_path / 'short-title.sqlite3')
+    try:
+        f.refresh(snapshot(instrument=[{'id': 2, 'shortTitle': 'VND', 'code': 'USD'}]))
+        from backend.accounts import catalog
+        with storage.transaction(f.path, read_only=True) as db:
+            assert catalog(db, f.now)['accounts'][0]['currency'] == 'VND'
+    finally:
+        f.close()

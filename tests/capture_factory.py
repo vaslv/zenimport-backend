@@ -48,7 +48,7 @@ class Harness:
         with storage.transaction(self.path) as db:
             db.execute("INSERT OR REPLACE INTO service_meta VALUES ('zenmoney_refreshed_at',?)", (str(self.now),))
             for kind, identifier, data in [
-                ('instrument', '2', {'id': 2, 'code': 'VND'}), ('instrument', '3', {'id': 3, 'code': 'USD'}),
+                ('instrument', '2', {'id': 2, 'shortTitle': 'VND'}), ('instrument', '3', {'id': 3, 'shortTitle': 'USD'}),
                 ('account', TARGET, {'id': TARGET, 'title': 'Fixture VND', 'type': 'checking', 'instrument': 2, 'user': 1}),
                 ('account', 'fixture-usd', {'id': 'fixture-usd', 'title': 'Fixture USD', 'type': 'checking', 'instrument': 3, 'user': 1}),
                 ('account', 'fixture-other-vnd', {'id': 'fixture-other-vnd', 'title': 'Other VND', 'type': 'cash', 'instrument': 2, 'user': 1}),
