@@ -1,5 +1,6 @@
 """Durable, create-only delivery. An ambiguous write is only ever read again."""
 from contextlib import contextmanager
+from datetime import datetime
 from decimal import Decimal
 import fcntl
 import logging
@@ -127,10 +128,14 @@ def intent(db, mirror, now):
                 continue
             prediction = predictions.predict(db, bank['id'], now, revision=row['revision'], context=context)
             builder = tx.income if bank['direction'] == 'income' else tx.expense
-            payload = builder(id=identifier, now=now, user=account['user'], date=bank['local_date'],
+            # ZenMoney uses created to order operations inside a calendar day.
+            # Keep changed at send time for diff/conflict handling.
+            created = int(datetime.fromisoformat(bank['occurred_at']).timestamp()) if bank.get('occurred_at') else now
+            payload = builder(id=identifier, now=created, user=account['user'], date=bank['local_date'],
                 account=account['id'], instrument=account['instrument'], amount=Decimal(bank['amount']),
                 categories=[prediction['category_id']] if prediction['category_id'] else None,
                 payee=bank['beneficiary_name'], comment=bank['description'], viewed=False)
+            payload['changed'] = now
         except SyncError as exc:
             capture.add_error(db, row['job_id'], get(db, 'bank_transactions', row['bank_id'])['account_id'], exc.code, now, True)
             continue

@@ -48,13 +48,14 @@ def bank_record(db, bank_id, revision=None):
     raw = json.loads(row['raw_json'])
     details = raw.get('details') or {}
     if 'local_date' in data:
-        current.update({k: data.get(k) for k in ('local_date', 'direction', 'amount', 'description', 'beneficiary_account', 'beneficiary_name')})
+        current.update({k: data.get(k) for k in ('local_date', 'occurred_at', 'direction', 'amount', 'description', 'beneficiary_account', 'beneficiary_name')})
     else:
         # Legacy snapshots contain signed minor units and the original raw row.
         scale = get(db, 'bank_accounts', current['account_id'])['scale']
         digits = str(abs(data['amount_minor'])).rjust(scale + 1, '0')
         current.update(local_date=data['date'], direction='income' if data['amount_minor'] > 0 else 'expense',
             amount=digits[:-scale] + '.' + digits[-scale:] if scale else digits, description=data['description'],
+            occurred_at=None,
             beneficiary_account=details.get('corresponsiveAccount'), beneficiary_name=details.get('corresponsiveName'))
     current['revision'] = revision
     return current

@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from decimal import Decimal
+from datetime import datetime
 from threading import Event
 from uuid import uuid4
 
@@ -425,6 +426,7 @@ def test_changed_current_date_does_not_remove_original_job_progress(h):
     assert h.job(job)['delivery']['pending'] == 1
     h.worker.run_once()
     assert h.remote.writes[0][0]['date'] == '2026-09-15'
+    assert h.remote.writes[0][0]['created'] == int(datetime.fromisoformat(rows[0]['occurred_at']).timestamp())
     assert h.job(job)['delivery']['delivered'] == 1
 
 
@@ -501,3 +503,51 @@ def test_worker_never_recreates_missing_runtime_database(h):
     with pytest.raises(sqlite3.OperationalError):
         h.worker.run_once()
     assert not h.path.exists()
+
+
+@pytest.mark.parametrize('occurred', ['2026-09-15T00:05:01+07:00', '2026-09-15T13:32:07+07:00'])
+def test_creation_uses_bank_time_but_diff_change_uses_send_time(h, occurred):
+    h.capture(changes={'occurred_at': occurred})
+    h.worker.run_once()
+    sent = h.remote.writes[0][0]
+    assert sent['created'] == int(datetime.fromisoformat(occurred).timestamp())
+    assert sent['changed'] == h.now
+    assert sent['date'] == '2026-09-15'
+    h.now += 301
+    h.worker.run_once()
+    assert len(h.remote.writes) == 1
+
+
+def test_same_day_operations_keep_distinct_bank_time_despite_same_send_batch(h):
+    job, auth = h.leased(h.connection['id'])
+    interval = job['accounts'][0]['intervals'][0]
+    day = interval['period']['end']
+    earlier, later = day+'T09:55:42+07:00', day+'T13:32:07+07:00'
+    # The bank returns newest first; IDs and insertion order cannot choose chronology.
+    rows = [record(interval, 'fixture-later', occurred_at=later, local_date=day), record(interval, 'fixture-earlier', occurred_at=earlier, local_date=day)]
+    assert h.page(job, interval, auth, records=rows).status_code == 200
+    assert h.complete(job, interval, auth, records=2).status_code == 200
+    h.worker.run_once()
+    sent = {tx['created']:tx for tx in h.remote.writes[0]}
+    assert set(sent) == {int(datetime.fromisoformat(t).timestamp()) for t in (earlier,later)}
+    assert all(tx['changed'] == h.now and tx['date'] == day for tx in sent.values())
+
+
+def test_remote_auto_category_does_not_become_confirmed_local_history(h):
+    from backend import predictions, records
+    from backend.sync_contracts import BankRecord
+    _, interval, _, _ = h.capture(3)
+    h.remote.mode = 'auto_category'
+    h.worker.run_once()
+    assert h.states() == ['delivered'] * 3
+    assert all(tx['tag'] is None for tx in h.remote.writes[0])
+    with storage.transaction(h.path, read_only=True) as db:
+        remote = [decode_json(row[0].encode()) for row in db.execute("SELECT data FROM zen_entities WHERE kind='transaction'")]
+        assert all(tx['tag'] == ['category-b'] and tx['viewed'] is False for tx in remote)
+        assert not db.execute('SELECT 1 FROM category_payments').fetchone()
+        assert not db.execute('SELECT 1 FROM category_evidence').fetchone()
+    # Their unreviewed server guesses cannot classify the next operation.
+    with storage.transaction(h.path) as db:
+        pending = records.save_record(db, h.account_id, BankRecord.model_validate(record(interval, 'fixture-next', amount='100')),
+            parser_version='fixture', timezone='Asia/Ho_Chi_Minh')
+        assert predictions.predict(db, pending, h.now)['category_id'] is None

@@ -62,6 +62,10 @@ class FakeZenMoney:
             for tx in accepted:
                 del self.transactions[tx['id']]
                 self.deletions.append({'object': 'transaction', 'id': tx['id']})
+        if self.mode == 'auto_category':
+            for tx in accepted:
+                self.transactions[tx['id']]['tag'] = ['category-b']
+            accepted = [self.transactions[tx['id']] for tx in accepted]
         if self.mode in ('timeout_after', 'edited', 'deleted'):
             raise httpx.ReadTimeout('fixture-response-lost')
         if self.mode == 'crash_after':
