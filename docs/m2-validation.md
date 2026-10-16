@@ -1,6 +1,6 @@
 # M2 — итоговая матрица, 16 октября 2026
 
-Backend: 352 проверки и lifecycle (HTTP/auth, повторный запуск, SIGKILL, graceful stop, snapshot/restore) прошли на ARM64 и linux/amd64. AMD64 проверен под эмуляцией OrbStack, не на физическом x86-сервере. Chrome: 13 unit, 3 popup/browser, 8 integration с настоящими собранными JavaScript, HTTP и SQLite backend, stateful fake SDK. Контейнеры тестов без внешней сети. Подробности браузерной матрицы в соседнем ZenImportChrome/docs/testing.md.
+Backend: 352 проверки и lifecycle (HTTP/auth, повторный запуск, SIGKILL, graceful stop, snapshot/restore) прошли на ARM64 и linux/amd64. AMD64 проверен под эмуляцией OrbStack, не на физическом x86-сервере. Chrome: 13 unit и 9 browser/integration (3 popup и 6 интеграционных) с настоящими собранными JavaScript, HTTP и SQLite backend, stateful fake SDK. Контейнеры тестов без внешней сети. Подробности браузерной матрицы в соседнем ZenImportChrome/docs/testing.md.
 
 Восстановленная реальная копия M1 запущена обычным runtime без SDK-токена, с network none. /health и /api/v1/info прошли; zenmoney_state=not_configured. После корректной остановки отпечаток 21 финансовой таблицы остался прежним: 073d1abf249cedd3c084038b062d3d5e822cf67908f760acfa691f55e5a8ef8b. 11 prepared записей не отправлены. Исходный рабочий том не подключался к этому runtime.
 
