@@ -51,7 +51,6 @@ def test_existing_reference_is_receipted_without_create_or_mobile_update(h, dire
 
 
 @pytest.mark.parametrize('change', [
-    {'comment': 'Other reference 580K26A0FIXTURE9'},
     {'date': '2026-09-16'}, {'outcome': 101}, {'hold': True},
     {'outcomeAccount': 'fixture-other-vnd'}, {'outcomeInstrument': 3},
     {'income': 1},
@@ -172,3 +171,39 @@ def test_two_bank_sides_of_existing_transfer_are_not_created_as_two_expenses(h):
     assert h.remote.writes == []
     with storage.transaction(h.path, read_only=True) as db:
         assert db.execute('SELECT count(*) FROM processing_receipts WHERE zen_id=?', (transfer,)).fetchone()[0] == 2
+
+
+def test_different_reference_text_does_not_override_account_day_amount(h):
+    seed(h, comment='Other reference 580K26A0FIXTURE9')
+    capture(h)
+    h.worker.run_once()
+    assert h.remote.writes == [] and h.states() == ['delivered']
+
+
+@pytest.mark.parametrize('kind,direction', [('expense','expense'), ('income','income'), ('refund','income'),
+    ('transfer_in','income'), ('transfer_out','expense'), ('lend','expense'), ('repay','expense'),
+    ('borrow','income'), ('collect','income')])
+def test_all_operation_types_match_the_selected_bank_side(h, kind, direction):
+    changes = {'comment': None, 'income': 100 if direction == 'income' else 0,
+        'outcome': 100 if direction == 'expense' else 0}
+    if kind in ('transfer_in','borrow','collect'):
+        changes.update(outcomeAccount='fixture-other-vnd', outcome=200, outcomeInstrument=3)
+    elif kind in ('transfer_out','lend','repay'):
+        changes.update(incomeAccount='fixture-other-vnd', income=200, incomeInstrument=3)
+    if kind in ('lend','repay','borrow','collect'):
+        h.remote.data['account'][1]['type'] = 'debt'
+        if direction == 'income':
+            changes.update(outcome=100, outcomeInstrument=2)
+        else:
+            changes.update(income=100, incomeInstrument=2)
+    seed(h, **changes)
+    capture(h, direction=direction)
+    h.worker.run_once()
+    assert h.remote.writes == [] and h.states() == ['delivered']
+
+
+def test_net_movement_on_same_account_is_used_instead_of_gross_side(h):
+    seed(h, comment=None, income=50, outcome=150)
+    capture(h)
+    h.worker.run_once()
+    assert h.remote.writes == [] and h.states() == ['delivered']
