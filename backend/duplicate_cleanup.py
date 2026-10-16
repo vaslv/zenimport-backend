@@ -4,6 +4,7 @@ Never called by HTTP routes, capture jobs or the delivery worker. No retries of
 financial writes: an interrupted journal can only be verified by reading.
 """
 import argparse
+from decimal import Decimal, localcontext
 from hashlib import sha256
 import os
 from pathlib import Path
@@ -13,7 +14,7 @@ from uuid import uuid4
 from zenmoney_api import Client, HTTPError, ResponseError, TransportError, transactions as tx
 from zenmoney_api.protocol import decode_json, encode_json
 
-from . import predictions, storage
+from . import existing, predictions, storage
 from .config import Settings
 from .delivery import writer_lock
 from .mirror import Mirror
@@ -43,39 +44,85 @@ def validate_plan(plan, approved):
     unsigned = {k: v for k, v in plan.items() if k != 'sha256'}
     if sha256(encode_json(unsigned)).hexdigest() != approved or plan.get('sha256') != approved:
         raise ValueError('Plan differs from the approved document')
-    rows = plan['ready'] + plan['needs_review']
-    removals, keeps, banks = ({r[key] for r in rows} for key in ('remove', 'keep', 'bank_id'))
-    if not rows or len(removals) != len(rows) or len(keeps) != len(rows) or len(banks) != len(rows) or removals & keeps:
-        raise ValueError('Plan must contain independent keep/remove pairs')
-    return rows
+    if 'groups' in plan:
+        if 'ready' in plan or 'needs_review' in plan:
+            raise ValueError('Mixed cleanup formats')
+        groups = plan['groups']
+    else:
+        groups = [{'kind': 'single', 'bank_ids': [r['bank_id']],
+                   'keeps': [r['keep_snapshot']], 'removals': [{'bank_id': r['bank_id'], 'snapshot': r['copy_snapshot']}]}
+                  for r in plan['ready'] + plan['needs_review']]
+        if any(r['keep'] != r['keep_snapshot']['id'] or r['remove'] != r['copy_snapshot']['id']
+               for r in plan['ready'] + plan['needs_review']):
+            raise ValueError('Snapshot identity differs from the plan')
+    banks, keeps, removes = [], [], []
+    for group in groups:
+        bs, zs, rs = group['bank_ids'], group['keeps'], group['removals']
+        shape = (len(bs), len(zs))
+        valid = ((group['kind'] == 'single' and shape == (1, 1)) or
+                 (group['kind'] == 'split' and len(bs) == 1 and len(zs) > 1) or
+                 (group['kind'] == 'settlement' and min(shape) == 1 and max(shape) > 1))
+        if not valid or sorted(bs) != sorted(r['bank_id'] for r in rs):
+            raise ValueError('Each group must replace exactly one delivery per bank record')
+        banks.extend(bs)
+        keeps.extend(z['id'] for z in zs)
+        removes.extend(r['snapshot']['id'] for r in rs)
+    if not groups or any(len(set(v)) != len(v) for v in (banks, keeps, removes)) or set(keeps) & set(removes):
+        raise ValueError('Cleanup groups must have independent identities')
+    return groups
 
 
-def check_rows(db, rows):
+def check_snapshots(remote, snapshots):
+    if any(item['id'] not in remote or semantic(remote[item['id']]) != semantic(item) for item in snapshots):
+        raise ValueError('A reviewed record changed or disappeared; no deletion authorized')
+
+
+def check_rows(db, groups):
     remote = predictions.entities(db, 'transaction')
-    for row in rows:
-        for key, snapshot in [('keep', 'keep_snapshot'), ('remove', 'copy_snapshot')]:
-            actual = remote.get(row[key])
-            if actual is None or semantic(actual) != semantic(row[snapshot]):
-                raise ValueError('A reviewed record changed or disappeared; no deletion authorized')
-        delivery = db.execute('SELECT * FROM deliveries WHERE bank_id=?', (row['bank_id'],)).fetchone()
-        if not delivery or delivery['zen_id'] != row['remove'] or delivery['state'] != 'delivered':
-            raise ValueError('Removal is not a confirmed local delivery')
-        if db.execute('SELECT 1 FROM link_bank_members WHERE bank_id=?', (row['bank_id'],)).fetchone():
-            raise ValueError('Bank operation already has another canonical group')
-        if db.execute('SELECT 1 FROM link_zen_members WHERE zen_id IN (?,?)', (row['keep'], row['remove'])).fetchone():
+    accounts = predictions.entities(db, 'account')
+    for group in groups:
+        snapshots = group['keeps'] + [r['snapshot'] for r in group['removals']]
+        check_snapshots(remote, snapshots)
+        banks = [dict(db.execute('SELECT * FROM bank_transactions WHERE id=?', (b,)).fetchone()) for b in group['bank_ids']]
+        if len({b['account_id'] for b in banks}) != 1 or len({b['local_date'] for b in banks}) != 1:
+            raise ValueError('A group must belong to one account and day')
+        account = db.execute('SELECT * FROM bank_accounts WHERE id=?', (banks[0]['account_id'],)).fetchone()
+        target = accounts.get(account['zenmoney_account_id'])
+        if target is None or any(z['date'] != banks[0]['local_date'] or z['user'] != target['user'] for z in snapshots):
+            raise ValueError('Reviewed target or date differs')
+        with localcontext() as precision:
+            precision.prec = 80
+            values = [existing.movement(z, target['id'], target['instrument']) for z in group['keeps']]
+            if None in values or sum(values, Decimal(0)) != sum((existing.signed(b) for b in banks), Decimal(0)):
+                raise ValueError('Retained group does not equal signed bank movements')
+        for row in group['removals']:
+            delivery = db.execute('SELECT * FROM deliveries WHERE bank_id=?', (row['bank_id'],)).fetchone()
+            if not delivery or delivery['zen_id'] != row['snapshot']['id'] or delivery['state'] != 'delivered':
+                raise ValueError('Removal is not a confirmed local delivery')
+            bank = next(b for b in banks if b['id'] == row['bank_id'])
+            if existing.movement(row['snapshot'], target['id'], target['instrument']) != existing.signed(bank):
+                raise ValueError('Duplicate differs from the bank movement')
+            if db.execute('SELECT 1 FROM link_bank_members WHERE bank_id=?', (row['bank_id'],)).fetchone():
+                raise ValueError('Bank operation already has another canonical group')
+        if any(db.execute('SELECT 1 FROM link_zen_members WHERE zen_id=?', (z['id'],)).fetchone() for z in snapshots):
             raise ValueError('A planned UUID belongs to another group')
     return remote
 
 
-def verify(db, rows):
+def verify(db, groups):
     remote = predictions.entities(db, 'transaction')
-    return {'removed': sum(r['remove'] not in remote for r in rows),
-            'preserved': sum(r['keep'] in remote and semantic(remote[r['keep']]) == semantic(r['keep_snapshot']) for r in rows),
-            'total': len(rows)}
+    removals = [r['snapshot']['id'] for g in groups for r in g['removals']]
+    keeps = [z for g in groups for z in g['keeps']]
+    return {'removed': sum(z not in remote and bool(db.execute(
+                "SELECT 1 FROM zen_tombstones WHERE kind='transaction' AND entity_id=?", (z,)).fetchone()) for z in removals),
+            'preserved': sum(z['id'] in remote and semantic(remote[z['id']]) == semantic(z) for z in keeps),
+            'total': len(removals)}
 
 
 def execute(path, mirror, plan, approved, journal_path, *, clock=time.time):
-    rows = validate_plan(plan, approved)
+    groups = validate_plan(plan, approved)
+    removals = [r['snapshot'] for g in groups for r in g['removals']]
+    keeps = [z for g in groups for z in g['keeps']]
     with writer_lock(path) as acquired:
         if not acquired:
             raise RuntimeError('Delivery writer is active')
@@ -85,61 +132,54 @@ def execute(path, mirror, plan, approved, journal_path, *, clock=time.time):
             if journal['approved_sha256'] != approved:
                 raise ValueError('Journal belongs to another plan')
             with storage.transaction(path, read_only=True) as db:
-                result = verify(db, rows)
+                result = verify(db, groups)
             journal['verification'] = result
             save(journal_path, journal)
             return result  # A resumed command NEVER repeats or starts deletes.
         with storage.transaction(path, read_only=True) as db:
-            if db.execute("SELECT 1 FROM capture_jobs WHERE capture_state IN ('planned','collecting') LIMIT 1").fetchone():
+            if db.execute("SELECT 1 FROM capture_jobs WHERE capture_state IN ('planned','collecting','paused') LIMIT 1").fetchone():
                 raise RuntimeError('Stop active capture before maintenance')
             if db.execute("SELECT 1 FROM bank_processing WHERE state IN ('pending','prepared','uncertain') LIMIT 1").fetchone():
                 raise RuntimeError('Resolve pending deliveries before maintenance')
-            check_rows(db, rows)
+            check_rows(db, groups)
         backup = journal_path.with_suffix('.before.sqlite3')
         copy_snapshot(path, backup)
-        journal = {'approved_sha256': approved, 'backup': str(backup), 'batches': []}
+        journal = {'approved_sha256': approved, 'backup': str(backup), 'groups': groups, 'batches': []}
         save(journal_path, journal)
-        # Canonical replacements are durable before deletion. Their originals
-        # remain the processing identity; retired duplicate UUIDs stay archived.
+        # The retained group is durable before retiring any duplicate UUID.
         with storage.transaction(path) as db:
-            check_rows(db, rows)
-            for row in rows:
-                bank = db.execute('SELECT account_id FROM bank_transactions WHERE id=?', (row['bank_id'],)).fetchone()
-                group = str(uuid4())
-                db.execute('INSERT INTO link_groups VALUES (?,?,?,?,?)', (group, 'single', bank['account_id'], int(clock()), 'duplicate_cleanup'))
-                db.execute('INSERT INTO link_bank_members VALUES (?,?)', (group, row['bank_id']))
-                db.execute('INSERT INTO link_zen_members VALUES (?,?)', (group, row['keep']))
-        for offset in range(0, len(rows), 20):
-            batch = rows[offset:offset+20]
+            check_rows(db, groups)
+            for group in groups:
+                bank = db.execute('SELECT account_id FROM bank_transactions WHERE id=?', (group['bank_ids'][0],)).fetchone()
+                identifier = str(uuid4())
+                db.execute('INSERT INTO link_groups VALUES (?,?,?,?,?)', (identifier, group['kind'], bank['account_id'], int(clock()), 'duplicate_cleanup'))
+                db.executemany('INSERT INTO link_bank_members VALUES (?,?)', ((identifier, b) for b in group['bank_ids']))
+                db.executemany('INSERT INTO link_zen_members VALUES (?,?)', ((identifier, z['id']) for z in group['keeps']))
+        for offset in range(0, len(removals), 20):
+            batch = removals[offset:offset+20]
             mirror.refresh(force=True, transactions=True)
             with storage.transaction(path, read_only=True) as db:
                 remote = predictions.entities(db, 'transaction')
-                # Recheck every retained original, not only the current batch.
-                if any(r['keep'] not in remote or semantic(remote[r['keep']]) != semantic(r['keep_snapshot']) for r in rows):
-                    raise ValueError('A retained original changed during cleanup')
-                if any(r['remove'] not in remote or semantic(remote[r['remove']]) != semantic(r['copy_snapshot']) for r in batch):
-                    raise ValueError('A duplicate changed during cleanup')
+                check_snapshots(remote, keeps + batch)
                 cursor = db.execute('SELECT cursor FROM zen_mirror_state WHERE id=1').fetchone()[0]
-            removals = [tx.deletion('transaction', r['remove'], user=remote[r['remove']]['user'],
-                now=max(int(clock()), remote[r['remove']].get('changed', 0)+1)) for r in batch]
-            entry = {'deletions': removals, 'intent': True}
+            deletions = [tx.deletion('transaction', r['id'], user=remote[r['id']]['user'],
+                now=max(int(clock()), remote[r['id']].get('changed', 0)+1)) for r in batch]
+            entry = {'deletions': deletions, 'intent': True}
             journal['batches'].append(entry)
             save(journal_path, journal)  # Commit exact intent before network.
             try:
-                mirror.client.delete(removals, cursor)
+                mirror.client.delete(deletions, cursor)
             except (HTTPError, ResponseError, TransportError) as exc:
                 entry['error'] = type(exc).__name__
                 save(journal_path, journal)
             mirror.refresh(force=True, transactions=True)
             with storage.transaction(path, read_only=True) as db:
-                result = verify(db, batch)
+                result = verify(db, groups)
             entry['verification'] = result
             save(journal_path, journal)
-            if result['removed'] != len(batch) or result['preserved'] != len(batch):
+            if result['removed'] != offset+len(batch) or result['preserved'] != len(keeps):
                 raise RuntimeError('Deletion not confirmed; use read-only verification')
-            print('Confirmed duplicate removals:', offset+len(batch), 'of', len(rows), flush=True)
-        with storage.transaction(path, read_only=True) as db:
-            result = verify(db, rows)
+            print('Confirmed duplicate removals:', offset+len(batch), 'of', len(removals), flush=True)
         journal['verification'] = result
         save(journal_path, journal)
         return result
