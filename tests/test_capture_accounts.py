@@ -112,6 +112,18 @@ def test_unconfigured_is_not_silently_ignored(h):
     assert result.status_code == 409 and result.json()['error']['code'] == 'account_disabled'
 
 
+def test_new_unconfigured_account_does_not_block_configured_accounts(h):
+    h.seed_mirror()
+    connection = h.discover(names=('configured', 'new'))
+    configured, new = connection['accounts']
+    assert h.configure(configured['id']).status_code == 200
+    result = h.start(connection['id'])
+    assert result.status_code == 202
+    assert [a['account_id'] for a in result.json()['accounts']] == [configured['id']]
+    refreshed = h.client.get('/api/v1/connections/' + connection['id']).json()
+    assert next(a for a in refreshed['accounts'] if a['id'] == new['id'])['selection'] == 'unconfigured'
+
+
 def test_concurrent_settings_only_one_distinct_update_wins(h):
     h.seed_mirror()
     identifier = h.discover()['accounts'][0]['id']

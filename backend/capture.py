@@ -219,10 +219,10 @@ def start(db, data, now):
         db.execute('INSERT INTO job_requests VALUES (?,?,?)', (str(data.request_id), active['id'], body))
         return job_view(db, active['id'], now)
     discovered = connection_view(db, connection['id'])['accounts']
-    if any(a['selection'] == 'unconfigured' for a in discovered):
-        fail('account_unconfigured')
     selected = [get(db, 'bank_accounts', a['id']) for a in discovered if a['selection'] == 'enabled' and a['supported']]
     if not selected:
+        if any(a['selection'] == 'unconfigured' for a in discovered):
+            fail('account_unconfigured')
         fail('account_disabled')
     for account in selected:
         if db.execute('SELECT 1 FROM account_capture_locks WHERE account_id=?', (account['id'],)).fetchone():
