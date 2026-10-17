@@ -10,7 +10,7 @@ from .capture_policy import get
 from .capture_policy import SyncError
 from .sync_contracts import (AccountCatalog, AccountSettings, AccountView, CaptureComplete,
     CaptureLease, CaptureLeaseRequest, CapturePage, CaptureStatus, ConnectionView,
-    DiscoverConnection, IntervalView, JobView, PageReceipt, StartSync, WireModel)
+    ConnectionCatalog, ConnectionLabel, DiscoverConnection, IntervalView, JobView, PageReceipt, StartSync, WireModel)
 
 
 class EmptyRequest(WireModel):
@@ -34,6 +34,19 @@ def router(path, clock, mirror, wake):
     @routes.post('/connections/discover', response_model=ConnectionView)
     def discover(data: DiscoverConnection):
         return run(accounts.discover, data)
+
+    @routes.get('/connections', response_model=ConnectionCatalog)
+    def connections(bank: str):
+        with storage.transaction(path, read_only=True) as db:
+            return accounts.connection_catalog(db, bank)
+
+    @routes.put('/connections/{identifier}/label', response_model=ConnectionView)
+    def rename(identifier: UUID, data: ConnectionLabel):
+        return run(accounts.rename_connection, identifier, data)
+
+    @routes.post('/connections/{identifier}/accounts/{account_id}/unlink', response_model=ConnectionView)
+    def unlink(identifier: UUID, account_id: UUID, data: EmptyRequest):
+        return run(accounts.unlink_account, identifier, account_id)
 
     @routes.get('/connections/{identifier}', response_model=ConnectionView)
     def connection(identifier: UUID):

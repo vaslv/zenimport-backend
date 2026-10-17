@@ -1,11 +1,12 @@
 # Financial storage — B2
 
-The current independent database version is **5**, `application_id=0x5A494231`;
+The current independent database version is **7**, `application_id=0x5A494231`;
 the baseline B2 financial schema is version 2. B3 settings/jobs: [capture.md](capture.md).
 B4 mirror/predictions: [mirror-predictions.md](mirror-predictions.md).
-B5 delivery: [delivery.md](delivery.md). Legacy ZenImport version **12** belongs to
+B5 delivery: [delivery.md](delivery.md). Named connections/schema 7:
+[bank-connections.md](bank-connections.md). Legacy ZenImport version **12** belongs to
 a different version sequence. Runtime opens only its own database. A new empty
-database is created automatically; own B1/v1, B2/v2, B3/v3, and B4/v4 upgrade
+database is created automatically; owned versions 1–6 upgrade
 transactionally with private SQLite backups, including WAL. Foreign/legacy/future
 schemas are not modified at startup.
 
@@ -13,7 +14,7 @@ schemas are not modified at startup.
 
 | Group | Tables and purpose |
 |---|---|
-| Connections/accounts | `connections`, `bank_accounts`, `connection_accounts`: access method separate from the canonical bank account |
+| Connections/accounts | `connections`, `connection_labels`, `bank_accounts`, `connection_accounts`: access method separate from the canonical bank account |
 | Settings | Version/selection/start date in `bank_accounts`; previous mappings in `account_bindings` |
 | Bank history | `bank_transactions`, `bank_aliases`, `bank_versions`: persistent UUID, source fields, aliases, immutable versions |
 | History capture | `capture_jobs`, `capture_intervals`, `capture_pages`, `coverage`: B3 foundation; completeness is not inferred from the last transaction date |

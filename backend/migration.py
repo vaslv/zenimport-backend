@@ -178,7 +178,7 @@ def unpack(payload, destination):
         manifest = json.loads(archive.read('manifest.json'))
         if (not isinstance(manifest, dict) or manifest.get('format') != 'zenimport-migration'
                 or type(manifest.get('format_version')) is not int or manifest['format_version'] != 1
-                or type(manifest.get('schema_version')) is not int or manifest['schema_version'] != storage.SCHEMA_VERSION
+                or type(manifest.get('schema_version')) is not int or manifest['schema_version'] not in (6, storage.SCHEMA_VERSION)
                 or not isinstance(manifest.get('instance_id'), str)):
             raise ValueError('Unsupported format')
         UUID(manifest['instance_id'])
@@ -188,8 +188,14 @@ def unpack(payload, destination):
         storage.create_private(destination)
         destination.write_bytes(data)
         with closing(storage.connect_readonly(destination)) as db:
-            storage.validate_owner(db, allow_upgrade=False)
+            actual_version = storage.validate_owner(db)
+            if actual_version != manifest['schema_version']:
+                raise ValueError('Manifest schema mismatch')
             storage.check_integrity(db)
             if meta(db, 'instance_id') != manifest['instance_id'] or not owners(db) or owners(db) != manifest['zenmoney_users']:
                 raise ValueError('Manifest identity mismatch')
+        # Upgrade only a fully verified private temporary copy. Published 0.2.0
+        # archives (schema 6) remain usable when moving to the new server.
+        if actual_version < storage.SCHEMA_VERSION:
+            storage.initialize(destination)
         return manifest

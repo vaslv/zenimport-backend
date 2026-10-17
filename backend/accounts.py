@@ -23,7 +23,36 @@ def connection_view(db, identifier):
     accounts = []
     for found in db.execute('SELECT * FROM connection_discovery WHERE connection_id=? AND present=1 ORDER BY account_id', (row['id'],)):
         accounts.append(account_view(get(db, 'bank_accounts', found['account_id']), found))
-    return {'id': row['id'], 'bank': row['bank'], 'accounts_complete': bool(row['accounts_complete']), 'accounts': accounts}
+    name = db.execute('SELECT label FROM connection_labels WHERE connection_id=?', (row['id'],)).fetchone()
+    bank = {'bidv': 'BIDV', 'vietinbank': 'VietinBank'}.get(row['bank'], row['bank'])
+    return {'id': row['id'], 'bank': row['bank'], 'accounts_complete': bool(row['accounts_complete']), 'accounts': accounts,
+            'profile_key': row['profile_key'], 'profile_identity': row['profile_identity'],
+            'label': name[0] if name else bank + ' ' + row['id'][:6]}
+
+
+def connection_catalog(db, bank):
+    if bank not in {'bidv', 'vietinbank'}:
+        fail('unsupported_bank', 422)
+    return {'connections': [connection_view(db, row[0]) for row in db.execute('SELECT id FROM connections WHERE bank=? ORDER BY id', (bank,))]}
+
+
+def rename_connection(db, identifier, data, now):
+    get(db, 'connections', identifier)
+    db.execute('INSERT INTO connection_labels VALUES (?,?) ON CONFLICT(connection_id) DO UPDATE SET label=excluded.label', (str(identifier), data.label))
+    return connection_view(db, identifier)
+
+
+def unlink_account(db, identifier, account_id, now):
+    from .capture import invalidate_accounts
+    get(db, 'connections', identifier)
+    row = db.execute('SELECT 1 FROM connection_accounts WHERE connection_id=? AND account_id=?', (str(identifier), str(account_id))).fetchone()
+    if row is None:
+        fail('not_found', 404)
+    db.execute('UPDATE connection_discovery SET present=0 WHERE connection_id=? AND account_id=?', (str(identifier), str(account_id)))
+    invalidate_accounts(db, [str(account_id)], 'settings_conflict', now, connection_id=str(identifier))
+    db.execute('''UPDATE bank_accounts SET supported=EXISTS(SELECT 1 FROM connection_discovery d
+               WHERE d.account_id=bank_accounts.id AND d.present=1 AND d.supported=1) WHERE id=?''', (str(account_id),))
+    return connection_view(db, identifier)
 
 
 def discover(db, data, now):
@@ -41,6 +70,8 @@ def discover(db, data, now):
         capabilities_json=excluded.capabilities_json,accounts_complete=excluded.accounts_complete''',
         (identifier, data.bank, data.profile_key, data.profile_identity, data.connector_version,
          data.capabilities.timezone, caps, int(data.accounts_complete)))
+    if data.label is not None:
+        db.execute('INSERT INTO connection_labels VALUES (?,?) ON CONFLICT(connection_id) DO UPDATE SET label=excluded.label', (identifier, data.label))
     previous = {r[0] for r in db.execute('SELECT account_id FROM connection_discovery WHERE connection_id=? AND present=1', (identifier,))}
     if data.accounts_complete:
         db.execute('UPDATE connection_discovery SET present=0 WHERE connection_id=?', (identifier,))

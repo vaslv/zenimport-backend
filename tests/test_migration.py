@@ -62,6 +62,43 @@ def repack(payload, change):
     return output.getvalue()
 
 
+def test_published_schema6_archive_upgrades_only_verified_temporary_copy(source, tmp_path):
+    payload = exported(source)
+    def downgrade(members):
+        old = tmp_path / 'published-v6.sqlite3'
+        old.write_bytes(members['database.sqlite3'])
+        with sqlite3.connect(old) as db:
+            db.execute('DROP TABLE connection_labels')
+            db.execute('DELETE FROM schema_migrations WHERE version=7')
+            db.execute('PRAGMA user_version=6')
+        data = old.read_bytes()
+        manifest = json.loads(members['manifest.json'])
+        manifest.update(schema_version=6, service_version='0.2.0', database_size=len(data), database_sha256=sha256(data).hexdigest())
+        members.update({'database.sqlite3': data, 'manifest.json': json.dumps(manifest).encode()})
+    published = repack(payload, downgrade)
+    before = len(source.remote.writes)
+    app, client = target_client(tmp_path / 'imported-v6', source)
+    with client:
+        response = upload(client, published)
+        assert response.status_code == 200, response.text
+        assert client.get('/api/v1/connections?bank=vietinbank').json()['connections']
+        assert app.state.migration.status()['awaiting_sync']
+        assert len(source.remote.writes) == before
+    with storage.transaction(tmp_path / 'imported-v6/target.sqlite3', read_only=True) as db:
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 7
+        assert db.execute('SELECT count(*) FROM processing_receipts').fetchone()[0] > 0
+
+
+def test_manifest_cannot_lie_about_schema6(source, tmp_path):
+    payload = exported(source)
+    def lie(members):
+        manifest = json.loads(members['manifest.json']);manifest['schema_version'] = 6
+        members['manifest.json'] = json.dumps(manifest).encode()
+    _, client = target_client(tmp_path / 'invalid-v6', source)
+    with client:
+        assert upload(client, repack(payload, lie)).json()['error']['code'] == 'migration_invalid'
+
+
 def test_export_pauses_source_and_stays_paused_after_restart(source):
     payload = exported(source)
     assert payload.startswith(b'PK')
@@ -263,3 +300,22 @@ def test_import_preserves_uncertain_uuid_and_never_retries_it(source, tmp_path):
         assert len(source.remote.writes) == 1
         with storage.transaction(app.state.delivery.path, read_only=True) as db:
             assert db.execute('SELECT state FROM deliveries').fetchone()[0] == 'delivered'
+
+
+def test_archive_preserves_named_connections_memberships_and_shared_identity(source, tmp_path):
+    first = source.client.get('/api/v1/connections?bank=vietinbank').json()['connections'][0]
+    assert source.client.put('/api/v1/connections/' + first['id'] + '/label', json={'label': 'Personal'}).status_code == 200
+    second = source.discover(profile='another-login', names=(first['accounts'][0]['source_key'],), label='Shared access')
+    assert second['accounts'][0]['id'] == first['accounts'][0]['id']
+    job, *_ = source.capture()
+    source.due()
+    assert source.client.post('/api/v1/jobs/' + job['id'] + '/stop', json={}).status_code == 200
+    catalog = source.client.get('/api/v1/connections?bank=vietinbank').json()
+    payload = source.client.post('/api/v1/migration/export').content
+    writes = len(source.remote.writes)
+    _, client = target_client(tmp_path / 'named-profiles', source)
+    with client:
+        response = upload(client, payload)
+        assert response.status_code == 200, response.text
+        assert client.get('/api/v1/connections?bank=vietinbank').json() == catalog
+        assert len(source.remote.writes) == writes

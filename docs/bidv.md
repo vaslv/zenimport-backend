@@ -1,7 +1,7 @@
 # BIDV capture policy
 
-Status: **0.2.1, local/unreleased**. Pair with ZenImport Chrome 0.2.1+. No database
-schema or SDK change is needed. The backend still performs no bank HTTP requests.
+Status: **0.2.1, local/unreleased**. Pair with ZenImport Chrome 0.2.1+. The BIDV policy itself needs no schema or SDK change. The same development
+version also adds [named connections and schema 7](bank-connections.md). The backend still performs no bank HTTP requests.
 
 The v1 discovery allowlist now accepts `bank=bidv` as well as `vietinbank`. BIDV
 requires Asia/Ho_Chi_Minh, included details, VND with scale zero, and capture windows

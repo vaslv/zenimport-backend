@@ -41,6 +41,9 @@ reject unknown fields. `GET info` checks compatibility before reading the bank.
 | Method and path | Request → response | Result |
 |---|---|---|
 | GET `/info` | — → ServerInfo | 200 |
+| GET `/connections?bank=bidv` | — → ConnectionCatalog | 200; named connections for one bank |
+| PUT `/connections/{id}/label` | ConnectionLabel → ConnectionView | 200; metadata only |
+| POST `/connections/{id}/accounts/{account_id}/unlink` | Empty JSON `{}` → ConnectionView | 200; preserve financial history |
 | POST `/connections/discover` | DiscoverConnection → ConnectionView | 200 |
 | GET `/connections/{id}` | — → ConnectionView | 200 |
 | GET `/zenmoney/accounts` | — → AccountCatalog | 200; no ZenMoney writes |
@@ -68,6 +71,11 @@ expense: the connector explicitly flags the unsupported source row and cannot cl
 complete capture until its meaning is resolved. Never hide such rows in tests/docs.
 
 ## Context, accounts, settings
+
+Backend/Chrome 0.2.1 add named connections, catalog/rename/unlink routes, and
+optional discovery label plus profile fields in ConnectionView. See
+[connection scope and migration](bank-connections.md). Update both builds; the new
+Chrome requires these endpoints even for VietinBank.
 
 profile_key is a stable bank-provided identifier or a separate user-chosen connection
 identifier, never inferred from the owner's name. identity_scope=bank requires proven

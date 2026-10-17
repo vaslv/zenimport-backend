@@ -113,6 +113,16 @@ class DiscoverConnection(WireModel):
     capabilities: Capabilities
     accounts_complete: StrictBool
     accounts: list[DiscoveredAccount] = Field(max_length=200)
+    label: Annotated[str, Field(min_length=1, max_length=120)] | None = None
+
+    @field_validator('label')
+    @classmethod
+    def clean_label(cls, value):
+        if value is not None:
+            value = value.strip()
+            if not value or any(ord(c) < 32 for c in value):
+                raise ValueError('Expected a nonempty connection name without control characters')
+        return value
 
     @model_validator(mode='after')
     def unique_accounts(self) -> Self:
@@ -161,6 +171,22 @@ class ConnectionView(WireModel):
     bank: Identifier
     accounts_complete: StrictBool
     accounts: list[AccountView]
+    profile_key: Identifier | None = None
+    profile_identity: Literal['bank', 'user_selected'] | None = None
+    label: Text = ''
+
+
+class ConnectionCatalog(WireModel):
+    connections: list[ConnectionView]
+
+
+class ConnectionLabel(WireModel):
+    label: Annotated[str, Field(min_length=1, max_length=120)]
+
+    @field_validator('label')
+    @classmethod
+    def clean_label(cls, value):
+        return DiscoverConnection.clean_label(value)
 
 
 class ZenAccount(WireModel):
@@ -310,7 +336,7 @@ class ErrorResponse(WireModel):
 
 
 CONTRACT_MODELS = (
-    DiscoverConnection, ConnectionView, AccountSettings, AccountView, ServerInfo,
+    DiscoverConnection, ConnectionView, ConnectionCatalog, ConnectionLabel, AccountSettings, AccountView, ServerInfo,
     AccountCatalog, StartSync, CaptureLeaseRequest, CaptureLease, CapturePage,
     CaptureComplete, CaptureStatus, PageReceipt, IntervalView, JobView, ErrorResponse,
 )

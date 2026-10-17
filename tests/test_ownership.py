@@ -41,10 +41,11 @@ def v5_copy(h):
     # Recreate the pre-fix schema on this disposable fixture only. All v5
     # receipts, authorizations and immutable request payloads remain intact.
     with closing(storage.configured(sqlite3.connect(h.path))) as db:
+        db.execute('DROP TABLE connection_labels')
         db.execute('DROP TRIGGER processing_target_immutable')
         db.execute('DROP TRIGGER processing_target_preserved')
         db.execute('DROP TABLE processing_targets')
-        db.execute('DELETE FROM schema_migrations WHERE version=6')
+        db.execute('DELETE FROM schema_migrations WHERE version>=6')
         db.execute('PRAGMA user_version=5')
         db.commit()
 
@@ -170,7 +171,7 @@ def test_failed_v6_upgrade_rolls_back_and_leaves_original_backup(h, monkeypatch)
     with closing(storage.connect_readonly(h.path)) as db:
         assert storage.validate_owner(db) == 5
         assert not db.execute("SELECT 1 FROM sqlite_master WHERE name='processing_targets'").fetchone()
-    assert len(list(h.path.parent.glob('*.pre-v6-*'))) == 1
+    assert len(list(h.path.parent.glob(f'*.pre-v{storage.SCHEMA_VERSION}-*'))) == 1
 
 
 def test_v5_group_keeps_original_authorized_account_after_rebinding(h):

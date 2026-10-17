@@ -389,3 +389,30 @@ runtime Python/SQL file hashes against the tested source, without data mounts.
   account was used. Live BIDV delivery remains a separate acceptance step.
 - Documentation: `docs/bidv.md`. Version metadata is 0.2.1, local/unreleased.
   No push, tag, publication, or production deployment is authorized by this feature request.
+
+## October 17, 2026 — Named bank connections (local 0.2.1)
+
+- Added a bank-filtered connection catalog, optional discovery names, rename and
+  scoped account unlink endpoints. A bank can have multiple access profiles;
+  their account memberships and capture jobs stay separate. Bank credentials
+  are not accepted or stored. Chrome owns explicit profile selection.
+- Reused canonical physical account IDs, mappings, coverage, and permanent
+  delivery/deletion journals across overlapping access. Unlink invalidates only
+  that connection's account capture; financial records and other access survive.
+  Shared account import settings are intentionally global, not per access profile.
+- Schema 7 adds only `connection_labels`. Owned schema-6 databases upgrade with
+  a private backup. Verified 0.2.0 migration archives remain importable after a
+  private temporary-copy upgrade; declared/actual schema mismatch is rejected.
+  Archive restoration retains names, membership, account IDs and receipts without
+  writing to ZenMoney. Existing migrations/backups remain transactional.
+- Docker ARM64: 527 tests and full HTTP/authentication/persistence, SIGKILL,
+  graceful shutdown, and snapshot/restored-delivery checks passed. Only synthetic
+  databases and fake SDK responses were used. Logs: ignored
+  `.local/profiles-full-backend-complete.log`. Earlier fixture-only assertion
+  failures were corrected before this successful final run.
+- API/storage guide: `docs/bank-connections.md`. Paired Chrome checks cover two
+  artificial BIDV logins, separate targets/ignored accounts, returning to a login,
+  overlapping access, repeat synchronization and a mobile deletion without writes.
+  Real two-login acceptance is not claimed. SDK dependency is unchanged.
+- Local source remains 0.2.1/unreleased. No production data, container, bank
+  session, installed extension, push, Git tag or published image was changed.

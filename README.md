@@ -1,7 +1,7 @@
 # ZenImport Backend
 
-Local development **0.2.1** adds the [BIDV capture policy](docs/bidv.md), paired with
-Chrome 0.2.1+. It is not yet published; the latest published image remains 0.2.0.
+Local development **0.2.1** adds the [BIDV capture policy](docs/bidv.md) and
+[named bank connections](docs/bank-connections.md), paired with Chrome 0.2.1+. It is not yet published; the latest published image remains 0.2.0.
 
 Version **0.2.0** adds popup export/import for moving servers:
 [data migration guide](docs/popup-migration.md). It retains the full delivery journal
@@ -10,7 +10,7 @@ the extension to 0.2.0 before using this feature.
 
 An independent Docker service that receives bank history from Chrome and adds new transactions to ZenMoney. Neither extension source nor an SDK checkout is required to build. Docker installs the public `zenmoney-python==0.7.0` wheel from PyPI with a pinned SHA256; no PyPI token is needed.
 
-The backend and Chrome extension are separate projects; financial storage v6, mirroring/prediction, and durable delivery are implemented. At the user's direction, the new local backend started with a clean database on October 16, 2026. Current status, extension settings, and initial import limitations: [docs/local-deployment.md](docs/local-deployment.md). Live mobile acceptance is deferred; do not connect the old extension to the new protocol.
+The backend and Chrome extension are separate projects; financial storage v7, mirroring/prediction, and durable delivery are implemented. At the user's direction, the new local backend started with a clean database on October 16, 2026. Current status, extension settings, and initial import limitations: [docs/local-deployment.md](docs/local-deployment.md). Live mobile acceptance is deferred; do not connect the old extension to the new protocol.
 
 Plan: [docs/refactor/README.md](docs/refactor/README.md). Status: [docs/refactor/05-progress.md](docs/refactor/05-progress.md). Contract: [docs/sync-api-v1.md](docs/sync-api-v1.md). Legacy module extraction decisions: [docs/extraction-map.md](docs/extraction-map.md).
 

@@ -1,6 +1,8 @@
 # Move a backend through the Chrome popup (0.2.0)
 
-Use backend and extension 0.2.0 or newer, with the same supported storage schema.
+Use backend and extension 0.2.0 or newer, with a supported storage schema. Backend 0.2.1 imports verified schema-6
+archives from 0.2.0 as well as schema 7. Backend 0.2.0 cannot import schema-7
+archives. Upgrade the destination first; never downgrade a schema-7 database.
 The earlier 0.1.0 image and 0.1.9 extension do not contain this feature. Update
 both backends and the extension before exporting or importing.
 
@@ -14,7 +16,7 @@ both backends and the extension before exporting or importing.
    stays paused, including after process restart or popup closure. Capture, catalog
    mutation, and delivery are blocked; health, info, migration status, repeated
    export, and explicit resume remain available.
-3. Change the address and backend token in **Connection**. Connect to the new
+3. Change the address and backend token in **Server connection**. Connect to the new
    server, configured with a ZenMoney token for the same financial data set.
    Discovering accounts or reading the catalog does not disable import.
 4. Before Synchronize, click **Import data** and select the ZIP. The server checks
