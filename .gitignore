@@ -1,4 +1,9 @@
 .env
+.env.*
+!.env.example
+!.env.server.example
+dist/
+backups/
 .venv/
 data/
 __pycache__/

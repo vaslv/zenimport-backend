@@ -4,10 +4,13 @@
 !vendor/
 !vendor/SHA256SUMS
 !vendor/*.whl
+!vendor/requirements-sdk.lock.txt
 !requirements.runtime.lock.txt
 !requirements.lock.txt
 !pyproject.toml
+!LICENSE
 !.env.example
+!.env.server.example
 !docker/
 !docker/*.py
 !tests/
@@ -27,3 +30,4 @@
 !scripts/migration_lab.py
 !scripts/migration_history.py
 !scripts/migration_replay.py
+!scripts/update_sdk.py

@@ -1,0 +1,25 @@
+# Image-only deployment: no checkout of the SDK, browser or Docker build needed.
+name: zenimport-server
+services:
+  backend:
+    image: ${ZENIMPORT_IMAGE:?Set ZENIMPORT_IMAGE to a verified image reference}
+    environment:
+      API_TOKEN: ${API_TOKEN:?Set API_TOKEN}
+      ZENMONEY_TOKEN: ${ZENMONEY_TOKEN:-}
+      DATABASE_PATH: ${DATABASE_PATH:-/data/zenimport.sqlite3}
+    ports:
+      - "127.0.0.1:${HTTP_PORT:-18792}:8000"
+    volumes:
+      - data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    init: true
+    restart: unless-stopped
+    # SDK reads may take up to 60s and can retry once; retain a graceful window.
+    stop_grace_period: 150s
+volumes:
+  data:
+    name: ${DATA_VOLUME:?Set persistent DATA_VOLUME explicitly}

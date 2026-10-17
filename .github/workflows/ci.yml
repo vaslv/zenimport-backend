@@ -1,0 +1,24 @@
+name: Backend container checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      - name: Tests, restart, crash recovery and snapshot (fake data)
+        run: ./scripts/test-docker.sh '${{ matrix.platform }}'
+      - name: Image-only server deployment (no ZenMoney token)
+        run: ./scripts/test-server-image.sh '${{ matrix.platform }}'

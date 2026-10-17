@@ -1,0 +1,12 @@
+# Run Caddy on the host; point DNS at this machine and allow ports 80/443.
+# Replace this example domain. No credentials in the proxy configuration.
+zenimport.example.org {
+    request_body {
+        max_size 2MB
+    }
+    reverse_proxy 127.0.0.1:18792 {
+        transport http {
+            response_header_timeout 150s
+        }
+    }
+}

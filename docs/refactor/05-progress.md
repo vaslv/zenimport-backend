@@ -413,3 +413,37 @@ Chrome Docker-регрессии — 31 unit и 17 browser/integration passed.
 e8da2e2. Фактические границы и ограничения пустой БД —
 [migration-lab.md](../migration-lab.md). Публичный сервер и мобильный UI ещё не
 проверены. Без push, Git-тегов и публикации.
+
+
+### Подготовка SDK/GitHub и серверного Docker — 17 октября 2026
+
+По уточнению пользователя дистрибутив SDK называется **zenmoney-python**,
+репозиторий `vaslv/zenmoney-python`, импорт `zenmoney_api`. MIT подтверждена
+пользователем и перенесена из созданного GitHub-репозитория. SDK 0.7.0:
+wheel/sdist/SHA256SUMS, Twine strict, 260 тестов и mypy, покрытие 99%.
+Его локальная история объединена с исходной GitHub-лицензией без rewrite/push.
+
+Backend зависит от `zenmoney-python==0.7.0`, устанавливает отдельный wheel
+с SHA256/require-hashes/no-index/no-deps и pip check. Исправлен прежний рассинхрон
+pyproject 0.6.0 / Docker wheel 0.6.1. Источник SDK не копируется. До первого
+публичного релиза используется локальный проверенный wheel; после публикации
+обновление выполняется явно скачанным артефактом и scripts/update_sdk.py.
+
+Добавлены image-only compose.server.yaml, приватный bootstrap .env без Python
+на хосте, OCI metadata, подготовка образов AMD64/ARM64 и пример Caddy.
+На обеих архитектурах прошли по **492 теста** и HTTP/auth, SIGKILL, graceful
+stop, согласованный snapshot/restore без повторной отправки. ARM64 — нативно,
+AMD64 — под эмуляцией. Отдельная image-only приёмка на обеих архитектурах
+подтвердила bootstrap 600/отказ перезаписи, runtime layout/SDK, localhost bind,
+read-only root/UID, OCI revision и сохранение volume после recreate.
+Пример Caddy проверен штатным validate без сети/сертификатов пользователя.
+
+Подготовлены MIT/CI/инструкции всех трёх проектов; workflows не создают теги,
+не публикуют пакеты/образы и не выполняют реальные финансовые тесты. GitHub
+Actions ещё не запускались. Gitleaks 8.30.1 не нашёл секретов в прежней полной
+Git-истории; дополнительная проверка известных локальных токенов также чистая.
+Рабочий backend/БД/ZenMoney не использовались и не обновлялись.
+
+Первыми публикуются SDK-коммиты и SDK-релиз, затем backend с проверенным SDK,
+затем Chrome. [Порядок](../publication.md), [сервер](../server-deployment.md).
+Всё локально; без push, Git-тегов, GitHub Release, PyPI, GHCR и Store.
