@@ -273,3 +273,17 @@ Docker on Linux/ARM64: **492 tests passed**, plus HTTP/auth, persistent recreati
   evidence in [pypi-container-validation.md](../pypi-container-validation.md).
 - actionlint passed; source/history secret scans and focused manual review passed.
   No source push, Git tag, registry publication, or production restart occurred.
+
+
+## 2026-10-17 — Linux CI bootstrap ownership fix
+
+- User authorized backend source push and GHCR image publication; source commit
+  `6ad950f` was pushed without creating Git tags or publishing other projects.
+- GitHub AMD64 passed all application/recovery tests, but the image-only check
+  exposed a test harness ownership assumption hidden by macOS bind mounts:
+  the host-created mode-600 `.env` cannot be read as runtime UID 10001 on Linux.
+- Run the three read-only bind-file verification commands as the host UID/GID,
+  just like the bootstrap helper. Keep mode 600 and the service UID unchanged.
+  No application, financial data, storage schema, or delivery policy changed.
+- Stop obsolete workflow runs before retesting/retrying publication. The failed
+  verification gate prevented publication of that source revision.

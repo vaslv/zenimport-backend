@@ -33,11 +33,12 @@ else
  "$root/scripts/build-image.sh" "$platform"
 fi
 (cd "$workspace" && "$root/scripts/init-server.sh")
-docker run --rm --network none --read-only --mount "type=bind,source=$workspace,target=/input,readonly" \
+# The private bind-mounted file belongs to the host UID, not the runtime app UID.
+docker run --rm --network none --read-only --user "$(id -u):$(id -g)" --mount "type=bind,source=$workspace,target=/input,readonly" \
  "$ZENIMPORT_IMAGE" python -c 'from pathlib import Path; import os; p=Path("/input/.env"); s=p.read_text(); assert p.stat().st_mode & 0o777 == 0o600; assert "ZENMONEY_TOKEN=\n" in s; assert "ZENIMPORT_IMAGE=" in s; assert len(next(x for x in s.splitlines() if x.startswith("API_TOKEN=")).split("=",1)[1])>=24'
-before=$(docker run --rm --network none --read-only --mount "type=bind,source=$workspace,target=/input,readonly" "$ZENIMPORT_IMAGE" python -c 'from pathlib import Path; from hashlib import sha256; print(sha256(Path("/input/.env").read_bytes()).hexdigest())')
+before=$(docker run --rm --network none --read-only --user "$(id -u):$(id -g)" --mount "type=bind,source=$workspace,target=/input,readonly" "$ZENIMPORT_IMAGE" python -c 'from pathlib import Path; from hashlib import sha256; print(sha256(Path("/input/.env").read_bytes()).hexdigest())')
 if (cd "$workspace" && "$root/scripts/init-server.sh"); then echo 'Unexpected .env overwrite' >&2; exit 1; fi
-after=$(docker run --rm --network none --read-only --mount "type=bind,source=$workspace,target=/input,readonly" "$ZENIMPORT_IMAGE" python -c 'from pathlib import Path; from hashlib import sha256; print(sha256(Path("/input/.env").read_bytes()).hexdigest())')
+after=$(docker run --rm --network none --read-only --user "$(id -u):$(id -g)" --mount "type=bind,source=$workspace,target=/input,readonly" "$ZENIMPORT_IMAGE" python -c 'from pathlib import Path; from hashlib import sha256; print(sha256(Path("/input/.env").read_bytes()).hexdigest())')
 [ "$before" = "$after" ]
 dc up -d --pull never --wait --wait-timeout 60 backend
 container=$(dc ps -q backend)
