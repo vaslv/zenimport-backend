@@ -11,6 +11,9 @@ catalog: an empty database knows nothing about prior deletions or arbitrary
 date/amount edits. Do not run old and new workers against the same ZenMoney account
 simultaneously.
 
+Published 0.1.0 digest, acceptance results, and exact quick start:
+[container-release-0.1.0.md](container-release-0.1.0.md).
+
 ## Two installation methods
 
 After source publication, build the image directly on the server:

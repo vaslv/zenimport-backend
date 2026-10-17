@@ -308,3 +308,21 @@ Docker on Linux/ARM64: **492 tests passed**, plus HTTP/auth, persistent recreati
 - Allow the image check to assert an explicit expected OCI source revision while
   using a newer test harness, and retain service logs on failure before cleanup.
   No runtime source, installed dependencies, database policy, or image bytes change.
+
+
+## 2026-10-17 — Backend GHCR publication accepted
+
+- Backend source and container 0.1.0 are public on GitHub/GHCR. Runtime source
+  remains `60e5d24`; immutable registry digest is
+  `sha256:77747ac1ddf90ea12ebcfd7d4202f67660bc3375a5ffafa508bfa82392fdfd0b`.
+  Published bytes and version tags were not replaced after the emulation timeout.
+- Native backend CI on `b18af65` passed both complete 492-test/platform suites:
+  https://github.com/vaslv/zenimport-backend/actions/runs/39029767213.
+- Separate anonymous digest-based acceptance passed on native AMD64 and ARM64:
+  https://github.com/vaslv/zenimport-backend/actions/runs/39029794475.
+- Verified public registry manifest/digest, anonymous pulls, installed SDK,
+  architecture/OCI source, and complete published-image deployment locally too.
+- Added [release/installation report](../container-release-0.1.0.md), preserving
+  initial failed/cancelled run history and the distinction between artifact source
+  and verification-harness revisions. No Git tags, other-project publication,
+  production restart/data changes, or actual remote-server deployment occurred.

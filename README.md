@@ -6,6 +6,19 @@ The backend and Chrome extension are separate projects; financial storage v6, mi
 
 Plan: [docs/refactor/README.md](docs/refactor/README.md). Status: [docs/refactor/05-progress.md](docs/refactor/05-progress.md). Contract: [docs/sync-api-v1.md](docs/sync-api-v1.md). Legacy module extraction decisions: [docs/extraction-map.md](docs/extraction-map.md).
 
+## Published server image
+
+Backend 0.1.0 is available publicly for Linux AMD64 and ARM64:
+
+```sh
+docker pull ghcr.io/vaslv/zenimport-backend:0.1.0
+```
+
+[Verified digest, native CI results, and installation commands](docs/container-release-0.1.0.md).
+For deployment, use that immutable digest and keep SQLite in the named volume.
+When moving an existing installation, transfer its consistent database and delivery
+journal before switching the extension; do not run old/new workers together.
+
 ## Local startup
 
 Docker Engine and Compose are required. Host Python/Node installations are not needed.

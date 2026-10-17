@@ -1,5 +1,9 @@
 # PyPI dependency and container publication readiness — 2026-10-17
 
+This file records the initial preparation checkpoint. Completed publication and
+actual native GitHub acceptance are recorded in
+[container-release-0.1.0.md](container-release-0.1.0.md).
+
 ## Dependency evidence
 
 - Backend version: 0.1.0; SDK import: `zenmoney_api`.
