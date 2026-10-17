@@ -21,6 +21,8 @@ The Chrome project is independent and is not published by this workflow.
 These checks use unique disposable databases, synthetic tokens, and fake ZenMoney
 responses. They do not read production `.env`, invoke a bank, or send real
 financial transactions. ARM64 is native on the development Mac; AMD64 is emulated.
+GitHub CI runs each architecture on its native Ubuntu runner; QEMU is used only
+for building the multiplatform release, not for timing-sensitive acceptance tests.
 No claim is made that a remote server has been configured by these checks.
 
 Review the complete source diff, clean Git state, lock/hash, workflow syntax,
@@ -48,11 +50,16 @@ After explicit source-push and image-publication authorization:
 5. The workflow refuses to replace an existing version image, builds both
    architectures, and pushes tags `0.1.0` and `sha-<full-source-commit>`. No `latest`
    tag or Git tag is created. The OCI source/revision labels identify the source.
-6. It checks the registry manifest for both architectures, then pulls the published
-   digest and reruns image-only HTTP/auth/persistence checks on both platforms.
+6. It checks the registry manifest for both architectures, then the reusable
+   **Verify published image** workflow pulls the published digest anonymously and
+   reruns image-only HTTP/auth/persistence checks on native AMD64 and ARM64 runners.
    If a post-publication check fails, the image may already exist: do not deploy
    it just because the tag exists. Investigate the failed run; do not overwrite
-   that version. The version guard also makes repeated dispatches fail safely.
+   that version. The version guard also makes repeated publication dispatches fail safely.
+   To recheck an existing artifact without rebuilding or republishing it, manually
+   run **Verify published image**, supplying its exact `image_digest` and full
+   `source_revision` from the OCI label. The source may differ from the workflow
+   revision when only the verification harness has changed.
 7. The workflow summary prints `ghcr.io/vaslv/zenimport-backend@sha256:...`.
    Use that exact immutable reference on the server, not a moving tag.
 

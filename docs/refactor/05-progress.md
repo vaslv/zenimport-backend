@@ -287,3 +287,24 @@ Docker on Linux/ARM64: **492 tests passed**, plus HTTP/auth, persistent recreati
   No application, financial data, storage schema, or delivery policy changed.
 - Stop obsolete workflow runs before retesting/retrying publication. The failed
   verification gate prevented publication of that source revision.
+
+
+## 2026-10-17 — Native ARM CI and immutable artifact revalidation
+
+- Published backend image 0.1.0 from source
+  `60e5d24c6d4398c76f0ee9a0535e4bcd4a5f0d99` to GHCR at digest
+  `sha256:77747ac1ddf90ea12ebcfd7d4202f67660bc3375a5ffafa508bfa82392fdfd0b`.
+  Registry metadata and both architecture pulls are publicly accessible without
+  authentication; the installed SDK and OCI source revision were checked locally.
+- Both published architecture images passed complete local image-only checks.
+  The first GitHub post-publication ARM smoke check hit its one-minute readiness
+  deadline under QEMU. A parallel ARM CI run also exceeded process-exit deadlines;
+  another run passed. Preserve the artifact and timing assertions instead of
+  overwriting its version or silently declaring the failed workflow successful.
+- Move GitHub ARM tests and image acceptance to `ubuntu-24.04-arm`, with AMD64 on
+  `ubuntu-24.04`. Keep QEMU only for the multiplatform image build. Add reusable,
+  manual-only **Verify published image** with validated digest/source SHA inputs,
+  no publication permissions, and anonymous pulls on both native architectures.
+- Allow the image check to assert an explicit expected OCI source revision while
+  using a newer test harness, and retain service logs on failure before cleanup.
+  No runtime source, installed dependencies, database policy, or image bytes change.

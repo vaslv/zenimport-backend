@@ -1,0 +1,56 @@
+name: Verify published image
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: Immutable GHCR digest (sha256 followed by 64 hex digits)
+        required: true
+        type: string
+      source_revision:
+        description: Full source commit recorded in the image OCI revision label
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      image_digest:
+        required: true
+        type: string
+      source_revision:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate immutable image and source references
+        env:
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+          SOURCE_REVISION: ${{ inputs.source_revision }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          image="ghcr.io/${REPOSITORY,,}@$IMAGE_DIGEST"
+          echo "ZENIMPORT_TEST_IMAGE=$image" >> "$GITHUB_ENV"
+          echo "ZENIMPORT_EXPECTED_REVISION=$SOURCE_REVISION" >> "$GITHUB_ENV"
+          echo "Checking \`$image\` from source \`$SOURCE_REVISION\`" >> "$GITHUB_STEP_SUMMARY"
+      - name: Pull anonymously and test image-only server deployment
+        env:
+          TEST_PLATFORM: ${{ matrix.platform }}
+        run: ./scripts/test-server-image.sh "$TEST_PLATFORM"

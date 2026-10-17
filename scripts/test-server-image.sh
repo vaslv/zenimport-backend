@@ -5,6 +5,7 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 platform=${1:-$(docker version --format '{{.Server.Os}}/{{.Server.Arch}}')}
 case "$platform" in linux/amd64) machine=x86_64;; linux/arm64) machine=aarch64;; *) exit 2;; esac
 project="zenimport-server-check-${platform#linux/}-$$"
+expected_revision=${ZENIMPORT_EXPECTED_REVISION:-$(git -C "$root" rev-parse HEAD)}
 ZENIMPORT_IMAGE=${ZENIMPORT_TEST_IMAGE:-$project:local}
 API_TOKEN=fixture-server-image-token-never-real
 ZENMONEY_TOKEN=
@@ -17,6 +18,9 @@ workspace=$(mktemp -d)
 dc() { docker compose --env-file /dev/null -p "$project" -f "$root/compose.server.yaml" "$@"; }
 cleanup() {
  status=$?; trap - EXIT
+ if [ "$status" -ne 0 ]; then
+  dc logs --no-color --tail 50 backend >&2 || true
+ fi
  dc down --volumes --remove-orphans >/dev/null 2>&1 || status=1
  if [ -z "${ZENIMPORT_TEST_IMAGE:-}" ]; then
   docker image rm "$ZENIMPORT_IMAGE" >/dev/null 2>&1 || true
@@ -49,6 +53,6 @@ first=$(dc exec -T backend python -c 'import sqlite3; c=sqlite3.connect("/data/z
 dc up -d --pull never --force-recreate --wait --wait-timeout 60 backend
 second=$(dc exec -T backend python -c 'import sqlite3; c=sqlite3.connect("/data/zenimport.sqlite3"); print(c.execute("select value from service_meta where key=?",("instance_id",)).fetchone()[0])')
 [ "$first" = "$second" ]
-[ "$(docker image inspect "$ZENIMPORT_IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$(git -C "$root" rev-parse HEAD)" ]
+[ "$(docker image inspect "$ZENIMPORT_IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$expected_revision" ]
 [ "$(docker image inspect "$ZENIMPORT_IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.licenses"}}')" = MIT ]
 echo "PASS: $platform image-only deployment, private bootstrap, no overwrite, persistent volume and OCI revision; no real data"
