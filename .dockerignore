@@ -22,3 +22,6 @@
 **/.env
 **/*.sqlite*
 **/*.db
+
+!scripts/
+!scripts/migration_lab.py

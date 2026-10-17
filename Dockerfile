@@ -36,10 +36,17 @@ COPY requirements.lock.txt ./
 RUN python -m pip install --no-cache-dir -r requirements.lock.txt
 COPY pyproject.toml ./
 COPY tests ./tests
+COPY scripts/migration_lab.py ./scripts/migration_lab.py
 COPY fixtures/sync-v1 ./fixtures/sync-v1
 COPY fixtures/legacy-v12 ./fixtures/legacy-v12
 USER 10001:10001
 CMD ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider"]
+
+# Explicit acceptance target only. Normal builds never include the live runner.
+FROM runtime AS migration-lab
+COPY scripts/migration_lab.py ./scripts/migration_lab.py
+ENTRYPOINT ["python", "/app/scripts/migration_lab.py"]
+CMD ["inspect"]
 
 # A default build always produces the service, not the test/configuration image.
 FROM runtime AS final

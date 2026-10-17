@@ -10,3 +10,6 @@ debug-*.json
 .DS_Store
 *.egg-info/
 test-results/
+
+# Private migration acceptance state and credentials
+.local/

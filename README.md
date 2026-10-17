@@ -76,3 +76,6 @@ scripts/test-platforms.sh
 Проект выделен из ZenImport `f3b2838` локальной копией Git без hardlinks, remotes отсутствуют. Полная прежняя история сохранена. Локальные коммиты разрешены; push/теги/публикация требуют отдельного разрешения.
 
 Read-only отчёт возможных лишних операций ZenMoney: GET `/api/v1/connections/{id}/discrepancies`. Страница находится в Chrome-расширении; область сравнения, формат и ограничения описаны в [docs/discrepancies.md](docs/discrepancies.md).
+
+Изолированная репетиция смены сервера и явно запускаемая приёмка отдельного
+тестового аккаунта: [docs/migration-lab.md](docs/migration-lab.md).
