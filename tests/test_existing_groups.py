@@ -47,6 +47,7 @@ def test_unique_split_merge_or_net_settlement_is_persisted_without_create(h,bank
         assert db.execute('SELECT count(*) FROM link_zen_members').fetchone()[0]==len(zens)
         assert db.execute('SELECT count(*) FROM deliveries').fetchone()[0]==0
         assert db.execute('SELECT count(*) FROM delivery_attempts').fetchone()[0]==0
+        assert db.execute('SELECT count(*) FROM processing_targets WHERE target_id=?', (TARGET,)).fetchone()[0]==len(banks)*len(zens)
     # Subsequent mobile edits and deletion must not authorize recreation.
     h.remote.transactions[identifiers[0]]['comment']='Edited in mobile'
     h.worker.mirror.refresh(force=True)

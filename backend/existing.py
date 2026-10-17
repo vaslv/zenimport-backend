@@ -6,7 +6,7 @@ from decimal import Decimal, localcontext
 import re
 from uuid import uuid4
 
-from . import predictions
+from . import ownership, predictions
 
 
 def reference(bank):
@@ -23,19 +23,11 @@ def reference(bank):
 def pool(db):
     # Ownership belongs to the bank-side account. One remote transfer can
     # legitimately represent an outgoing leg in bank A and an incoming leg in B.
-    claimed = {tuple(row) for row in db.execute('''WITH known AS (
-        SELECT bank_id,zen_id FROM processing_receipts
-        UNION SELECT bank_id,zen_id FROM deliveries WHERE ever_attempted=1
-        UNION SELECT bank_id,zen_id FROM delivery_attempts
-        UNION SELECT b.bank_id,z.zen_id FROM link_bank_members b JOIN link_zen_members z ON z.group_id=b.group_id),
-        bindings AS (SELECT id account_id,zenmoney_account_id target FROM bank_accounts
-        UNION SELECT account_id,zenmoney_account_id FROM account_bindings)
-        SELECT DISTINCT k.zen_id,a.target FROM known k JOIN bank_transactions b ON b.id=k.bank_id
-        JOIN bindings a ON a.account_id=b.account_id WHERE a.target IS NOT NULL''')}
+    claimed, unknown = ownership.claims(db)
     excluded = {r[0] for r in db.execute('SELECT zen_id FROM zen_exclusions')}
     buckets = defaultdict(list)
     for tx in predictions.entities(db, 'transaction').values():
-        if tx['id'] in excluded or tx.get('hold'):
+        if tx['id'] in excluded or tx['id'] in unknown or tx.get('hold'):
             continue
         for target in {tx.get('incomeAccount'), tx.get('outcomeAccount')} - {None}:
             if (tx['id'], target) not in claimed:
@@ -191,12 +183,18 @@ def group_matches(db, candidates, singles):
 
 def reconcile(db, candidates, now):
     """Persist one plan in the caller's intent transaction, without remote writes."""
+    ownership.backfill(db)
     singles = matches(db, candidates)
     groups = group_matches(db, candidates, singles)
     recognized = set(singles) | {b for g in groups for b in g.banks}
+    targets = {b['id']: a['id'] for b, a in candidates}
     for bank, (zen, origin) in singles.items():
+        ownership.remember(db, bank, zen, targets[bank], origin, now)
         db.execute('INSERT INTO processing_receipts VALUES (?,?,?,?)', (bank, zen, origin, now))
     for group in groups:
+        for bank in group.banks:
+            for zen in group.zens:
+                ownership.remember(db, bank, zen, targets[bank], 'day_amount_group', now)
         identifier = str(uuid4())
         db.execute('INSERT INTO link_groups VALUES (?,?,?,?,?)',
             (identifier, group.kind, group.account_id, now, 'day_amount_group'))
@@ -206,4 +204,4 @@ def reconcile(db, candidates, now):
         db.execute('DELETE FROM deliveries WHERE bank_id=? AND ever_attempted=0', (bank,))
         origin = singles[bank][1] if bank in singles else 'day_amount_group'
         db.execute("UPDATE bank_processing SET state='delivered',reason=?,updated_at=? WHERE bank_id=?", ('existing_'+origin, now, bank))
-    return recognized
+    return recognized, ownership.blocked(db, candidates) - recognized

@@ -16,7 +16,7 @@ COPY requirements.runtime.lock.txt ./
 RUN python -m pip install --no-cache-dir -r requirements.runtime.lock.txt
 COPY vendor ./vendor
 RUN cd vendor && sha256sum -c SHA256SUMS \
-    && python -m pip install --no-cache-dir --no-deps ./zenmoney_api_client-0.6.0-py3-none-any.whl
+    && python -m pip install --no-cache-dir --no-deps ./zenmoney_api_client-0.6.1-py3-none-any.whl
 
 FROM dependencies AS runtime
 RUN groupadd --gid 10001 app && useradd --uid 10001 --gid app --no-create-home app \

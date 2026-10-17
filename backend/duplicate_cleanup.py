@@ -14,7 +14,7 @@ from uuid import uuid4
 from zenmoney_api import Client, HTTPError, ResponseError, TransportError, transactions as tx
 from zenmoney_api.protocol import decode_json, encode_json
 
-from . import existing, predictions, storage
+from . import existing, ownership, predictions, storage
 from .config import Settings
 from .delivery import writer_lock
 from .mirror import Mirror
@@ -151,6 +151,10 @@ def execute(path, mirror, plan, approved, journal_path, *, clock=time.time):
             check_rows(db, groups)
             for group in groups:
                 bank = db.execute('SELECT account_id FROM bank_transactions WHERE id=?', (group['bank_ids'][0],)).fetchone()
+                target = db.execute('SELECT zenmoney_account_id FROM bank_accounts WHERE id=?', (bank['account_id'],)).fetchone()[0]
+                for bank_id in group['bank_ids']:
+                    for zen in group['keeps']:
+                        ownership.remember(db, bank_id, zen['id'], target, 'duplicate_cleanup', int(clock()))
                 identifier = str(uuid4())
                 db.execute('INSERT INTO link_groups VALUES (?,?,?,?,?)', (identifier, group['kind'], bank['account_id'], int(clock()), 'duplicate_cleanup'))
                 db.executemany('INSERT INTO link_bank_members VALUES (?,?)', ((identifier, b) for b in group['bank_ids']))

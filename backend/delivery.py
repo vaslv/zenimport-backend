@@ -12,7 +12,7 @@ from uuid import uuid4
 from zenmoney_api import HTTPError, ResponseError, TransportError
 from zenmoney_api import transactions as tx
 
-from . import accounts, capture, existing, predictions, storage
+from . import accounts, capture, existing, ownership, predictions, storage
 from .capture_policy import SyncError, get
 from .mirror import apply_diff, reconcile_known, text
 
@@ -63,7 +63,7 @@ def refresh_status(db, now, job_id=None):
         else:
             db.execute("UPDATE capture_errors SET resolved=1 WHERE job_id=? AND code='delivery_uncertain'", (job['id'],))
         errors = db.execute('''SELECT 1 FROM capture_errors WHERE job_id=? AND resolved=0
-            AND code IN ('zenmoney_unavailable','zenmoney_account_unavailable','delivery_uncertain','account_disabled','settings_conflict')''', (job['id'],)).fetchone()
+            AND code IN ('zenmoney_unavailable','zenmoney_account_unavailable','delivery_uncertain','existing_ownership_unknown','account_disabled','settings_conflict')''', (job['id'],)).fetchone()
         active = db.execute("SELECT 1 FROM deliveries WHERE authorized_job_id=? AND state='attempting'", (job['id'],)).fetchone()
         pending = counts.get('pending', 0) + counts.get('prepared', 0)
         finished = not pending and not unknown and job['capture_state'] == 'complete'
@@ -125,12 +125,19 @@ def intent(db, mirror, now):
             capture.add_error(db, row['job_id'], get(db, 'bank_transactions', row['bank_id'])['account_id'], exc.code, now, True)
         except (KeyError, ValueError, TypeError):
             capture.add_error(db, row['job_id'], get(db, 'bank_transactions', row['bank_id'])['account_id'], 'zenmoney_account_unavailable', now, True)
-    recognized = existing.reconcile(db, [(bank, account) for _, bank, account in validated], now)
+    db.execute("UPDATE capture_errors SET resolved=1 WHERE code='existing_ownership_unknown'")
+    recognized, blocked = existing.reconcile(db, [(bank, account) for _, bank, account in validated], now)
     if recognized:
         predictions.rebuild_evidence(db)
     context = predictions.evidence_context(db)
+    # Report every blocked candidate, even beyond this cycle's write batch.
+    for row, bank, _ in validated:
+        if bank['id'] in blocked:
+            capture.add_error(db, row['job_id'], bank['account_id'], 'existing_ownership_unknown', now, False)
     for row, bank, account in validated:
         try:
+            if bank['id'] in blocked:
+                continue
             if bank['id'] in recognized:
                 db.execute("UPDATE capture_errors SET resolved=1 WHERE job_id=? AND account_id=? AND code IN ('zenmoney_account_unavailable','settings_conflict','account_disabled')", (row['job_id'], bank['account_id']))
                 continue
@@ -160,6 +167,7 @@ def intent(db, mirror, now):
             (bank['id'], identifier, text(payload), row['job_id'], now))
         db.execute("UPDATE deliveries SET state='attempting',ever_attempted=1,updated_at=? WHERE bank_id=?", (now, bank['id']))
         db.execute("UPDATE bank_processing SET state='uncertain',reason='write_intent',updated_at=? WHERE bank_id=?", (now, bank['id']))
+        ownership.remember(db, bank['id'], identifier, row['target_id'], 'delivery_intent', now)
         db.execute('INSERT INTO delivery_attempts VALUES (?,?,?,?,?,?)', (str(uuid4()), bank['id'], identifier, now, 'intent', text(payload)))
         db.execute("UPDATE capture_errors SET resolved=1 WHERE job_id=? AND account_id=? AND code IN ('zenmoney_account_unavailable','settings_conflict','account_disabled')", (row['job_id'], bank['account_id']))
         payloads.append(payload)

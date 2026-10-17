@@ -10,8 +10,8 @@ from zenmoney_api.protocol import decode_json
 
 
 def test_installed_vendored_sdk_supports_unreviewed_exact_creation():
-    assert version('zenmoney-api-client') == '0.6.0'
-    wheel = Path('vendor/zenmoney_api_client-0.6.0-py3-none-any.whl')
+    assert version('zenmoney-api-client') == '0.6.1'
+    wheel = Path('vendor/zenmoney_api_client-0.6.1-py3-none-any.whl')
     assert sha256(wheel.read_bytes()).hexdigest() == Path('vendor/SHA256SUMS').read_text().split()[0]
     amount = Decimal('1234567890123456.123456')
     identifier = '00000000-0000-4000-8000-000000000001'

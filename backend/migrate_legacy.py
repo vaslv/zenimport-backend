@@ -319,13 +319,15 @@ def convert(source_path: Path, destination: Path):
                 import_history(source, target)
                 import_choices(source, target)
                 import_deliveries(source, target)
+                from .ownership import backfill
+                backfill(target)
                 archive.verify_archive(target, digest, counts)
                 storage.check_integrity(target)
                 report['processing_states'] = dict(target.execute('SELECT state,count(*) FROM bank_processing GROUP BY state'))
                 report['delivery_states'] = dict(target.execute('SELECT state,count(*) FROM deliveries GROUP BY state'))
                 report['normalized_rows'] = {table: target.execute('SELECT count(*) FROM ' + table).fetchone()[0] for table in (
                     'bank_accounts', 'bank_transactions', 'bank_aliases', 'bank_versions', 'link_groups', 'link_bank_members',
-                    'link_zen_members', 'processing_receipts', 'delivery_attempts', 'zen_entities', 'zen_tombstones',
+                    'link_zen_members', 'processing_receipts', 'processing_targets', 'delivery_attempts', 'zen_entities', 'zen_tombstones',
                     'bank_exclusions', 'zen_exclusions', 'category_choices', 'recipient_rules')}
                 target.execute('UPDATE legacy_imports SET report_json=? WHERE digest=?', (json.dumps(report, sort_keys=True), digest))
             # Last connection closed/checkpointed; publish atomically without overwriting a racing writer.

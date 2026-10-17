@@ -17,6 +17,7 @@ MESSAGES = {
     'zenmoney_unavailable': 'Нет актуального каталога ZenMoney',
     'zenmoney_account_unavailable': 'Выбранный счёт ZenMoney недоступен',
     'delivery_uncertain': 'Сначала требуется проверить результат прежней отправки',
+    'existing_ownership_unknown': 'Не удалось определить счёт прежнего сопоставления',
     'bank_login_required': 'Войдите в личный кабинет банка',
 }
 

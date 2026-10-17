@@ -29,7 +29,7 @@ def test_upgrade_preserves_mirror_and_does_not_authorize_legacy_writes(tmp_path)
     backup = storage.initialize(path)
     assert backup.stat().st_mode & 0o777 == 0o600
     with storage.transaction(path, read_only=True) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 5
+        assert db.execute('PRAGMA user_version').fetchone()[0] == storage.SCHEMA_VERSION
         assert db.execute('SELECT cursor,generation,ready FROM zen_mirror_state').fetchone()[:] == (123, 2, 1)
         assert db.execute('SELECT data FROM zen_entities').fetchone()[0] == '{"amount":0.123456789012345678901}'
         assert not db.execute('SELECT 1 FROM delivery_authorizations').fetchone()

@@ -138,7 +138,7 @@ def apply_diff(db, diff, *, expected_generation, source_hash, requested_cursor, 
     db.execute("UPDATE capture_errors SET resolved=1 WHERE code='zenmoney_unavailable'")
     db.execute('''UPDATE capture_jobs SET delivery_state='waiting' WHERE delivery_state='blocked'
         AND NOT EXISTS (SELECT 1 FROM capture_errors e WHERE e.job_id=capture_jobs.id AND e.resolved=0
-                        AND e.code IN ('delivery_uncertain','zenmoney_account_unavailable'))''')
+                        AND e.code IN ('delivery_uncertain','existing_ownership_unknown','zenmoney_account_unavailable'))''')
     return True
 
 
