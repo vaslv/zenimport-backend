@@ -4,7 +4,8 @@ from uuid import uuid4
 
 from starlette.responses import JSONResponse
 
-from .sync_contracts import ApiError, ErrorResponse, MAX_BODY_BYTES
+from .sync_contracts import ApiError, ErrorResponse, MAX_BODY_BYTES, MAX_MIGRATION_BYTES
+from .capture_policy import MESSAGES, SyncError
 
 
 def error_response(request_id, code, message, status, *, retryable=False):
@@ -16,9 +17,10 @@ def error_response(request_id, code, message, status, *, retryable=False):
 
 
 class ApiBoundary:
-    def __init__(self, app, *, token):
+    def __init__(self, app, *, token, migration_gate=None):
         self.app = app
         self.authorization = ('Bearer ' + token).encode('ascii')
+        self.migration_gate = migration_gate
 
     async def __call__(self, scope, receive, send):
         if scope['type'] != 'http':
@@ -38,11 +40,12 @@ class ApiBoundary:
         parts = path.split('/')
         if len(parts) > 2 and parts[2] and parts[2] != 'v1':
             return await reject('unsupported_api_version', 'Unsupported API version', 404)
+        maximum = MAX_MIGRATION_BYTES if path == '/api/v1/migration/import' and scope['method'] == 'POST' else MAX_BODY_BYTES
         lengths = [v for k, v in scope['headers'] if k.lower() == b'content-length']
         if lengths:
             if len(lengths) != 1 or not lengths[0].isdigit():
                 return await reject('validation_error', 'Invalid request', 422)
-            if len(lengths[0]) > 10 or int(lengths[0]) > MAX_BODY_BYTES:
+            if len(lengths[0]) > 10 or int(lengths[0]) > maximum:
                 return await reject('payload_too_large', 'Request exceeds the size limit', 413)
 
         body = bytearray()
@@ -51,7 +54,7 @@ class ApiBoundary:
             if event['type'] == 'http.disconnect':
                 return
             chunk = event.get('body', b'')
-            if len(body) + len(chunk) > MAX_BODY_BYTES:
+            if len(body) + len(chunk) > maximum:
                 return await reject('payload_too_large', 'Request exceeds the size limit', 413)
             body.extend(chunk)
             if not event.get('more_body', False):
@@ -78,7 +81,14 @@ class ApiBoundary:
             await send(message)
 
         try:
-            await self.app(scope, replay, response)
+            if self.migration_gate and path != '/api/v1/info' and not path.startswith('/api/v1/migration/'):
+                try:
+                    with self.migration_gate().operation():
+                        await self.app(scope, replay, response)
+                except SyncError as exc:
+                    await error_response(identifier, exc.code, MESSAGES[exc.code], exc.status, retryable=exc.retryable)(scope, receive, send)
+            else:
+                await self.app(scope, replay, response)
         except Exception:
             if started:
                 raise RuntimeError(f'Response failed; request_id={identifier}') from None

@@ -326,3 +326,36 @@ Docker on Linux/ARM64: **492 tests passed**, plus HTTP/auth, persistent recreati
   initial failed/cancelled run history and the distinction between artifact source
   and verification-harness revisions. No Git tags, other-project publication,
   production restart/data changes, or actual remote-server deployment occurred.
+
+## Popup data migration — October 17, 2026, local 0.2.0
+
+Added authenticated ZIP export/import/status/resume API using the current schema
+and a complete SQLite snapshot, not a merge or executable SQL dump. The manifest
+records format/schema, instance, user set, size and SHA256. No environment credentials
+are exported. Strict two-member ZIP, bounded compressed/unpacked sizes, integrity,
+foreign-key, identity, and owner/schema checks precede restoration. The existing
+2 MB API-body limit is unchanged outside the 64 MiB raw-ZIP import route.
+
+A request/worker gate and writer lock prohibit exporting through an in-flight
+financial request. Source pause is committed before snapshot and survives restart.
+Resume is explicit. Import only replaces a destination with no prior sync/history;
+discovery/catalog alone is allowed. Prior imports are final except idempotent retry
+of the same digest before its first explicit sync. Import uses SQLite backup's
+destination transaction; no live-file replacement/WAL deletion. Restored delivery
+stays on hold until an explicit sync, resets its mirror for a current full read,
+and retains receipts, deletions, ownership, UUIDs, and uncertain attempt history.
+
+Fresh native ARM64 Docker: **508 tests passed** (492 existing + 16 migration cases),
+HTTP/auth, read-only root/UID, real worker restart, SIGKILL, graceful stop, and
+snapshot restoration passed. Migration cases cover corrupted/checksummed foreign
+archives, paths/duplicates, wrong identity, size/auth, concurrent financial write,
+post-sync prohibition, persistent pause, receipts/deletions, exact retry, and an
+uncertain committed UUID without repeat writes. Expected warnings: upstream
+Starlette/httpx deprecation and deliberately duplicated ZIP entry in a negative case.
+
+Built-extension/actual HTTP backend browser acceptance also verified ZIP download,
+address switch, upload, restored mappings, and no duplicate or recreated deletion.
+All banks/ZenMoney/data were synthetic, in isolated Docker. No production database,
+container, installed extension, real API, push/tag, or publication was used.
+New AMD64/native remote HTTPS/mobile acceptance is not claimed by these runs.
+Published backend 0.1.0 remains unchanged. Guide: [popup-migration.md](../popup-migration.md).

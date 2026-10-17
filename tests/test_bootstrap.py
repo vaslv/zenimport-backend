@@ -14,6 +14,7 @@ from backend.app import create_app
 from backend.config import Settings, create_env
 from backend.http import ApiBoundary
 from backend import storage
+from backend import __version__
 from backend.sync_contracts import AccountSettings, ErrorResponse, ServerInfo, MAX_BODY_BYTES
 
 TOKEN = 'fixture-backend-token-for-bootstrap'
@@ -36,7 +37,7 @@ def test_health_info_and_freshness_are_separate(client):
     response = client.get('/api/v1/info', headers=HEADERS)
     assert response.status_code == 200
     info = ServerInfo.model_validate(response.json())
-    assert info.api_version == 1 and info.service_version == '0.1.0'
+    assert info.api_version == 1 and info.service_version == __version__
     assert info.zenmoney_state == 'not_configured' and info.last_zenmoney_refresh is None
     assert response.headers['cache-control'] == 'no-store'
     UUID(response.headers['x-request-id'])

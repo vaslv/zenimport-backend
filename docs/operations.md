@@ -82,6 +82,11 @@ requires the separate new-file command in [financial-storage.md](financial-stora
 
 ## Snapshot and restoration
 
+Version 0.2.0 adds **Settings → Data migration** in the Chrome popup:
+[browser-driven export/import](popup-migration.md). The source is persistently
+paused; import is allowed only before the destination's first synchronization.
+The manual procedure below remains available for recovery and larger databases.
+
 Stop the backend first for a consistent recovery point. The exporter uses SQLite
 backup including committed WAL, validates ownership/schema/FKs/integrity, and publishes
 a mode-600 file. Neither source nor existing destination is overwritten. Every new

@@ -1,5 +1,10 @@
 # ZenImport Backend
 
+Popup export/import for moving servers is prepared in local **0.2.0**:
+[data migration guide](docs/popup-migration.md). It retains the full delivery journal
+and restores only before the destination's first sync. The published 0.1.0 image
+does not include this feature yet.
+
 An independent Docker service that receives bank history from Chrome and adds new transactions to ZenMoney. Neither extension source nor an SDK checkout is required to build. Docker installs the public `zenmoney-python==0.7.0` wheel from PyPI with a pinned SHA256; no PyPI token is needed.
 
 The backend and Chrome extension are separate projects; financial storage v6, mirroring/prediction, and durable delivery are implemented. At the user's direction, the new local backend started with a clean database on October 16, 2026. Current status, extension settings, and initial import limitations: [docs/local-deployment.md](docs/local-deployment.md). Live mobile acceptance is deferred; do not connect the old extension to the new protocol.

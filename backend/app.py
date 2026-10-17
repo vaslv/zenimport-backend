@@ -6,7 +6,8 @@ import time
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException
 from zenmoney_api import Client
 
@@ -18,6 +19,7 @@ from .sync_api import router
 from .sync_contracts import ServerInfo
 from .mirror import Mirror
 from .delivery import DeliveryWorker
+from .migration import Migration, MigrationGate
 
 
 def create_app(settings: Settings | None = None, *, clock=None, client_factory=Client, start_worker=True):
@@ -31,7 +33,9 @@ def create_app(settings: Settings | None = None, *, clock=None, client_factory=C
         app.state.zenmoney = client
         try:
             app.state.mirror = Mirror(settings.database_path, client, settings.zenmoney_token, clock)
-            app.state.delivery = DeliveryWorker(settings.database_path, app.state.mirror, clock)
+            app.state.migration_gate = MigrationGate(settings.database_path)
+            app.state.migration = Migration(settings.database_path, app.state.migration_gate, app.state.mirror, clock)
+            app.state.delivery = DeliveryWorker(settings.database_path, app.state.mirror, clock, gate=app.state.migration_gate)
             if start_worker:
                 app.state.delivery.start()
             try:
@@ -44,8 +48,30 @@ def create_app(settings: Settings | None = None, *, clock=None, client_factory=C
 
     app = FastAPI(title='ZenImport Backend', version=__version__, lifespan=lifespan,
                   docs_url=None, redoc_url=None, openapi_url=None)
-    app.add_middleware(ApiBoundary, token=settings.api_token)
+    app.add_middleware(ApiBoundary, token=settings.api_token, migration_gate=lambda: app.state.migration_gate)
     app.include_router(router(settings.database_path, clock, lambda: app.state.mirror, lambda: app.state.delivery.wake()))
+
+    @app.get('/api/v1/migration/status')
+    def migration_status():
+        return app.state.migration.status()
+
+    @app.post('/api/v1/migration/export')
+    def migration_export():
+        return Response(app.state.migration.export(), media_type='application/zip', headers={
+            'Content-Disposition': 'attachment; filename="zenimport-migration.zip"'})
+
+    @app.post('/api/v1/migration/import')
+    async def migration_import(request: Request):
+        if request.headers.get('content-type', '').split(';')[0].strip().lower() != 'application/zip':
+            raise SyncError('migration_invalid', 422)
+        payload = await request.body()
+        return await run_in_threadpool(app.state.migration.restore, payload)
+
+    @app.post('/api/v1/migration/resume')
+    def migration_resume():
+        result = app.state.migration.resume()
+        app.state.delivery.wake()
+        return result
 
     @app.exception_handler(SyncError)
     async def sync_error(request: Request, exc):

@@ -14,6 +14,7 @@ from pydantic import AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Fiel
 
 API_VERSION = 1
 MAX_BODY_BYTES = 2_000_000
+MAX_MIGRATION_BYTES = 64 * 1024 * 1024
 MAX_PAGE_RECORDS = 500
 
 Identifier = Annotated[str, Field(min_length=1, max_length=240)]
@@ -50,6 +51,8 @@ ErrorCode = Literal[
     'idempotency_conflict', 'history_incomplete', 'capture_context_changed',
     'zenmoney_unavailable', 'zenmoney_account_unavailable', 'delivery_uncertain', 'existing_ownership_unknown', 'not_found',
     'method_not_allowed', 'internal_error',
+    'migration_busy', 'migration_paused', 'migration_not_empty', 'migration_invalid',
+    'migration_wrong_account', 'migration_incomplete',
 ]
 
 

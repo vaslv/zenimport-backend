@@ -28,6 +28,10 @@ cookies/OTPs never leave the browser session. The SDK token stays on the server.
 
 ## HTTP
 
+Backend/Chrome 0.2.0 add authenticated, raw-ZIP export/import endpoints under
+`/api/v1/migration/`: [migration contract and safety rules](popup-migration.md).
+The import endpoint alone permits 64 MiB; the ordinary body limit below is unchanged.
+
 All routes are under `/api/v1`, requiring the backend Bearer token. `/health` is
 public and exposes no financial data/secrets. The API version is in the path;
 `ServerInfo.api_version=1`. Required field/semantic changes need a new major API

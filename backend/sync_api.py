@@ -73,6 +73,8 @@ def router(path, clock, mirror, wake):
         def command(db, data, now):
             repeated = db.execute('SELECT 1 FROM job_requests WHERE request_id=?', (str(data.request_id),)).fetchone()
             job = capture.start(db, data, now)
+            db.execute("INSERT OR REPLACE INTO service_meta VALUES ('sync_ever_started','1')")
+            db.execute("DELETE FROM service_meta WHERE key='migration_hold' AND value='imported'")
             if not repeated:
                 delivery.authorize_job(db, job['id'], now)
             return job, bool(repeated)

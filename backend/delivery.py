@@ -196,10 +196,11 @@ def writer_lock(path):
 
 
 class DeliveryWorker:
-    def __init__(self, path, mirror, clock):
+    def __init__(self, path, mirror, clock, *, gate=None):
         self.path, self.mirror, self.clock = path, mirror, clock
         self.stopping, self.signal = threading.Event(), threading.Event()
         self.thread = None
+        self.gate = gate
 
     def start(self):
         self.thread = threading.Thread(target=self.loop, name='zenmoney-delivery', daemon=True)
@@ -236,6 +237,17 @@ class DeliveryWorker:
             return bool(db.execute("SELECT 1 FROM bank_processing WHERE state='uncertain' LIMIT 1").fetchone())
 
     def run_once(self):
+        if self.gate is not None:
+            try:
+                with self.gate.operation(worker=True):
+                    return self._run_once()
+            except SyncError as exc:
+                if exc.code not in ('migration_paused', 'migration_busy'):
+                    raise
+                return
+        return self._run_once()
+
+    def _run_once(self):
         with writer_lock(self.path) as acquired:
             if not acquired:
                 return

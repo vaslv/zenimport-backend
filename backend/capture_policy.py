@@ -7,6 +7,13 @@ from .sync_contracts import Capabilities
 
 
 MESSAGES = {
+    'payload_too_large': 'The archive exceeds the size limit',
+    'migration_busy': 'Finish the current request or delivery and try again',
+    'migration_paused': 'This server is paused after data export',
+    'migration_not_empty': 'Import is only available before the first synchronization',
+    'migration_invalid': 'Invalid or incompatible migration archive',
+    'migration_wrong_account': 'The archive belongs to another ZenMoney account',
+    'migration_incomplete': 'Finish or stop bank history capture before exporting',
     'not_found': 'Resource not found', 'validation_error': 'Invalid request',
     'unsupported_bank': 'Unsupported bank', 'unsupported_currency': 'Unsupported currency or scale',
     'account_unconfigured': 'Configure all discovered accounts', 'account_disabled': 'Account disabled',
