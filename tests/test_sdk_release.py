@@ -1,4 +1,4 @@
-"""Dependency changes must fail before modifying the checked-in wheel cache."""
+"""Dependency changes must fail before modifying the public PyPI lock file."""
 from hashlib import sha256
 from pathlib import Path
 from zipfile import ZipFile
@@ -23,24 +23,22 @@ def project(tmp_path):
     return root
 
 
-def test_unverified_digest_cannot_replace_cache(tmp_path):
+def test_unverified_digest_cannot_replace_pin(tmp_path):
     path, digest = wheel(tmp_path);root = project(tmp_path)
     with pytest.raises(ValueError, match='SHA256'):
-        module.stage(path, '0'*64, root)
-    assert not (root/'vendor').exists()
+        module.pin(path, '0'*64, root)
+    assert not (root/'requirements.sdk.lock.txt').exists()
 
 
 def test_other_distribution_cannot_occupy_sdk_namespace(tmp_path):
     path, digest = wheel(tmp_path, 'another-package');root = project(tmp_path)
     with pytest.raises(ValueError, match='name/version'):
-        module.stage(path, digest, root)
-    assert not (root/'vendor').exists()
+        module.pin(path, digest, root)
+    assert not (root/'requirements.sdk.lock.txt').exists()
 
 
-def test_verified_release_records_the_package_pin_and_removes_old_wheel(tmp_path):
+def test_verified_release_records_the_package_pin_without_vendoring_code(tmp_path):
     path, digest = wheel(tmp_path);root = project(tmp_path)
-    (root/'vendor').mkdir();(root/'vendor/old.whl').write_bytes(b'old')
-    module.stage(path, digest, root)
-    assert list((root/'vendor').glob('*.whl')) == [root/'vendor'/path.name]
-    assert (root/'vendor'/path.name).read_bytes() == path.read_bytes()
-    assert (root/'vendor/requirements-sdk.lock.txt').read_text() == f'zenmoney-python==0.7.0 --hash=sha256:{digest}\n'
+    module.pin(path, digest, root)
+    assert not (root/'vendor').exists()
+    assert (root/'requirements.sdk.lock.txt').read_text().splitlines()[-1] == f'zenmoney-python==0.7.0 --hash=sha256:{digest}'

@@ -7,7 +7,8 @@ Work in stages, run scripts/test-docker.sh, and update the progress log.
 Create local Git commits for completed stages. Pushing, tags, and publication
 require separate explicit user permission.
 Do not use the production database or real ZenMoney in automated tests.
-Install the SDK from the verified vendor wheel, not a neighboring checkout.
+Install the SDK from public PyPI with the version/SHA256 in requirements.sdk.lock.txt,
+not a neighboring checkout. PyPI upload tokens are not needed to install it.
 Do not add Chrome/connectors/editors/embedded bank UI to this project.
 The user's October 16 request permits a read-only discrepancy report API;
 its page belongs exclusively to the extension and performs no financial actions.

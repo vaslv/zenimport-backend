@@ -14,10 +14,9 @@ FROM python-base AS dependencies
 WORKDIR /app
 COPY requirements.runtime.lock.txt ./
 RUN python -m pip install --no-cache-dir -r requirements.runtime.lock.txt
-COPY vendor ./vendor
-RUN cd vendor && sha256sum -c SHA256SUMS \
-    && python -m pip install --no-cache-dir --no-deps --no-index --find-links=. \
-       --require-hashes -r requirements-sdk.lock.txt \
+COPY requirements.sdk.lock.txt ./
+RUN python -m pip --isolated install --no-cache-dir --no-deps --only-binary=:all: \
+       --index-url https://pypi.org/simple --require-hashes -r requirements.sdk.lock.txt \
     && python -m pip check
 
 FROM dependencies AS runtime

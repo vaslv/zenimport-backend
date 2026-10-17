@@ -26,7 +26,7 @@ Archive only means the module is absent from the working tree/runtime; its code 
 
 Initially: HTTP/config/storage bootstrap/models. B2 adds financial storage and explicit migrations; B3 adds settings, page ingestion, and planning; B4 adds mirroring and learning; B5 adds durable delivery. These are modules in one service, without extra microservices, a broker, or a database engine change.
 
-Docker no longer contains browser/parser targets, HTML demo, or extension dependencies. The build context allows only required backend/vendor/test/config files. The SDK wheel is SHA256-verified and installed from vendor; SDK source is not required.
+Docker no longer contains browser/parser targets, HTML demo, or extension dependencies. The build context allows only required backend/dependency-lock/test/config files. The public PyPI SDK wheel is SHA256-verified during installation; SDK source and a vendored wheel are not required.
 
 B1 assigned the new database application_id `0x5A494231`, schema 1, and service_meta/instance_id. B2 added financial schema **2**, private backups, and transactional upgrades of own v1. Legacy/foreign/future schemas are still rejected before changes. Legacy v12 is explicitly converted into a new file: [financial-storage.md](financial-storage.md). The production database was not migrated.
 

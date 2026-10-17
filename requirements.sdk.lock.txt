@@ -1,0 +1,2 @@
+# Public PyPI release; verify version and SHA256 before updating this pin.
+zenmoney-python==0.7.0 --hash=sha256:529cd89ce941ddfabbe8a08c4ab5c587389680cda0e0b9b1f1abaf3e5f2734b7

@@ -1,6 +1,6 @@
 # ZenImport Backend
 
-An independent Docker service that receives bank history from Chrome and adds new transactions to ZenMoney. Neither extension source nor an SDK checkout is required to build: a verified `zenmoney-python` 0.7.0 wheel is included in `vendor/`.
+An independent Docker service that receives bank history from Chrome and adds new transactions to ZenMoney. Neither extension source nor an SDK checkout is required to build. Docker installs the public `zenmoney-python==0.7.0` wheel from PyPI with a pinned SHA256; no PyPI token is needed.
 
 The backend and Chrome extension are separate projects; financial storage v6, mirroring/prediction, and durable delivery are implemented. At the user's direction, the new local backend started with a clean database on October 16, 2026. Current status, extension settings, and initial import limitations: [docs/local-deployment.md](docs/local-deployment.md). Live mobile acceptance is deferred; do not connect the old extension to the new protocol.
 
@@ -38,6 +38,8 @@ An ordinary `down` preserves the named volume. After configuration changes, recr
 
 ## Server deployment
 
+Image-only installation and HTTPS: [docs/server-deployment.md](docs/server-deployment.md). SDK pinning: [docs/sdk-dependency.md](docs/sdk-dependency.md).
+
 Complete startup/update, snapshot, and restore instructions: [docs/operations.md](docs/operations.md). Actual platform validation: [docs/b6-validation.md](docs/b6-validation.md).
 
 Transfer this project or its built image to the target machine; build for that machine's architecture. The same Dockerfile/Compose works locally and remotely. Settings are supplied at runtime; the image contains no secrets. Publishing an image to a registry is optional.
@@ -69,7 +71,7 @@ The test override requires Compose support for `!reset`. `scripts/test-contracts
 - `backend/delivery.py`: complete-version authorization, one worker, viewed=false creation, UUID verification, and recovery without blind retries.
 - `backend/migrate_legacy.py`, `legacy_archive.py`: explicit legacy v12 conversion into a separate database with a verifiable archive.
 - `backend/sync_contracts.py`: v1 models carried over from B0.
-- `vendor/`: pinned SDK and SHA256; `requirements*.lock.txt`: exact dependencies.
+- `requirements.sdk.lock.txt`: public PyPI SDK version/SHA256; `requirements*.lock.txt`: exact dependencies.
 - `tests/`, `fixtures/sync-v1/`: independent and container checks.
 - `docs/`: contract, stages, and extracted code provenance.
 

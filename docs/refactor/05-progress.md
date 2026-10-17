@@ -234,3 +234,28 @@ Publish SDK commits/release first, then backend with verified SDK, then Chrome. 
 Translated documentation, code comments/docstrings, configuration comments, synthetic example labels, and application messages into English. Historical stage results, dates, identifiers, and limitations are preserved. The production container/database and already published SDK release artifacts remain unchanged.
 
 Docker on Linux/ARM64: **492 tests passed**, plus HTTP/auth, persistent recreation, SIGKILL recovery, graceful shutdown, and snapshot restoration without repeat writes. Extension integration against this backend: **17 passed** with synthetic data/fake ZenMoney only. No push, new tags, or publication.
+
+
+## 2026-10-17 — Published PyPI SDK dependency
+
+- Replaced the checked-in prerelease SDK wheel with public PyPI installation of
+  `zenmoney-python==0.7.0`, SHA256
+  `529cd89ce941ddfabbe8a08c4ab5c587389680cda0e0b9b1f1abaf3e5f2734b7`.
+  The version JSON, downloaded wheel, and GitHub release manifest agree.
+  The SDK runtime modules match the previously used wheel; no financial behavior
+  or database schema is changed.
+- Docker enforces the wheel hash/version and binary-only installation without
+  dependency re-resolution, then runs pip check. No PyPI credentials are required.
+  Removed vendor code/cache; the offline updater now writes only the SDK lock.
+- Updated dependency documentation and installed-package/update-pin tests.
+- Docker: 492 tests passed on native Linux ARM64 and emulated Linux AMD64;
+  HTTP/auth, persistence/recreation, SIGKILL recovery, graceful in-flight shutdown,
+  and consistent snapshot restoration passed on both. Image-only deployment also
+  passed on both, including actual CPU architecture, private bootstrap/no overwrite,
+  UID/read-only root/loopback binding, SDK, OCI revision, and volume persistence.
+- Tests used isolated generated projects and fake financial data only. Production
+  containers, SQLite, and live bank/ZenMoney sessions were not used or changed.
+  Two unused historical test networks were removed to free exhausted Docker IPAM
+  capacity; no network with attached containers or production volume was removed.
+- PyPI upload credentials remain outside this backend. Source push, Git tags, and
+  registry publication are separate actions; this checkpoint is local only.

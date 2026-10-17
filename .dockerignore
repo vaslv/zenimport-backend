@@ -1,10 +1,7 @@
 *
 !backend/
 !backend/**
-!vendor/
-!vendor/SHA256SUMS
-!vendor/*.whl
-!vendor/requirements-sdk.lock.txt
+!requirements.sdk.lock.txt
 !requirements.runtime.lock.txt
 !requirements.lock.txt
 !pyproject.toml
