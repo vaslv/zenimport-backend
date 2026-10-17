@@ -1,7 +1,8 @@
-# Искусственная схема legacy v12
+# Synthetic legacy v12 schema
 
-`schema.sql` получена инициализацией **пустой временной базы** прежним
-`backend.db.initialize`, исходник ZenImport `f3b2838`. Финансовых данных,
-счетов и токенов пользователя нет. Время служебной миграции заменено константой.
-Строки для проверок добавляет `tests/legacy_factory.py`, только синтетические.
-Конвертер не исполняет SQL из исходной базы: схема хранится как архивные данные.
+`schema.sql` was produced by initializing an **empty temporary database** with
+legacy `backend.db.initialize`, ZenImport source `f3b2838`. It contains no user
+financial data, accounts, or tokens. The internal migration timestamp was replaced
+with a constant. `tests/legacy_factory.py` adds synthetic test rows only.
+The converter never executes SQL from the source database: the schema is retained
+as archived data.

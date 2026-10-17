@@ -1,222 +1,280 @@
-# ZenImport: сбор банковской истории без редактора операций
+# ZenImport: bank history capture without a transaction editor
 
-Создано через office-hours: 15 октября 2026, Asia/Ho_Chi_Minh.
-Status: IMPLEMENTATION AUTHORIZED (15 октября 2026)
+Created through office-hours: October 15, 2026, Asia/Ho_Chi_Minh.
+Status: IMPLEMENTATION AUTHORIZED (October 15, 2026)
 Mode: Builder
-Исходный проект: /Users/vaslv/Projects/Vaslv/ZenImport, main, 9271b3b.
-Библиотека: /Users/vaslv/Projects/Vaslv/ZenMoneyAPI, используемый пакет 0.6.0.
-Это проектное решение. Реализация начата с B0/S1; состояние этапов ведётся в журнале. Миграция рабочей БД и отправка данных на этих этапах не выполнялись.
+Source project: /Users/vaslv/Projects/Vaslv/ZenImport, main, 9271b3b.
+Library: /Users/vaslv/Projects/Vaslv/ZenMoneyAPI, package version 0.6.0 in use.
+This is a design decision. Implementation started with B0/S1; stage status lives in
+the progress log. These stages did not migrate production databases or send data.
 
-## Задача и результат для пользователя
+## User problem and outcome
 
-Пользователь входит в банк самостоятельно, открывает расширение и нажимает «Синхронизировать». Расширение получает банковские операции, backend добавляет недостающие в ZenMoney. Все новые записи отправляются непросмотренными. Категории, разделение покупок, переводы, долги и удаления пользователь разбирает в официальном мобильном приложении.
+The user signs into the bank independently, opens the extension, and clicks
+Synchronize. The extension captures bank transactions; the backend adds missing ones
+to ZenMoney. Every new record is unreviewed. Users handle categories, split purchases,
+transfers, debts, and deletions in the official mobile app.
 
-В Chrome остаётся только popup: синхронизация, краткий прогресс и раскрываемые настройки. В банковские страницы не добавляются элементы интерфейса. Исчезают отдельная SPA, страницы сверки, редакторы операций, модальные подтверждения отправки и переключатель встроенного интерфейса.
+Chrome keeps only the popup: synchronization, brief progress, expandable settings.
+Bank pages receive no UI elements. Remove the separate SPA, reconciliation pages,
+transaction editors, send-confirmation modals, and embedded-interface toggle.
 
-Пользователь отказался от альтернативы с задержкой спорных совпадений: важнее доставить все новые банковские операции, возможные смысловые дубли он удаляет в ZenMoney. Это осознанно может временно менять баланс/отчёты до разбора на телефоне.
+The user rejected delaying ambiguous matches: delivering every new bank transaction
+is more important; possible semantic duplicates will be deleted in ZenMoney. This
+can deliberately alter balances/reports temporarily until phone review.
 
-## Согласованные решения
+## Agreed decisions
 
-- D1, А: изменения и удаления в ZenMoney окончательны. Не перезаписывать их и не восстанавливать удалённые операции при повторном чтении банка.
-- D2, Б: три самостоятельных проекта: SDK, backend, Chrome extension. Банковские коннекторы пока отдельные модули внутри extension.
-- D3, Б: возможное совпадение с ZenMoney не задерживает новую операцию. Никакой ручной сверки внутри браузера.
-- D4, уточнение пользователя: первое подключение показывает все обнаруженные банковские счета; каждому назначается существующий счёт ZenMoney либо «Не загружать». Начало первой истории по умолчанию 30 дней назад; доступны «6 месяцев» и произвольная дата. Далее загрузка от предыдущей успешной загрузки с запасом две недели.
-- Пользователь выбирает срок по дате начала. Конец загрузки — текущая дата банка, зафиксированная в начале задания.
-- Ранее согласованный порог категории: минимум три подтверждённых примера одного получателя в одной категории и ни одного примера другой категории; при сомнениях категория пустая.
+- D1, A: ZenMoney edits/deletions are final. Never overwrite edits or restore deleted transactions when rereading the bank.
+- D2, B: three independent projects: SDK, backend, Chrome extension. Bank connectors remain separate extension modules.
+- D3, B: possible ZenMoney matches do not delay new transactions. No manual browser reconciliation.
+- D4, user clarification: first connection shows all discovered bank accounts; map each to an existing ZenMoney account or Do not import. Default initial start is 30 days ago, with six months/custom dates. Subsequent capture starts from the previous successful boundary with a two-week overlap.
+- Users select a start date; capture ends on the bank's current date frozen at job creation.
+- Previously agreed category threshold: at least three confirmed examples for one payee/category and none for another category; uncertainty leaves it empty.
 
-## Границы проектов
+## Project boundaries
 
-Названия новых каталогов рабочие: ZenImportBackend и ZenImportChrome рядом с ZenMoneyAPI. Окончательное переименование исходного репозитория решается при инженерном планировании; история разработки должна остаться доступной.
+Working directory names: ZenImportBackend and ZenImportChrome alongside ZenMoneyAPI.
+Final renaming of the original repository belongs to engineering planning; history
+must remain accessible.
 
-| Проект | Включает | Не включает |
+| Project | Includes | Excludes |
 |---|---|---|
-| ZenMoneyAPI | HTTP, модели API, точные суммы, создание объектов, обработку ошибок | БД приложения, банковские парсеры, обучение, очередь синхронизации |
-| Backend | Историю банка, зеркало ZenMoney, настройки счетов, категории, устойчивую очередь, проверку отправки | Автоматизацию банковского входа, HTML-интерфейс редактора |
-| Chrome | Popup, настройки подключения, обнаружение счетов, сбор истории, передачу страниц, отображение прогресса | Собственный редактор финансов, токен ZenMoney, правила принятия решений об отправке |
-| Модули банков | Определение сайта/контекста, список счетов, ограничения периода, пагинацию, детали и нормализацию | Отправку в ZenMoney, категоризацию, общий интерфейс popup |
+| ZenMoneyAPI | HTTP, API models, exact amounts, object builders, errors | Application database, bank parsers, learning, sync queue |
+| Backend | Bank history, ZenMoney mirror, account settings, categories, durable queue, write verification | Bank sign-in automation, HTML editor |
+| Chrome | Popup, connection settings, discovery, capture, page upload, progress | Financial editor, ZenMoney token, delivery decision policy |
+| Bank modules | Site/context detection, accounts, period limits, pagination, details, normalization | ZenMoney delivery, categorization, shared popup UI |
 
-Выбран подход с серверным управлением отправкой. Минимальное разнесение папок отвергнуто: оставляло бы отправку зависимой от браузера. Четвёртый проект для коннекторов отложен: пока у них один потребитель.
+Server-controlled delivery is selected. Merely separating directories was rejected:
+it would retain browser-dependent delivery. A fourth connector project is deferred
+because connectors have one consumer so far.
 
-SDK подключается как закреплённый проверенный пакет. Сборка backend не требует соседней рабочей папки SDK. Extension имеет собственную сборку и тесты, обращается к версионированному HTTP API backend.
+Use a pinned verified SDK package. Backend builds must not require a neighboring SDK
+working directory. The extension has its own build/tests and uses versioned backend HTTP.
 
-## Popup и первое подключение
+## Popup and first connection
 
-Эскиз: [zenimport-popup-wireframe.html](zenimport-popup-wireframe.html). Это схема трёх состояний, а не дополнительная страница продукта.
+Sketch: [zenimport-popup-wireframe.html](zenimport-popup-wireframe.html). It shows
+three states, not an additional product page.
 
-### Обычное состояние
+### Ordinary state
 
-Название расширения, распознанный банк, кнопка «Синхронизировать», одна короткая строка результата, свёрнутый раздел «Настройки». Кнопка относится к подключению банка в активной вкладке и всем его включённым счетам. Другие банковские вкладки автоматически не обрабатываются.
+Extension name, detected bank, Synchronize, one short result line, collapsed Settings.
+The button applies to the active tab's bank connection and all enabled accounts.
+Other bank tabs are not processed automatically.
 
-Нажатие запускает сбор и доставку без дополнительного просмотра списка операций. Закрытие popup не отменяет задание. Во время работы та же основная область показывает этап и число обработанных счетов/операций. Если нужна отмена, она заменяет действие основной кнопки на время сбора; уже отправленные записи не откатываются.
+Clicking starts capture/delivery without another transaction preview. Closing the
+popup does not cancel the job. The same primary area shows stage/account/transaction
+counts while running. If cancellation is needed, temporarily replace the primary
+action during capture; delivered records are never rolled back.
 
-### Первое подключение
+### First connection
 
-1. При отсутствии соединения автоматически раскрыть поля «Адрес сервера» и «Токен подключения». Это токен нашего backend; токен ZenMoney настраивается на сервере.
-2. Проверить сервер, версию API и получить список доступных счетов ZenMoney. Если банк не открыт/вход истёк, показать короткую инструкцию войти в банк.
-3. Определить банк, доступный банковский профиль и все поддерживаемые счета в его текущей сессии. Не собирать логин, пароль, cookies и OTP для отправки на backend.
-4. Для каждого счёта показать название, валюту, окончание номера и select: «Выберите счёт ZenMoney», совместимые счета, «Не загружать». Начальное пустое значение не означает согласие пропустить счёт. Пока есть невыбранные строки, первая синхронизация не начинается.
-5. В первый релиз выбор допускает обычные действующие счета ZenMoney в той же валюте; архивные/удалённые и долговые счета недоступны. Сначала создать нужный счёт в мобильном приложении, затем обновить список в popup, если его нет. Создание счетов самим расширением не входит в задачу.
-6. Период первоначального импорта общий для выбранных сейчас счетов: дата 30 дней назад; быстрый выбор шести календарных месяцев; произвольная дата. Будущее запрещено. Ограничения глубины истории банк сообщает явно, без молчаливого сокращения выбранного периода.
-7. «Синхронизировать» сохраняет настройки и запускает процесс. При выборе «Не загружать» для всех счетов отображается «Нет выбранных счетов», отправка не запускается.
+1. Without a connection, expand Server address and Connection token automatically. This is the backend token; configure the ZenMoney token on the server.
+2. Check server/API compatibility and load eligible ZenMoney accounts. If the bank is closed/login expired, show a brief sign-in instruction.
+3. Detect the bank, accessible profile, and all supported session accounts. Never collect login/password/cookies/OTP for backend transmission.
+4. Each account shows title, currency, masked suffix, and selection: Select a ZenMoney account, compatible targets, Do not import. Empty selection is not consent to skip. Initial synchronization waits while rows remain unselected.
+5. First release targets active regular same-currency ZenMoney accounts; archived/deleted/debt accounts are unavailable. Users create missing accounts on mobile and refresh the popup list. Extension account creation is outside scope.
+6. Initial period is shared by currently selected accounts: 30 days ago, six-calendar-month shortcut, custom date. Future dates are prohibited. Report bank history limits explicitly; never silently shorten the period.
+7. Synchronize saves settings and starts. If all accounts are Do not import, show No accounts selected and send nothing.
 
-### Изменения подключения
+### Connection changes
 
-- Настройки server/token, привязки и период доступны в раскрываемой области popup. Настройки сохраняются без вывода токенов в журнал.
-- Каждый обнаруженный банковский счёт имеет состояние: не настроен, включён с целевым счётом ZenMoney, отключён. Отключённый счёт не читается и его старые неотправленные записи не отправляются.
-- Отключение действует и на активные задания: перед следующим банковским запросом и отправкой backend/extension повторно проверяют разрешение счёта. Запрос, уже переданный банку или ZenMoney, нельзя отменить задним числом; его результат сохраняют/проверяют без отката. Остаток очереди приостанавливается с прежними UUID. Повторное включение само не отправляет данные: требуется новое нажатие «Синхронизировать».
-- При появлении нового счёта показать его в настройках. Уже настроенные счета могут синхронизироваться; новый не включается молча. При включении ему выбирают начальную дату как при первом подключении.
-- Отсутствие счёта в одном ответе банка не удаляет настройку и не означает его закрытие.
-- Смена целевого счёта действует на будущие, ещё не отправленные операции. Существующие связи, удаления и отправленные записи остаются привязаны к прежним ID. Активные/неопределённые отправки замораживают смену привязки до проверки результата.
-- Разные банковские профили сохраняются как отдельные подключения. Если коннектор не может надёжно отличить их, требуется выбор подключения в popup; угадывание по имени владельца недопустимо. Один и тот же доказанно идентичный физический банковский счёт, доступный нескольким подключениям, использует общую идентичность и историю отправок.
-- Привязка к ZenMoney, включение/отключение, начальная дата и покрытие принадлежат этому общему банковскому счёту, а не способу доступа. Второе подключение показывает уже сохранённую настройку; создать конкурирующую привязку нельзя. Изменения настроек используют версию: устаревшее сохранение не перетирает новое. Сбор одного счёта сериализуется между подключениями. Не объединять счета разных профилей, если банк не позволяет доказать их идентичность.
-- Перед подготовкой каждой отправки проверять целевой счёт по свежему зеркалу ZenMoney. Если он удалён, архивирован или стал несовместимым, сохранить очередь и показать короткую причину остановки; остальные счета продолжают работу. Исправление привязки доступно в существующих настройках, с сохранением ограничений для уже начатых отправок.
+- Expandable popup settings contain server/token, mappings, and period. Save without logging tokens.
+- Discovered accounts are unconfigured, enabled with a ZenMoney target, or disabled. Disabled accounts are neither read nor deliver their old unsent records.
+- Disabling affects active jobs: before the next bank request/send, backend/extension recheck authorization. Requests already sent to the bank/ZenMoney cannot be retroactively cancelled; retain/verify results without rollback. Pause the remaining queue with original UUIDs. Reenabling alone never sends; require another Synchronize click.
+- Show newly discovered accounts in settings. Configured accounts can continue; never silently enable new ones. Enabling selects a start date as at first connection.
+- Absence from one bank response never deletes settings or proves account closure.
+- Target changes apply to future unsent transactions. Existing links/deletions/sent records retain old IDs. Active/uncertain delivery freezes mapping changes until verified.
+- Separate bank profiles are separate connections. If the connector cannot reliably distinguish them, require popup connection selection; never guess from owner names. A provably identical physical account across connections shares identity/delivery history.
+- ZenMoney mapping, enabled state, start date, and coverage belong to the shared bank account, not access method. A second connection shows existing settings; competing mappings are prohibited. Version settings so stale saves cannot overwrite newer ones. Serialize account capture across connections. Never merge profiles without bank identity evidence.
+- Before preparing every delivery, check the target against a fresh mirror. Deleted/archived/incompatible targets retain queues and show a brief reason; other accounts continue. Existing settings permit mapping correction while preserving started-delivery restrictions.
 
-## Периоды и доказательство полноты
+## Periods and completeness evidence
 
-Для каждого банковского счёта хранить начальную границу истории, непрерывное покрытие завершённых интервалов, конец последней полной загрузки и незавершённые интервалы. Время нажатия кнопки, самая свежая операция и результат отправки в ZenMoney не заменяют доказательство полного чтения банка.
+For each bank account, retain import start, continuous completed-interval coverage,
+last complete boundary, and unfinished intervals. Button time, newest transaction,
+and ZenMoney delivery results never substitute for complete bank capture evidence.
 
-- Первый запуск: от выбранной даты до текущей даты банка.
-- Следующий полный запуск: от более поздней из двух дат — начальной границы импорта или конца последней полной загрузки минус 14 календарных дней — до текущей даты банка.
-- Если синхронизации не было два месяца, прочитать весь пропущенный период плюс две недели, а не только последние 30 дней.
-- Если первый запуск не завершился, продолжить незавершённые интервалы выбранной истории. Не переключаться на короткое окно, пока остались пропуски. Завершённые интервалы могут быть использованы при возобновлении; более свежая успешная часть не перепрыгивает дыру в покрытии.
-- Пустой успешный ответ с проверенными счётом/периодом и корректной пагинацией также завершает интервал.
-- Каждый коннектор задаёт собственные пределы запроса и часовой пояс. Для VietinBank сохраняется разбиение до 30 дней. Границы, переходы месяца/года и високосные даты проверяются тестами.
-- Для ручного дочитывания в свёрнутых настройках есть отдельное изначально пустое поле «Разово перечитать историю с». Сохранение непустой даты задаёт запрос на следующее нажатие «Синхронизировать»: выбранный диапазон до текущей даты перечитывается независимо от старого покрытия и обычной формулы. Это также обнаруживает позднюю запись внутри ранее завершённого периода. Более ранняя дата при необходимости расширяет начальную границу истории. После полной загрузки запрос очищается; при сбое сохраняются его незавершённые интервалы. Последующие обычные запуски снова используют запас 14 дней. Простое сохранение адреса сервера/токена при пустом поле не создаёт запрос перечитывания.
-- Сдвиг начала вперёд не удаляет банковские записи, связи или историю отправок. При синхронизации обрабатываются все ранее накопленные недоставленные записи включённых счетов, даже за пределами нового окна чтения. Это явно подписать рядом с настройкой истории.
-- Поздние банковские записи старше двухнедельного запаса автоматически не обнаруживаются. Перечитывание старого периода — существующий путь восстановления, без обещания полноты вне проверенного покрытия.
+- First run: selected date through current bank date.
+- Next complete run: max(import start, last complete end minus 14 calendar days) through current bank date.
+- After two months without syncing, capture the whole gap plus two weeks, not merely the last 30 days.
+- Incomplete initial runs resume unfinished selected-history intervals. Do not shorten the window while gaps remain. Reuse completed intervals, but newer successful islands cannot jump gaps.
+- A successful empty response with verified account/period/pagination completes an interval too.
+- Each connector defines request limits/time zone. VietinBank retains windows up to 30 days. Test boundaries, month/year changes, leap dates.
+- Collapsed settings contain an initially empty One-time history reread from field. Saving a nonempty date schedules the range through current date for the next Synchronize regardless of coverage/ordinary formula. This finds late records in completed periods and can extend import start earlier. Clear only after full capture; failures retain unfinished ranges. Later ordinary runs return to 14-day overlap. Saving server/token with an empty field never schedules rereading.
+- Moving the start forward never deletes bank records/links/delivery history. Synchronization processes all accumulated undelivered records from enabled accounts, even outside the new capture window. Explain this beside history settings.
+- Late bank records older than two-week overlap are not found automatically. Old-period rereading is the recovery path; never promise completeness beyond verified coverage.
 
-## Сбор, хранение и отправка
+## Capture, persistence, delivery
 
-1. Popup инициирует задание для конкретного подключения, фиксируя включённые счета, версии привязок и конец периода. Текущее отключение счёта имеет приоритет над сохранённым списком задания. Backend возвращает устойчивый ID задания. Повторное нажатие присоединяется к активному заданию, а не создаёт параллельную отправку.
-2. Backend получает свежие данные ZenMoney: существующие ID, удаления, счета, категории и пользовательские изменения для обучения. Если актуализация недоступна, собирать и хранить банк можно, отправлять пока нельзя.
-3. Extension последовательно читает включённые счета через коннектор. Принятые страницы сохраняются на сервере до подтверждения браузеру. Перезапуск popup/worker не теряет уже подтверждённые сервером данные.
-4. Завершение интервала подтверждается отдельным сообщением: все страницы, количество, границы и счёт проверены. Только полный интервал делает новые записи этой загрузки готовыми к отправке. Частично полученные данные сохраняются для возобновления и не объявляются полной историей.
-5. Backend подготавливает операции завершённых интервалов и прежние пригодные недоставленные записи включённых счетов; исключения и ранее доставленные записи не отправляет. Готовые интервалы могут отправляться, пока браузер читает следующие. Ошибка другого счёта не отменяет уже подтверждённые результаты.
-6. Присваивает категорию при достаточной подтверждённой истории, иначе оставляет её пустой. По знаку банковского движения создаёт расход либо приход. Новые переводы, долги, возвраты и разделённые покупки пользователь оформляет в ZenMoney.
-7. Сохраняет постоянный ZenMoney UUID и намерение отправки до обращения к API. Отправляет ограниченными пакетами и проверяет результат отдельным чтением через SDK.
-8. После завершения сбора браузер не требуется для отправки. Backend продолжает очередь после закрытия Chrome и собственного перезапуска. Если Chrome закрыли до завершения сбора, невычитанные интервалы ждут следующего входа и нажатия кнопки.
+1. Popup initiates a specific-connection job, freezing enabled accounts, mapping versions, and period end. Current disabling overrides the job snapshot. Backend returns a stable job ID. Repeated clicks join the active job rather than send in parallel.
+2. Refresh ZenMoney IDs, deletions, accounts, categories, and user edits for learning. If unavailable, bank capture/storage can continue, but delivery cannot.
+3. Extension sequentially reads enabled accounts through connectors. Server persists accepted pages before browser ACK. Popup/worker restart never loses acknowledged data.
+4. A separate interval completion message verifies all pages, counts, bounds, and account. Only complete intervals make their new records eligible. Partial data is retained for resume, never called complete history.
+5. Backend prepares completed intervals and eligible old unsent records for enabled accounts; skip exclusions/prior delivery. Ready intervals may send while the browser reads later ones. Another account's error never invalidates confirmed results.
+6. Assign categories only from sufficient confirmed history, otherwise empty. Bank movement sign determines expense/income. Users turn new records into transfers/debts/refunds/split purchases in ZenMoney.
+7. Persist the permanent ZenMoney UUID/send intent before API access. Send bounded batches and verify through separate SDK reads.
+8. After capture, browser availability is unnecessary for delivery. Backend resumes queues after Chrome closure/its own restart. If Chrome closes during capture, unread intervals wait for the next sign-in/click.
 
-Серверный процесс реализует долговечную очередь в БД. Для первого релиза один экземпляр backend/один исполнитель, без отдельного брокера сообщений. Сетевые ожидания вынести из длительных SQL-транзакций. Короткие транзакции атомарно сохраняют состояние очереди; сериализация доступа и восстановление после остановки входят в тесты.
+The server implements a durable database queue. First release uses one instance/
+executor without a message broker. Keep network waits outside long SQL transactions.
+Short transactions atomically persist queue state; serialization/recovery are tested.
 
-Никаких периодических скрытых импортов или новых отправок только из-за открытия банковской страницы. Авторизация на доставку исходит от нажатия «Синхронизировать»; дальнейшее исполнение этого задания может продолжаться на сервере.
+No periodic hidden imports or new sends merely from bank page opening. Synchronize
+authorizes delivery; executing that job can continue on the server afterward.
 
-## Новая операция, возможный дубль и удаление
+## New records, possible duplicates, deletion
 
-Идентичность банковской операции строится из банка, устойчивого банковского счёта и внешнего ID операции. Подключение браузера — источник доступа, а не повод создать новую копию того же счёта.
+Bank identity combines bank, stable bank account, and external transaction ID.
+Browser connections are access methods, not reasons to duplicate accounts.
 
-- Сохранённая историческая связь или подтверждённая доставка означает «уже обработана». Не пересчитывать это решение по текущим суммам/категориям после пользовательских изменений.
-- Для ранее неизвестных операций точный проверенный банковский ID, присутствующий в ZenMoney на соответствующей стороне/счёте, может подтвердить существование. Совпадение даты, суммы, описания или их комбинаций остаётся предположением и не блокирует новую доставку. Ручного интерфейса сопоставления не будет.
-- Каждую новую операцию отправлять с viewed=false, включая уверенно категоризированные. Пустая категория не заменяется «Корректировкой» автоматически.
-- Удаление известного ZenMoney UUID сохраняется как постоянный запрет повторного создания соответствующей банковской операции. Факт доставки и запрет сохраняются независимо от очистки текущего зеркала.
-- Не считать отсутствие в частичном ответе удалением. Отдельно хранить явное удаление и временно не найденную ранее доставленную запись; оба состояния не дают создать её повторно.
-- Другая банковская операция с такими же суммой/датой/получателем не наследует запрет удаления.
-- Разделение/превращение операции в перевод на телефоне не приводит к повторной отправке исходной банковской операции. Сохранённые группы 1:N и N:M не разрушаются. Если API не позволяет доказать связь с новыми дочерними ID, не выдумывать её и не использовать такую запись для обучения.
-- Если банк меняет поля уже известной операции, сохранить новую версию исходных данных, но не исправлять ранее доставленную запись в ZenMoney.
+- Historical links/confirmed delivery mean already processed. Never recompute this from current amounts/categories after mobile edits.
+- For unknown transactions, exact proven bank IDs on the corresponding ZenMoney side/account may establish existence. Equal date/amount/description/combinations remain assumptions and do not block delivery. No manual matching UI.
+- Send every new record viewed=false, even confidently categorized ones. Never automatically replace an empty category with Adjustment.
+- Known ZenMoney UUID deletion permanently prohibits recreating the corresponding bank record. Delivery/deletion facts survive mirror cleanup.
+- Partial-response absence is not deletion. Separately retain explicit deletion and temporarily absent delivered records; neither authorizes recreation.
+- Another bank transaction with equal amount/date/payee does not inherit a deletion prohibition.
+- Phone splitting/transfer conversion must not resend the original bank record. Preserve 1:N/N:M groups. If the API cannot prove new child-ID links, do not invent them or use the record for learning.
+- Bank edits to known transaction fields create a new source version, never corrections to delivered ZenMoney records.
 
-### Потеря ответа API не равна возможному смысловому дублю
+### Lost API response is not a semantic duplicate
 
-Если ответ записи потерян, прочитать результат по сохранённому UUID. Найденная запись или явное удаление этого UUID подтверждают, что его нельзя создавать повторно. Отличия полей при проверке могут быть пользовательским исправлением; не перезаписывать их для соответствия старому payload.
+Read by persisted UUID after response loss. UUID presence or explicit deletion proves
+it cannot be recreated. Different fields may reflect mobile corrections; never
+restore old payload values to make verification pass.
 
-При неизвестном результате не генерировать другой UUID и не выполнять слепой повтор upsert. Повтор «Синхронизировать» возобновляет проверку. Если API не даёт установить исход, задание остаётся с технической ошибкой, коротким статусом и диагностикой; это не возвращает финансовую сверку в браузер. Гарантия автоматической доставки при бесконечной недоступности API не заявляется.
+Unknown outcomes prohibit new UUIDs/blind upserts. Synchronize resumes verification.
+If the API cannot establish outcome, retain a technical error with brief status/
+diagnostics; this does not restore financial browser reconciliation. Automatic
+delivery during indefinite API outage is not guaranteed.
 
-Известная ошибка до отправки/доказанно отклонённый запрос может быть исправлена и повторена с прежним ID. Классификацию ошибок и доказательства безопасного повтора закрепить контрактными тестами, не считать любой HTTP-код доказательством отсутствия записи.
+Known pre-send/proven rejected requests may be corrected/retried with the original
+ID. Fix error classification/retry evidence through contract tests; no arbitrary
+HTTP code proves that nothing was written.
 
-### Ограничение идентичности без банковского ID
+### Identity limits without bank IDs
 
-В текущем VietinBank parser при отсутствии trxId используется отпечаток счёта, времени, суммы, остатка и описания. Изменение этих полей может изменить отпечаток. При переносе сохранить прежние ключи/алиасы; обновление парсера не должно пересоздавать историю. Гарантия «никогда не восстановить удалённое» действует для повторно распознанной идентичности; при изменяющихся данных и отсутствии стабильного ID абсолютная гарантия недостижима. Это риск коннектора, требующий образцов и тестов, а не UI сверки.
+Current VietinBank parsing uses account/time/amount/balance/description fingerprints
+when trxId is absent. Field changes can change fingerprints. Preserve old keys/aliases
+during migration; parser updates must not recreate history. Never restore deleted
+applies to recognized identity; mutable data without stable IDs prevents absolute
+guarantees. This is a connector risk requiring samples/tests, not reconciliation UI.
 
-Ещё один предел — запись, созданная другим инструментом и удалённая до первого наблюдения нашей системой. Если от неё остался только неизвестный UUID без связи с банковской операцией, доказать, какую банковскую строку нельзя отправлять, невозможно. Сохранённые связи и известные удаления защищаем; отсутствующее прошлое не восстанавливаем по догадке. Это следствие выбранного правила отправлять неоднозначные новые записи.
+Another limit is a record created elsewhere and deleted before first observation.
+An unknown UUID without a bank link cannot prove which bank row must be suppressed.
+Protect known links/deletions, but do not invent missing history. This follows the
+chosen rule of sending ambiguous new records.
 
-## Категории и обучение после мобильного разбора
+## Categories and learning after mobile review
 
-- Хранить неизменный банковский источник отдельно от текущей записи ZenMoney. Категорию и тип пользовательской записи брать из актуального ZenMoney, не из устаревшего отправленного объекта.
-- Использовать существующие подтверждённые связи и правила получателей, сохраняя происхождение решения. Выбор получателя: счёт контрагента, проверенное нормализованное название/правило, затем описание при отсутствии реквизитов. Не склеивать произвольные описания или комиссии с основным платежом.
-- Для автоматического выбора нужны три разных достоверных банковских платежа, одна применяемая категория, совпадающее направление, отсутствие противоречащих примеров. Разделённые платежи/переводы/долги и недостоверные связи не дают единственной категории.
-- Собственные предсказания в новых viewed=false записях не обучают модель. Для новых импортированных записей допускать обучение после прочитанного из ZenMoney viewed=true и пригодной расходной/доходной категории. Сам факт успешной отправки не считается подтверждением пользователем.
-- Исторические вручную подтверждённые связи сохраняют свой источник доверия; повторные чтения и несколько частей одного платежа не увеличивают число независимых примеров.
-- Удаление или изменение пользователем категории/типа исключает либо изменяет соответствующее обучающее свидетельство. Недействующие/удалённые категории не назначать.
-- Пересчитывать подсказки перед подготовкой ещё не отправленных записей. Отправленные записи из-за нового прогноза не обновлять.
-- Сохранённая ручная категория ещё не отправленной операции приоритетнее нового прогноза, если категория существует и допустима для получившегося расхода/прихода. Если она стала непригодной, сохранить исходный выбор в архиве, а перед отправкой применить общий алгоритм: только уверенный прогноз, иначе пустая категория. Не переносить категорию долга/перевода механически в обычную операцию.
+- Store immutable bank sources separately from current ZenMoney records. Read user categories/types from current ZenMoney, not stale sent objects.
+- Use confirmed links/payee rules with decision provenance. Prefer counterparty account, then verified normalized name/rule, then description if details are absent. Never merge arbitrary descriptions or fees with main payments.
+- Automatic assignment needs three different reliable bank payments, one category, matching direction, and no conflicting examples. Split payments/transfers/debts/unreliable links do not establish one category.
+- Our new viewed=false predictions never train. New imported records become examples only after ZenMoney viewed=true and an eligible expense/income category. Successful sending is not user confirmation.
+- Historical manual confirmations retain their trust source. Repeated reads/multiple pieces of one payment never increase independent counts.
+- User category/type edits/deletions change or remove evidence. Never assign inactive/deleted categories.
+- Recalculate before preparing unsent records. Never update sent records because predictions changed.
+- Saved manual categories outrank new predictions if still valid for the resulting expense/income. Archive invalid original choices and apply the general confident-prediction-or-empty policy before sending. Never mechanically transfer debt/transfer categories to ordinary records.
 
-## Контракт коннектора и границы доверия
+## Connector contract and trust boundaries
 
-Общий интерфейс коннектора: определить поддержку страницы; получить контекст подключения и счета; описать часовой пояс/валюты/глубину/размер окна; прочитать историю по счёту и периоду; получить дополнительные детали; вернуть проверенные записи, прогресс и сведения о полноте.
+Common interface: determine page support; obtain connection/account context; describe
+time zone/currencies/depth/window; read account/period history; fetch extra details;
+return validated records, progress, and completeness evidence.
 
-Запись: стабильный внешний ID или явно помеченный версионированный отпечаток, банковский счёт, дата/время с известным поясом, направление, точная сумма/валюта, описание, реквизиты контрагента и все доступные относящиеся к операции поля. Нормализованные общие поля отделены от исходных сведений конкретного банка. Исходные ответы не должны содержать cookies, токены или данные авторизации.
+Records contain stable external ID or explicitly versioned fingerprint, bank account,
+known-zone timestamp, direction, exact amount/currency, description, counterparty
+details, and all available transaction fields. Separate normalized common fields from
+bank-specific originals. Original responses must exclude cookies/tokens/authentication.
 
-Для банков с доступными подробностями в отдельном запросе полнота включает эти подробности. Недоступность необязательного поля явно обозначается; нельзя молча утверждать, что собраны все детали. Некорректная сумма/валюта/счёт не превращается в предположительную операцию.
+Where details require another request, completeness includes them. Explicitly mark
+unavailable optional fields; never silently claim all details. Invalid amount/currency/
+account never becomes a guessed transaction.
 
-Никаких глобальных слушателей «активности» ради бесконечного удержания банковской сессии. Коннектор использует необходимые запросы во время активного сбора; при истечении входа приостанавливается и просит войти снова. Не имитировать банковские платежи или изменения настроек.
+No global activity listeners for infinite session keepalive. Use necessary requests
+during active capture; pause and request sign-in on expiry. Never simulate bank
+payments or settings changes.
 
-## Перенос текущих данных
+## Migrating current data
 
-Предлагаемый безопасный перенос, без обнуления существующей базы:
+Proposed safe migration without resetting existing storage:
 
-1. Остановить старый процесс отправки и активные задания расширения. Сохранить полную проверяемую резервную копию SQLite с WAL и сведения о версиях приложения/схемы. Оригинал и старый образ оставить для отката.
-2. Выполнить преобразование на отдельной копии в Docker без доступа к рабочему ZenMoney. Сохранить все банковские ID, исходные данные/архивы, счета, привязки, группы связей, исключения, ручные категории/правила, текущий mirror/cursor, журнал и намерения отправки с прежними UUID.
-3. Перенести подтверждённые ссылки в постоянный журнал обработанных операций независимо от того, существует ли сейчас цель в зеркале. Явные удаления сохраняются отдельными событиями. Старые исключённые банковские операции остаются исключёнными; отключение целого счёта — отдельная настройка.
-4. Старые локальные изменения существующих ZenMoney-операций архивировать без автоматического применения. Они не должны перезаписать мобильные решения. Ранее выбранные категории новых ещё не отправленных операций сохранить как ручные подсказки, если категория действительна; старые локальные определения долга/перевода сохранить в архиве, а дальнейший разбор типов выполнять на телефоне.
-5. Для заданий, которые точно ещё не отправлялись, сохранить UUID, перестроить объект под новый сценарий расход/приход, установить viewed=false. Для уже отправленных/неопределённых попыток не менять сохранённый payload или идентификатор: сначала проверить результат. Старое viewed=true само по себе не должно вызывать повторную отправку.
-6. Перенести доказанное покрытие истории только при наличии полного подтверждения счёта, диапазона и всех страниц. Если его нет, пометить покрытие неизвестным; следующая загрузка повторит выбранный начальный диапазон с дедупликацией. Не выводить дату успешной загрузки из самой новой операции.
-7. Сравнить исходную и новую базу: количества и ключи, полные исходные записи, участники групп, исключения, журнал UUID/попыток и точные денежные значения. Новые производные таблицы не должны терять исходные записи. Проверить целостность и повторный запуск миграции.
-8. При переключении не запускать старый и новый backend одновременно на одной БД/токене. Новый backend подключается к явно выбранному тому, не создавая пустую базу из-за изменения имени Compose-проекта.
-9. Первый запуск нового приложения выполняет чтение и проверку незавершённых отправок. Создание новых записей начинается только по нажатию «Синхронизировать», а не вследствие миграции.
+1. Stop legacy delivery/active extension jobs. Save a complete verifiable SQLite/WAL backup and application/schema versions. Retain original database/old image for rollback.
+2. Convert a separate copy in Docker without production ZenMoney. Preserve all bank IDs, raw data/archives, accounts/mappings, link groups, exclusions, manual categories/rules, current mirror/cursor, journals/intents with original UUIDs.
+3. Move confirmed links into permanent processing history regardless of current mirror target presence. Retain explicit deletions as separate events. Legacy bank exclusions stay excluded; disabling an entire account is separate configuration.
+4. Archive local edits to existing ZenMoney records without applying them over mobile decisions. Preserve eligible manually chosen unsent categories as hints; archive local debt/transfer types for subsequent phone review.
+5. Proven unstarted jobs retain UUIDs, rebuild as expense/income, viewed=false. Started/uncertain attempts retain exact payload/ID and are verified first. Old viewed=true alone never triggers resend.
+6. Transfer coverage only with full account/range/page evidence. Otherwise mark unknown and reread the selected initial range with deduplication. Never infer successful capture from the newest transaction.
+7. Compare source/target counts/keys, complete raw records, group participants, exclusions, UUID/attempt history, exact amounts. Derived tables must not lose source records. Check integrity/idempotent reruns.
+8. Never run old/new backends simultaneously on one database/token. Explicitly select the new volume; avoid accidental emptiness from Compose project renaming.
+9. First startup reads/verifies unfinished delivery. New records require Synchronize, not migration alone.
 
-Откат после новых реальных отправок нельзя делать простым возвратом старого snapshot: он забудет созданные UUID. После начала LIVE-записей возможен только откат версии с сохранением актуального журнала доставки либо отдельное согласованное восстановление и сверка ID. Проверить этот сценарий до переключения.
+After actual new writes, rollback cannot simply restore an old snapshot that forgets
+new UUIDs. Preserve the current delivery journal during version rollback or use a
+separately agreed recovery/ID reconciliation process. Test before cutover.
 
-## Docker, данные и распространение
+## Docker, data, distribution
 
-- Первый релиз рассчитан на личный backend с одним профилем ZenMoney; допускает несколько банковских подключений и счетов. Многопользовательский сервис не входит в этот рефакторинг.
-- Один runtime-образ backend, локально и на сервере; постоянный том БД; настройки во время запуска, без локальных абсолютных путей и без секретов в образе. SQLite сохраняется; переход на PostgreSQL не требуется только ради удалённого размещения.
-- Локальный профиль публикует порт на loopback. Для удалённого размещения инструкция включает HTTPS через reverse proxy, постоянный том и резервное копирование. Токен расширения отдельный от ZenMoney; токен ZenMoney доступен только backend.
-- Требуются сборка/тесты linux/arm64 и linux/amd64, запуск с непривилегированным пользователем, проверка здоровья, корректная остановка и восстановление очереди. Не заявлять поддержку платформ без фактической проверки.
-- При каждом проекте отдельные версии зависимостей, тесты и инструкции. Проверка совместимости версии extension/API перед работой; несовместимость объясняется в popup.
-- На первом этапе доставка extension — воспроизводимый ZIP для установки распакованной версии. Backend — воспроизводимая локальная сборка и контейнерный артефакт. Автоматическая сборка/тесты могут быть подготовлены для CI; публикация образов, Chrome Web Store, Git push и теги требуют отдельного разрешения и пока не выполняются.
-- Исходную БД и архивы при миграции не чистить. Новые диагностические сообщения ограничить по размеру/сроку и не включать в них секреты; политика хранения финансового архива обсуждается отдельно, не решается удалением в этом рефакторинге.
+- First release is a personal backend for one ZenMoney profile, with multiple bank connections/accounts. Multiuser service is outside this refactor.
+- One runtime image locally/remotely, persistent database volume, runtime configuration, no local absolute paths/secrets in images. Retain SQLite; remote hosting alone does not require PostgreSQL.
+- Local ports bind loopback. Remote instructions include HTTPS reverse proxy, persistent storage, backups. Extension/backend token is separate from backend-only ZenMoney token.
+- Require actual linux/arm64 and linux/amd64 builds/tests, non-root execution, health, graceful stop, queue recovery. Never claim untested platform support.
+- Each project owns dependency versions/tests/instructions. Verify extension/API compatibility before work and explain mismatches in popup.
+- Initially distribute a reproducible unpacked-extension ZIP and reproducible local backend/container build. CI builds/tests may be prepared; image publication, Chrome Web Store, Git push/tags require separate permission and are not performed now.
+- Never clean source databases/archives during migration. Bound new diagnostic messages by size/retention and exclude secrets. Financial archive retention is separate discussion, not deletion during this refactor.
 
-## Проверяемые критерии готовности
+## Verifiable acceptance criteria
 
-1. Чистая установка: два банковских счёта привязаны, третий отключён; данные третьего не читаются и не отправляются. Ненастроенный счёт не включается молча.
-2. Первоначальный период: 30 дней по умолчанию, шесть месяцев и произвольная дата; все страницы и доступные детали прочитаны.
-3. Следующая синхронизация начинается с сохранённой полной границы минус 14 дней. Проверены длительный перерыв, пустой период, недочитанный первый запуск и сбой отдельного счёта.
-   Разовое перечитывание находит позднюю запись внутри ранее полностью прочитанного периода; после его завершения возвращается обычное окно. Второе подключение использует ту же настройку счёта. Отключение во время очереди прекращает новые отправки, но не теряет результат уже начатых.
-4. Одна новая операция без категории, одна с уверенной категорией и одна с неоднозначным совпадением доставлены с viewed=false.
-5. Повторный запуск не создаёт технических дублей. Удалённая в ZenMoney запись не возвращается; другая покупка с той же суммой создаётся.
-6. Изменения категории, суммы, счёта, типа и разделение на телефоне не перезаписываются импортом. Они корректно меняют либо исключают обучающие примеры.
-7. Потеря ответа, частичный результат, перезапуск backend/Chrome, повторный клик и два браузерных подключения не приводят к новым UUID для той же попытки.
-8. Popup закрывается без потери задания. После завершения сбора отправка заканчивается при закрытом Chrome. Если сбор прерван, статус не сообщает полный успех.
-9. Не добавляются DOM-элементы, панели или статусы в банк. В расширении отсутствуют отдельные продуктовые страницы и редакторы операций.
-10. Миграция на копии сохраняет данные/ключи/связи/исключения и проходит повторно без изменений. Проверен откат и сохранение журнала доставок после отправки.
-11. Docker-проверки независимы от рабочей БД и настоящего токена. Проверены обе целевые архитектуры и постоянный том.
-12. Реальная проверка в приложении пользователя: созданная viewed=false операция действительно появляется в ожидаемом списке новых/непросмотренных, затем её удаление не приводит к восстановлению. Отдельно проверить iOS: прежнее официальное разъяснение касается Android и не доказывает поведение текущего iOS-клиента.
+1. Clean installation: two mapped bank accounts, a third disabled and neither read nor delivered. Unconfigured never silently enables.
+2. Initial period defaults to 30 days; six months/custom date work; read all pages/available details.
+3. Subsequent capture starts from complete boundary minus 14 days. Test long gaps, empty periods, incomplete first runs, separate-account failures. One-time rereading finds late records in completed ranges and returns to ordinary windows afterward. Second connections reuse settings; disabling stops new attempts without losing in-flight results.
+4. One uncategorized, one confidently categorized, and one ambiguously matching new record all arrive viewed=false.
+5. Repeats create no technical duplicates. Deleted ZenMoney records never return; a different same-amount purchase is created.
+6. Phone category/amount/account/type edits and splits are never overwritten and correctly change/exclude learning examples.
+7. Lost/partial responses, backend/Chrome restarts, repeated clicks, and two browser connections never create new UUIDs for one attempt.
+8. Popup closure loses no job; after capture, delivery finishes with Chrome closed. Interrupted capture never claims complete success.
+9. No bank DOM elements/panels/statuses. No separate product pages/transaction editors in the extension.
+10. Copy-based migration preserves data/keys/links/exclusions and repeats unchanged. Test rollback/current delivery journal preservation after sending.
+11. Docker checks use neither production database nor real tokens. Validate both target architectures/persistent volumes.
+12. Actual user-app check: viewed=false appears in the expected new/unreviewed list; deletion then synchronization never restores it. Check iOS separately: prior official Android explanation does not prove current iOS behavior.
 
-## Следующие шаги
+## Next steps
 
-1. Согласование направления завершено поручением пользователя от 15 октября начать реализацию. Предложенная миграция старых локальных черновиков готовится сначала на копии.
-2. Инженерное планирование: конечные контракты данных и API, схема миграции, журнал доставки/удалений, восстановление заданий, формальные правила идентичности и тесты.
-3. Проверить недостающие факты на VietinBank: список счетов одного профиля, доступность всех деталей, стабильность ID и реальная глубина истории. Это проверка перед реализацией соответствующих контрактов, не повод предполагать возможности банка.
-4. Выделить и протестировать backend с очередью; затем extension с единственным popup и модуль VietinBank. Удалять старые UI-пути после покрытия новых сквозных сценариев.
-5. Репетиция переноса на копии и проверка нового просмотра в мобильном ZenMoney. Затем отдельное переключение рабочего окружения с сохранением исходной базы и журнала доставки.
+1. Direction accepted by the October 15 implementation request. Prepare proposed legacy draft migration on a copy first.
+2. Engineering planning: final data/API contracts, migration schema, delivery/deletion journal, recovery, formal identities, tests.
+3. Establish missing VietinBank facts: profile account lists, all details, stable IDs, actual depth. Validate before related contracts; never assume bank capabilities.
+4. Extract/test queued backend, then popup-only extension/VietinBank module. Remove legacy UI only after new end-to-end coverage.
+5. Copy migration rehearsal/mobile new-record checks, then separate production cutover preserving originals/delivery history.
 
-Практическое действие пользователя перед LIVE-приёмкой: выбрать одну будущую реальную новую операцию, проверить её появление среди непросмотренных на телефоне, удалить её и повторить синхронизацию. Не выполнять такой тест на исторической операции, которую требуется сохранить.
+User action before LIVE acceptance: select one future genuinely new transaction,
+check its unreviewed phone display, delete, and synchronize again. Never destructively
+test a historical transaction that must be retained.
 
-## Открытые технические вопросы
+## Open technical questions
 
-- Доступность списка всех счетов и устойчивого признака банковского профиля в VietinBank требует наблюдения реального ответа; текущий сборщик работает с одним счётом.
-- Стабильность идентификации строк без trxId; изменение банковского описания/остатка не должно незаметно обходить запрет повторной отправки. Нужны фикстуры и явные ограничения, если банк не даёт доказательства идентичности.
-- Поведение viewed=false и подтверждения просмотра в текущем iOS-клиенте не проверено.
-- Точные схемы HTTP-контрактов и конечные имена репозиториев относятся к инженерному плану. Выбранные пользовательские правила от них не зависят.
+- Complete account discovery/stable profile identifiers require actual VietinBank responses; current collector handles one account.
+- Identity stability without trxId: changed descriptions/balances must not silently bypass resend prevention. Need fixtures/explicit limits where identity cannot be proven.
+- viewed=false/review confirmation in current iOS remains untested.
+- Exact HTTP schemas/final repository names belong to engineering planning; agreed user rules do not depend on them.
 
-## Что определило решение
+## Decision drivers
 
-- «Никаких сверок внутри браузера» исключает возвращение редактора под видом диагностики.
-- «Все изменения и удаления в ZenMoney считаем окончательными» делает мобильное приложение источником пользовательских решений.
-- Пример нескольких счетов в одном банковском профиле требует настройки каждого счёта и отдельного прогресса, а не глобальной даты последней синхронизации.
+- No browser reconciliation excludes bringing back editors disguised as diagnostics.
+- Treat all ZenMoney changes/deletions as final makes mobile the source of user decisions.
+- Multiple accounts in one bank profile require per-account configuration/progress, not one global last-sync date.
 
-## Проверка проекта
+## Design review
 
-Независимая проверка: два прохода, шесть замечаний устранены, итог PASS, оценка рецензента 9/10. Уточнены разовое перечитывание, отключение при активной очереди, общие настройки одного счёта в разных подключениях, проверка целевого счёта, границы доказуемости удалений и приоритет ручной категории. Остаточных замечаний рецензента нет; перечисленные технические вопросы остаются проверками перед реализацией.
+Independent review: two passes, six findings resolved, final PASS, reviewer 9/10.
+Clarified one-time rereading, disabling active queues, shared settings across connections,
+target validation, limits of deletion evidence, and manual-category priority. No
+remaining review findings; listed technical questions remain preimplementation checks.
 
-HTML-эскиз сохранён. Автоматическая визуальная проверка не выполнена: браузерный помощник не смог открыть локальный порт в текущей среде. Это схема интерфейса, не протестированная реализация расширения.
+HTML sketch saved. Automated visual validation was not completed: the browser helper
+could not open the local port in this environment. This is an interface sketch,
+not a tested extension implementation.
 
-15 октября 2026 пользователь поручил начать последовательную реализацию с локальными коммитами. Проект принят как основание для реализации. Все решения выше описывают будущую реализацию; не являются отчётом об изменениях приложения.
+On October 15, 2026, the user requested sequential implementation with local commits.
+This design is accepted as the basis. Decisions above describe future implementation,
+not a report of application changes.

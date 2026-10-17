@@ -1,30 +1,30 @@
-# Проект 1: ZenMoneyAPI
+# Project 1: ZenMoneyAPI
 
-Цель: использовать уже выделенную универсальную библиотеку, а не переписывать её ради нового backend. Репозиторий: `/Users/vaslv/Projects/Vaslv/ZenMoneyAPI`.
+Goal: use the already extracted general-purpose library rather than rewrite it for the new backend. Repository: `/Users/vaslv/Projects/Vaslv/ZenMoneyAPI`.
 
-Читайте: местный AGENTS.md, `docs/coverage.md`, `docs/live-results.md`, затем только затрагиваемый модуль `src/zenmoney_api`. Пользователь не требует обратной совместимости с прежним backend; однако новый рефакторинг сам по себе не требует ломать публичный SDK.
+Read local AGENTS.md, `docs/coverage.md`, `docs/live-results.md`, then only the affected `src/zenmoney_api` module. The user does not require backward compatibility with the old backend; nevertheless, the new refactor does not inherently require breaking the public SDK.
 
-## S1. Аудит необходимых возможностей
+## S1. Audit required capabilities
 
-Проверить `client.py`, `transactions.py`, `protocol.py`, `errors.py` и существующие тесты:
+Check `client.py`, `transactions.py`, `protocol.py`, `errors.py`, and existing tests:
 
-- Первоначальный/инкрементальный diff, forceFetch и явные удаления.
-- Expense/income с заданным UUID, точной суммой, допустимыми счетами/инструментами, категорией или отсутствием категории.
-- Явное `viewed=false` через builders и фактическое тело HTTP. Сейчас общий default `viewed=True`; backend должен передавать false, глобально менять default библиотеки ради одного приложения не требуется.
-- Чтение результата по UUID через полученный diff; не изобретать недокументированный GET transaction.
-- Ошибки до отправки, HTTP-ошибки, повреждённый ответ и timeout различимы настолько, насколько позволяют транспорт/протокол. SDK не выполняет скрытых повторов записи.
-- Сохраняются неизвестные поля ответа и точные денежные значения; API не сводится к расходам/приходам — существующие переводы/долги остаются универсальными возможностями SDK.
+- Initial/incremental diff, forceFetch, and explicit deletions.
+- Expense/income with a supplied UUID, exact amount, valid accounts/instruments, and a category or no category.
+- Explicit `viewed=false` through builders to the actual HTTP body. The general default is currently `viewed=True`; the backend must pass false rather than change the library default globally for one application.
+- Find results by UUID in received diff; do not invent an undocumented GET transaction.
+- Distinguish pre-send failures, HTTP errors, malformed responses, and timeouts as far as transport/protocol allow. The SDK performs no hidden write retries.
+- Preserve unknown response fields and exact money. Do not reduce the API to expenses/income: existing transfers/debts remain general SDK features.
 
-Выход: короткая матрица «требование → существующий метод → тест → пробел». Если всё покрыто, этап завершается без изменений SDK и новой версии.
+Output: a short requirement → existing method → test → gap matrix. If everything is covered, finish without SDK changes or a new version.
 
-## S2. Устранить только доказанные пробелы
+## S2. Fix only demonstrated gaps
 
-Зависит от S1. Для каждого пробела сначала тест наблюдаемого поведения, затем минимальное изменение публичного API/ошибки. Не добавлять БД, банковские имена, категории получателей, tombstones приложения или очередь. При изменении API обновить примеры/типизацию и записать изменения для backend.
+Depends on S1. For each gap, first add an observable behavior test, then the minimum public API/error change. Do not add databases, bank names, payee categories, application tombstones, or queues. Update examples/typing and document backend changes when modifying the API.
 
-Приёмка: `scripts/test.sh` в Docker, установленный пакет и строгая типизация; покрыты sync/async варианты затронутого контракта. Не делать live-запросы автоматически. Существующие тесты расходов, приходов, переводов и долгов продолжают проходить.
+Acceptance: `scripts/test.sh` in Docker, installed package, strict typing; sync/async coverage for the affected contract. No automatic live requests. Existing expense, income, transfer, and debt tests must still pass.
 
-## S3. Передать артефакт backend
+## S3. Hand an artifact to the backend
 
-При реальном изменении собрать через `scripts/build.sh`, зафиксировать версию и checksum. Backend устанавливает проверенный wheel, не соседний исходник SDK. Проверить импорт и контрактный тест из чистого контейнера backend. Если изменений не было — сохранить проверенную текущую зависимость.
+For actual changes, build with `scripts/build.sh` and record version/checksum. The backend installs a verified wheel, not neighboring SDK source. Verify imports and the contract test in a clean backend container. Without changes, retain the verified current dependency.
 
-Готово, когда B5 может построить и проверить новую непросмотренную запись через SDK без ручной сборки ZenMoney JSON в бизнес-логике. Публикация пакета, push и теги не входят в этот этап.
+Complete when B5 can construct and verify a new unreviewed transaction through the SDK without manually assembling ZenMoney JSON in business logic. Package publication, pushing, and tags are outside this stage.

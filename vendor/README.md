@@ -1,36 +1,37 @@
-# Отдельный пакет zenmoney-python
+# Independent zenmoney-python package
 
-Закреплён **zenmoney-python==0.7.0**, импорт `zenmoney_api`.
-Проект: https://github.com/vaslv/zenmoney-python, MIT.
-Wheel не содержит кода backend; исходники SDK сюда не копируются.
+Pinned **zenmoney-python==0.7.0**, import `zenmoney_api`.
+Project: https://github.com/vaslv/zenmoney-python, MIT.
+The wheel contains no backend code; SDK sources are not copied here.
 
-До первого GitHub-релиза wheel собран из локального проверенного коммита SDK.
-`SHA256SUMS` фиксирует байты, `requirements-sdk.lock.txt` — имя/версию и SHA256.
-Docker сначала проверяет manifest, затем устанавливает пакет без индекса/зависимостей
-с `--require-hashes` и выполняет pip check. Его зависимости закреплены отдельно
-в requirements.runtime.lock.txt; соседний checkout для обычной сборки не нужен.
-`pyproject.toml` и тест проверяют то же каноническое имя/версию, старого
-zenmoney-api-client в образе нет. Это пакетная зависимость; vendor служит её кешем.
+Before the first GitHub release, the wheel was built from a verified local SDK
+commit. `SHA256SUMS` identifies its bytes; `requirements-sdk.lock.txt` pins name,
+version, and SHA256. Docker validates the manifest first, installs the package
+without an index/dependencies using `--require-hashes`, and runs pip check.
+Its dependencies are pinned separately in requirements.runtime.lock.txt; ordinary
+builds need no neighboring checkout. `pyproject.toml` and a test check the same
+canonical name/version; the image contains no old zenmoney-api-client.
+This is a package dependency; vendor is its cache.
 
-После публикации первого SDK-релиза скачать wheel и SHA256SUMS из GitHub Release,
-сверить digest, затем выполнить из корня backend:
+After the first SDK release, download the wheel and SHA256SUMS from GitHub Release,
+verify the digest, and run from the backend root:
 
 ```sh
 python3 scripts/update_sdk.py --wheel /path/zenmoney_python-0.7.0-py3-none-any.whl --sha256 VERIFIED_DIGEST
 ./scripts/test-platforms.sh
 ```
 
-Обновление не обращается в сеть. Скрипт отказывается менять кеш при несовпадении
-SHA256, имени или версии зависимости pyproject.toml. Чтобы перейти на другую
-версию, сначала явно изменить pin в pyproject.toml, затем поставить проверенный
-wheel. После обновления выполнить Docker-проверки и закоммитить wheel/manifest/
-lock вместе. Не ставить SDK из рабочей ветки или через соседний PYTHONPATH.
+Updating makes no network calls. The script refuses to change the cache if SHA256,
+name, or the dependency version in pyproject.toml differs. To adopt another version,
+explicitly change the pyproject.toml pin first, then install the verified wheel.
+After updating, run Docker checks and commit wheel/manifest/lock together.
+Do not install the SDK from a working branch or a neighboring PYTHONPATH.
 
-GitHub-репозиторий не является PyPI. Для будущего перехода к загрузке из индекса
-нужен отдельный PyPI-релиз и сохранение pin/digest; сейчас сборка не зависит от
-наличия ещё не опубликованного пакета в интернете. Уже опубликованный артефакт
-той же версии не заменять новой сборкой с другим хешем.
+A GitHub repository is not PyPI. A future index-based installation requires a
+separate PyPI release and retained pin/digest. Current builds do not depend on
+availability of an unpublished package on the internet. Never replace an already
+published artifact of the same version with a differently hashed rebuild.
 
-Текущий предрелизный wheel 0.7.0 получен после проверки SDK-коммита `ba17ce3`
-(сохранены исходная история и начальная лицензия GitHub). Docker SDK:
-260 тестов, mypy strict, покрытие 99%; runtime API при переименовании не менялся.
+The current prerelease 0.7.0 wheel was obtained after validating SDK commit `ba17ce3`
+(preserving original history and the initial GitHub license). SDK Docker checks:
+260 tests, strict mypy, 99% coverage; renaming did not change the runtime API.

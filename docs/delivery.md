@@ -1,273 +1,272 @@
-# Надёжная доставка новых операций — B5
+# Reliable delivery of new transactions — B5
 
-`backend/delivery.py`, SQLite **6**. Используется закреплённый SDK 0.6.1:
+`backend/delivery.py`, SQLite **6**. Uses pinned SDK 0.6.1:
 `transactions.expense/income`, `Client.upsert`, `Client.read_diff`.
-Это отправитель новых записей. Редактирование существующих операций остаётся
-в мобильном ZenMoney; backend не восстанавливает пользовательские удаления.
-HTTP-контракт v1, popup и коннекторы на этом этапе не менялись.
+This sends new records. Existing transaction editing stays in mobile ZenMoney;
+the backend never restores user deletions. The v1 HTTP contract, popup, and
+connectors were unchanged in this stage.
 
-## Разрешение доставки
+## Delivery authorization
 
-Новая команда POST `/api/v1/jobs` разрешает доставку пригодной накопленной
-истории выбранных включённых счетов. Завершение интервала добавляет его записи
-в ту же очередь. Разрешение сохраняется в `delivery_authorizations` вместе с
-банковским UUID, конкретной неизменяемой версией, полным интервалом, заданием,
-версией настроек, целью ZenMoney и источником SDK. Повтор того же request_id
-не создаёт другое задание или другие UUID.
+A new POST `/api/v1/jobs` command authorizes delivery of eligible accumulated history
+for selected enabled accounts. Completing an interval adds its records to the same
+queue. `delivery_authorizations` persists the bank UUID, specific immutable version,
+complete interval, job, settings version, ZenMoney target, and SDK source.
+Repeating request_id never creates another job or UUIDs.
 
-Берётся самая новая **доказанно полная** версия в разрешённом периоде. Более новая
-версия из неполного интервала её не заменяет. Триггеры/FK проверяют основание
-разрешения; после первой попытки оно не изменяется/не удаляется. Простое наличие
-старой строки, prepared payload либо legacy-импорт не доказывает полноту банка.
-Без полного интервала такая строка не отправляется: её нужно перечитать через
-обычную синхронизацию. Конвертация/upgrade не создают разрешений предположениями.
+Select the newest **provably complete** version in the authorized period. A newer
+version from an incomplete interval never replaces it. Triggers/FKs validate the
+authorization basis; after the first attempt it cannot change or be removed.
+An old row, prepared payload, or legacy import alone does not prove bank completeness.
+Without a complete interval, reread it through ordinary synchronization before sending.
+Conversion/upgrades never invent authorizations.
 
-Исключённые и уже обработанные операции пропускаются. Постоянные подтверждения,
-группы, попытки и удаления сохраняются независимо от текущей банковской версии.
-До первой отправки выполняется сопоставление с актуальным зеркалом: банковский
-номер имеет приоритет, затем целевой счёт/день/направление/инструмент/точная сумма.
-Повторяющиеся суммы сопоставляются по времени с учётом количества. См. уточнение
-от 16 октября ниже: прежнее правило безусловного создания изменено пользователем.
+Excluded/already processed transactions are skipped. Permanent confirmations, groups,
+attempts, and deletions survive independently of the current bank version. Before
+first delivery, match against the fresh mirror: bank reference first, then target
+account/day/direction/instrument/exact amount. Repeated amounts match by time and
+multiplicity. The October 16 clarification below supersedes unconditional creation.
 
-## Один исполнитель
+## One executor
 
-Worker принадлежит lifespan сервера и запускается автоматически. Он не зависит
-от popup, вкладки банка, lease сборщика и наличия Chrome. После перезапуска
-продолжает только ранее разрешённую очередь; новые задания по таймеру не создаёт.
-Проверяет работу каждые пять секунд, start/complete будят его раньше.
+The worker belongs to server lifespan and starts automatically. It is independent
+of popup, bank tab, capture lease, and Chrome availability. Restart resumes only
+previously authorized work; timers create no new jobs. Polls every five seconds;
+start/complete wake it earlier.
 
-Файл `<реальный путь БД>.delivery.lock` с правами 600 и OS flock исключает второго
-отправителя, включая отдельный процесс. Файл может оставаться после остановки;
-владение определяется OS-блокировкой, а не существованием файла. Во время работы
-его не удалять. Это защита одного сервиса на локальном диске, не поддержка
-кластера/сетевого SQLite-тома. Рекомендуемая конфигурация остаётся один процесс.
-Обмен SDK и обновление cursor сериализованы также с чтением каталога.
+`<actual database path>.delivery.lock`, mode 600 with OS flock, excludes a second
+sender, including another process. It may remain after stopping; ownership depends
+on the OS lock, not file existence. Never delete it while running. This protects one
+local-disk service, not a cluster/shared network SQLite volume. One process remains
+recommended. SDK exchanges/cursor updates also serialize with catalog reads.
 
-Перед **каждым пакетом** зеркало принудительно обновляется вне SQLite-транзакции.
-В короткой транзакции заново проверяются enabled, версия настроек, цель,
-валюта/обычный действующий счёт/инструмент/владелец, полнота и постоянный журнал.
-При смене токена старое разрешение не подходит — нужен новый явный клик.
-Недоступная цель одного счёта не мешает доставить пригодные записи другого.
+Before **every batch**, force mirror refresh outside a SQLite transaction. A short
+transaction then rechecks enabled, settings version, target, currency/regular active
+account/instrument/owner, completeness, and permanent history. A token change invalidates
+old authorization and needs another explicit click. One unavailable target does not
+block eligible delivery to other accounts.
 
-Отключение до фиксации intent запрещает запрос. После intent запрос считается
-начатым: его результат только завершается/проверяется. Следующий пакет уже не
-отправится. Смена цели требует нового разрешения; неизменённый UUID неначатого
-prepared сохраняется. Stop прекращает сбор, но не отзывает ранее разрешённые
-полные интервалы. Для приостановки новых отправок нужно отключить счёт.
+Disabling before intent commit prevents the request. After intent, the request is
+considered started and only completed/verified; no next batch is sent. Target changes
+need new authorization; unstarted prepared retains its UUID. Stop halts capture but
+does not revoke already authorized complete intervals. Disable the account to pause
+new delivery attempts.
 
-## Payload и попытка
+## Payload and attempts
 
-Пакет содержит максимум 20 операций. Это выбранный размер пакета реализации,
-а не заявление об ограничении API. Направление берётся из банка, точная сумма —
-Decimal, дата — локальная банковская дата, payee — имя получателя, comment —
-описание. `created` — Unix-время `occurred_at` разрешённой неизменяемой банковской версии (с учётом часового пояса), `changed` — время отправки. Это сохраняет хронологию внутри календарного дня; если у старой версии банковское время неизвестно, используется время отправки без выдумывания времени операции. `viewed=false` задаётся **явно**, даже при уверенной категории.
-Пригодная категория вычисляется по правилам B4 для разрешённой версии;
-неизвестная отправляется как NULL. ZenMoney может вернуть категорию уже в первом ответе на создание: сохранённый исходный payload и зеркало ответа различают наш прогноз и удалённое обогащение. Это не повод перезаписывать результат. Автоматических долгов/переводов/«Корректировки» нет.
+Batches contain at most 20 transactions. This is an implementation batch size, not
+an API limit claim. Direction comes from the bank, exact amount is Decimal, date is
+the bank-local date, payee is the recipient name, comment is the description.
+`created` is Unix `occurred_at` from the authorized immutable bank version, accounting
+for time zone; `changed` is send time. This preserves within-day chronology. Legacy
+versions without bank time use send time rather than inventing transaction time.
+`viewed=false` is **explicit**, even for confident categories.
 
-До первого сетевого байта одной транзакцией сохраняются UUID, полный точный
-payload, attempting/ever_attempted=1, uncertain в банковском журнале и append-only
-событие intent. Prepared без прежней попытки можно безопасно пересобрать с тем же
-UUID. После попытки payload, UUID и основание неизменяемы. Сетевой вызов выполняется
-без SQLite write-lock. Результат добавляется отдельным событием, старое не правится.
+B4 computes an eligible category for the authorized version; unknown is NULL.
+ZenMoney may assign a category in the first creation response: stored original
+payload versus response mirror distinguish our prediction from remote enrichment.
+Never overwrite that result. No automatic debts/transfers/Adjustment.
 
-Возвращённый diff применяется атомарным механизмом B4: raw, проекции, удаления,
-cursor и прогнозы. Запись подтверждается **по UUID**, без сравнения отправленных
-полей: пользователь уже мог изменить категорию, сумму или тип на телефоне.
-Если часть UUID не подтверждена, выполняется дополнительное read-only чтение
-с `forceFetch=['transaction']`. Нового upsert для таких UUID не будет.
+Before the first network byte, one transaction persists UUID, complete exact payload,
+attempting/ever_attempted=1, bank journal uncertain, and append-only intent event.
+Prepared without prior attempts can safely rebuild using the same UUID. After any
+attempt, payload, UUID, and authorization basis are immutable. Network calls hold no
+SQLite write lock. Results are appended as separate events, never edits to old ones.
 
-## Неизвестный результат и удаление
+Returned diff applies atomically through B4: raw, projections, deletions, cursor,
+predictions. Confirm **by UUID**, never by comparing sent fields: the user may already
+have edited category, amount, or type on the phone. For unconfirmed UUIDs, perform
+another read-only fetch with `forceFetch=['transaction']`; never another upsert.
 
-Timeout, HTTP 400/401/429/5xx, неполный/повреждённый ответ и crash не доказывают,
-что API ничего не применил. Состояние attempting после crash становится uncertain;
-разрешается только чтение прежних UUID. Наличие UUID подтверждает доставку;
-явное soft/hard deletion делает банковскую операцию terminal suppressed.
-Мобильные правки/удаления не исправляются и не восстанавливаются.
-Отсутствие UUID даже в полном ответе не разрешает повтор записи.
+## Unknown outcomes and deletion
 
-Это сознательная граница: авария **после сохранения intent, но до реального
-запроса** тоже может оставить uncertain. Без доказательства неприменения такая
-операция автоматически не отправится. SDK не сообщает, был ли применён запрос,
-и не даёт достоверного ответа «ничего не записано» по одному HTTP-коду.
-Редактора/кнопки принудительного повтора в B5 нет; новую идентичность или сброс
-журнала для обхода блокировки не создавать. Последующий fetch может подтвердить
-старый UUID, но истечение времени само по себе запись не разрешает.
+Timeout, HTTP 400/401/429/5xx, incomplete/malformed responses, and crashes do not prove
+that the API applied nothing. A crash in attempting becomes uncertain; only reads
+of existing UUIDs are permitted. UUID presence confirms delivery; explicit soft/hard
+deletion makes the bank transaction terminal suppressed. Never correct or restore
+mobile edits/deletions. UUID absence, even in a full response, never authorizes retry.
 
-Повторы относятся только к **чтению**: внутри B4 одна ограниченная повторная
-попытка transport/429/5xx; между циклами сохраняется задержка 15/30/60/120/240/300
-секунд. Перезапуск её не сбрасывает, новый пользовательский клик запрашивает
-проверку снова. Retry-After SDK HTTPError не предоставляет. Неизвестная часть
-пакета блокирует общий успех, но не повторяет и не теряет уже подтверждённую часть.
+This is deliberate: a crash **after intent persistence but before the actual request**
+can also leave uncertain. Without proof of nonapplication it will not be resent
+automatically. The SDK cannot report whether the server applied a request or reliably
+prove nothing was written from an HTTP code alone. B5 has no editor/force-retry button;
+never create another identity or reset journals to bypass the block. Later fetches
+can confirm the old UUID; elapsed time alone cannot authorize a write.
 
-## Статус и остановка
+Retries apply only to **reads**: B4 has one bounded transport/429/5xx retry; across
+cycles, delays persist as 15/30/60/120/240/300 seconds. Restart does not reset them;
+a new user click requests another verification. SDK HTTPError exposes no Retry-After.
+An unknown batch remainder blocks overall success without repeating or losing the
+already confirmed portion.
 
-JobView сохраняет четыре счётчика pending/delivered/suppressed/uncertain и
-раздельные capture_state/delivery_state. Уже захваченный UUID не исчезает из
-прогресса задания из-за новой изменённой даты банка. `running` — начатая попытка;
-`blocked` — неизвестный результат, недоступная цель/SDK или изменение настроек;
-`complete` — сбор полный и все его операции обработаны/исключены. При неполном
-сборе успешная доставка части операций не выдаётся за общий успех.
-`retryable` у ошибки разрешает повтор команды/чтения, не записи ZenMoney.
+## Status and shutdown
 
-При штатном shutdown worker останавливает новые попытки, дожидается текущего
-обмена и закрывает SDK. Docker сохраняет прежние 30 секунд grace; если процесс
-был принудительно завершён раньше окончания запроса, журнал intent обеспечивает
-тот же безопасный сценарий восстановления. Health не выдаёт финансовый успех,
-а ошибки/логи не содержат токенов, исходных строк или ответов API.
+JobView retains pending/delivered/suppressed/uncertain counts and separate
+capture_state/delivery_state. A captured UUID never disappears from job progress
+because its bank date changed later. `running` means a started attempt; `blocked`
+means unknown outcome, unavailable target/SDK, or changed settings; `complete` means
+complete capture and all its records processed/suppressed. Partial delivery success
+never implies complete overall capture. Error `retryable` permits command/read
+retries, not ZenMoney writes.
 
-## Проверки и следующий этап
+During graceful shutdown, the worker stops new attempts, waits for the current
+exchange, and closes the SDK. Docker retains the previous 30-second grace; if killed
+before a request finishes, intent journaling supplies the same safe recovery path.
+Health never claims financial success, and errors/logs contain no tokens, source
+rows, or API responses.
 
-`scripts/test-docker.sh`: SDK MockTransport в контейнере без сети, точные
-расходы/приходы с viewed=false и категорией/NULL, пакет 20+20+2, порог обучения,
-полные/неполные версии и старый backlog, исключения/подтверждения, потерянный
-ответ, частичное применение, HTTP-отказ до применения, мобильная правка/удаление,
-несколько счетов, смена цели/токена, отключение, конкурентные workers, backoff,
-rollback intent, lifespan и прекращение браузерных запросов. Отдельные процессы
-в контейнере завершаются через os._exit до запроса и после fake API commit;
-восстановление использует тот же UUID без повторного upsert. Upgrade/rollback
-v4→v5 на искусственной БД с приватным backup. Всего **340 passed**, 48 новых проверок B5, Docker 29.4.0 / Compose 5.1.2,
-linux/arm64 / CPython 3.12.15. Runtime mode=rw не создаёт удалённую во время
-работы БД; гонка с фоновым worker проверена. HTTP-сервис/постоянный том проверены
-после пересоздания контейнера, включая сохранность разрешения доставки.
+## Validation and next stage
 
-Полный фактический результат и commit — в [журнале](refactor/05-progress.md).
-Реальные API/БД/мобильный UI не проверялись. Последующий B6 прошёл на ARM64
-и AMD64 под эмуляцией: [b6-validation.md](b6-validation.md). Поле viewed=false проверено
-в payload, его отображение в мобильной вкладке новых — будущая M3. Следующий
-этап — E1: выделение Chrome; самостоятельная часть B6 выполнена, E5 потребует
-готового нового расширения.
+`scripts/test-docker.sh`: SDK MockTransport in a network-isolated container; exact
+expense/income with viewed=false and category/NULL; 20+20+2 batching; learning
+threshold; complete/incomplete versions and legacy backlog; exclusions/confirmations;
+lost response; partial application; HTTP rejection before application; mobile edits/
+deletion; multiple accounts; target/token change; disabling; concurrent workers;
+backoff; intent rollback; lifespan; stopped browser requests. Separate container
+processes use os._exit before requests and after fake API commit; recovery checks
+the same UUID without upsert. Synthetic v4→v5 upgrade/rollback with private backup.
+Total **340 passed**, 48 new B5 checks, Docker 29.4.0 / Compose 5.1.2,
+linux/arm64 / CPython 3.12.15. Runtime mode=rw never recreates a database removed during
+operation; the background-worker race was checked. HTTP/persistent-volume checks
+passed after recreation, including delivery authorization preservation.
 
+Full actual results/commit: [log](refactor/05-progress.md). Real API/database/mobile UI
+were not tested. Later B6 passed ARM64/emulated AMD64: [b6-validation.md](b6-validation.md).
+viewed=false is verified in payloads; mobile New display remains M3. Next: E1,
+Chrome extraction; independent B6 is complete, while E5 requires the new extension.
 
-## Время и категории: проверка 16 октября 2026
+## Timestamps and categories: October 16, 2026 validation
 
-Исправлено заполнение created временем синхронизации для всех операций пакета. Новые записи получают банковское время; changed остаётся текущим. Время берётся из той же разрешённой версии, что дата и сумма, даже если текущая запись банка уже обновилась. Уже отправленные payload/UUID не переписываются.
+Fixed created previously taking synchronization time for every batch transaction.
+New records use bank time; changed remains current. Time comes from the same
+authorized version as date/amount, even if the current bank record has changed.
+Existing sent payloads/UUIDs are never rewritten.
 
-Описание API различает date (календарная дата), created и changed: https://github.com/zenmoney/ZenPlugins/wiki/ZenMoney-API#transaction. Поддержка ZenMoney указывает, что created хранит время банка: https://support.zenmoney.ru/communities/1/topics/2465-strannoe-povedenie-changed; изменение created существующей записи не поддерживается: https://support.zenmoney.ru/communities/1/topics/2316-obnovlenie-tranzaktsij-cherez-api. Проверка конкретного отображения на мобильном приложении после изменения остаётся живой приёмкой, не доказана fake API.
+API docs distinguish date (calendar date), created, and changed:
+https://github.com/zenmoney/ZenPlugins/wiki/ZenMoney-API#transaction.
+ZenMoney support says created stores bank time:
+https://support.zenmoney.ru/communities/1/topics/2465-strannoe-povedenie-changed;
+existing-record created updates are unsupported:
+https://support.zenmoney.ru/communities/1/topics/2316-obnovlenie-tranzaktsij-cherez-api.
+Actual mobile rendering after this change needs live acceptance, not fake API evidence.
 
-Диагностика рабочего хранилища выполнена только чтением: у двух проверенных операций время банка различалось, created в исходном payload совпадало; категории были NULL при отправке и заполнены уже в первом delivery-ответе ZenMoney. Локальная подтверждённая история/правила/ручные категории пусты. Это удалённое определение категории, а не ошибочный прогноз backend. Персональные payload, получатели и секреты в документацию не включены. Автоматическое отключение/очистка удалённых категорий не реализовывались: публичная документация не подтверждает такой способ, настоящие записи для экспериментов не использовались.
+Read-only production diagnostics found different bank times for two checked records
+but identical original payload created timestamps. Both categories were NULL when
+sent and already filled in the first ZenMoney delivery response. Local confirmed
+history/rules/manual categories were empty. This is remote categorization, not a
+wrong backend prediction. Personal payloads/payees/secrets are absent from these
+docs. No automatic disabling/clearing of remote categories was implemented: public
+docs establish no such mechanism, and actual records were not used for experiments.
 
-## Распознавание прежней истории: 16 октября 2026
+## Recognizing prior history: October 16, 2026
 
-Причина обнаруженных дублей — запуск новой БД без прежних подтверждённых
-связей. Наличие записи в зеркале само по себе раньше не останавливало создание:
-новый bank_id получал новый ZenMoney UUID. Это не повтор HTTP-попытки: рабочий
-журнал содержит ровно один intent и один response_applied на каждый из 518 UUID.
+Discovered duplicates came from starting a new database without prior confirmed
+links. Mirror presence alone previously did not prevent creation: each new bank_id
+got a new ZenMoney UUID. This was not an HTTP retry: production history has exactly
+one intent and one response_applied for each of 518 UUIDs.
 
-Перед первым intent теперь проверяется однозначная идентичность прежней записи:
-постоянный банковский номер VietinBank `vib:id:…` как отдельный токен comment,
-целевой счёт, календарная дата, направление, точная сумма и инструмент банковской
-стороны. Для перевода/долга проверяется именно банковская сторона. Единственная
-запись, не занятая другим подтверждением/попыткой/группой/исключением, сохраняется
-как постоянный processing_receipt с origin=bank_reference; upsert не выполняется.
-Конкурирующие банковские записи не могут присвоить один UUID. Неначатый prepared
-удаляется, начатые/неопределённые payload и UUID никогда не переназначаются.
-Удаление распознанной записи в мобильном приложении остаётся окончательным.
+Before first intent, existing records are now checked for unambiguous identity:
+VietinBank bank reference `vib:id:…` as a separate comment token, target account,
+calendar date, direction, exact amount, and bank-side instrument. Transfers/debts
+use the bank side specifically. A unique record unoccupied by another confirmation/
+attempt/group/exclusion becomes a permanent origin=bank_reference processing_receipt;
+no upsert. Competing bank records cannot claim one UUID. Unstarted prepared is
+removed; started/uncertain payloads/UUIDs are never reassigned. Mobile deletion of
+a recognized record remains final.
 
-По уточнённому запросу пользователя добавлен второй уровень: целевой счёт,
-календарный день, направление, инструмент и точная сумма, затем хронологический
-порядок внутри равных сумм. Сопоставляется минимум из количеств банка и ещё не
-занятых сторон записей ZenMoney; создаётся только положительная разница. Одна
-банковская сторона UUID не поглощает несколько банковских записей. Один перевод
-может соответствовать расходу на одном счёте и приходу на другом. Другой банковский номер в описании не запрещает совпадение по дню и сумме: номер задаёт только приоритет поиска. При двух физических счетах с одной целью суммовое
-сопоставление отключено, чтобы не выбирать владельца произвольно.
+A second user-requested level uses target account, calendar day, direction, instrument,
+exact amount, then chronological ordering among equal amounts. Match the minimum of
+bank count and free ZenMoney sides; create only the positive difference. One UUID
+bank side cannot consume multiple bank records. One transfer may match expense on
+one account and income on another. Another reference in a description does not
+forbid day/amount matching; references establish search priority only. When two
+physical bank accounts share a target, amount matching is disabled rather than
+guessing ownership.
 
-Receipt хранит origin=day_amount для единственной пары и day_amount_order для
-повторений. Последние не обучают категории: хронология сохраняет количество, но
-не доказывает индивидуальное соответствие контрагента. Уже сопоставленные UUID
-и их последующие правки/удаления сохраняют прежние окончательные правила. Это
-эвристика: постороннюю ручную запись с теми же счётом/днём/суммой нельзя всегда
-отличить от банковской без устойчивого номера. Мобильное изменение даты/суммы,
-сделанное до первого знакомства с записью, тоже может скрыть такое совпадение.
-Постоянный журнал нельзя очищать при обычных обновлениях.
+Receipts use origin=day_amount for unique pairs and day_amount_order for repetitions.
+The latter never trains categories: chronology preserves multiplicity but cannot
+prove individual payee identity. Matched UUIDs and later mobile edits/deletions retain
+the existing finality rules. This is heuristic: unrelated manual records with equal
+account/day/amount cannot always be distinguished without a stable reference.
+Mobile date/amount edits before first observation may also conceal a match.
+Never clear the permanent journal during ordinary updates.
 
-Для текущей очистки остановленный старый том прочитан только read-only, без
-восстановления старого сервиса или переноса всей БД. В приватном Git-ignored
-`data/duplicate-cleanup-plan.json` подготовлены точные UUID новых копий и сохраняемых
-оригиналов по прежним подтверждённым single-связям, с проверкой актуальной даты,
-счёта и суммы. Изменённые/просмотренные копии выделены отдельно. Пользователь
-явно разрешил удаление этих 493 новых копий. Используется ручной модуль
-backend.duplicate_cleanup, недоступный из HTTP API и заданий синхронизации.
-Он проверяет хеш утверждённого плана, свежие снимки обеих сторон каждой пары,
-принадлежность копии нашему журналу доставки и отсутствие других связей.
-До I/O создаются приватная резервная копия, канонические single-связи с
-сохраняемыми оригиналами и долговечный журнал intent. Пакеты максимум по 20,
-после каждого чтение и проверка. Повтор запуска с существующим журналом только
-проверяет результат, не повторяет финансовые запросы. Удаление отставной копии
-не подавляет сохраняемый оригинал; будущее удаление самого оригинала окончательно.
-Финансовые строки, UUID и ответы API не добавляются в Git. Этот аудит не делает
-суммовое предположение подтверждённой банковской связью.
+For the cleanup, the stopped old volume was read read-only without restarting its
+service or migrating the whole database. Private Git-ignored
+`data/duplicate-cleanup-plan.json` records exact new-copy/retained-original UUIDs from
+prior confirmed single links, validated against current date/account/amount.
+Changed/reviewed copies are separate. The user explicitly authorized deletion of
+these 493 new copies. Manual backend.duplicate_cleanup is unavailable to HTTP/sync
+jobs. It validates the approved plan hash, fresh snapshots of both sides, copy
+ownership by our delivery journal, and absence of other links. Before I/O, it saves
+a private backup, canonical single links to retained originals, and durable intent
+history. Batches contain at most 20, each followed by reads/verification. Reusing an
+existing journal verifies only; it never repeats financial requests. Retired-copy
+deletion never suppresses the retained original; later deletion of the original is
+final. Financial rows/UUIDs/API responses never enter Git. This audit does not turn
+an amount heuristic into a proven bank link.
 
-## Все типы и составные соответствия — 16 октября 2026
+## All types and composite matches — October 16, 2026
 
-Поиск использует знаковое движение на целевом счёте: income минус outcome
-его сторон, с проверкой инструмента и точной Decimal-суммы. Расходы, приходы,
-возвраты, долги и переводы участвуют одинаково; валюта/сумма второго счёта
-перевода не подменяют сумму банковской стороны.
+Search uses signed movement on the target account: income minus outcome on its sides,
+with matching instrument/exact Decimal amount. Expenses, income, refunds, debts, and
+transfers participate equally; the transfer's other-account currency/amount never
+replaces the bank-side amount.
 
-После одиночных совпадений ищутся однозначные группы в том же дне и счёте:
-одна банковская запись — несколько ZenMoney (разбивка); несколько банковских —
-одна ZenMoney (объединённая комиссия или взаимозачёт); одна банковская —
-несколько движений разных направлений. Суммы складываются со знаком.
-Сохраняются link_groups с origin=day_amount_group и все участники. Группа
-и снятие неначатой доставки фиксируются в одной транзакции до первого intent.
-После распознавания обучающая история перестраивается до прогноза новых записей.
-Разбивка считается одним независимым платежом; settlement не обучает категории.
+After single matches, search same-day/account unique groups: one bank record to
+multiple ZenMoney records (split); multiple bank records to one ZenMoney record
+(combined fee/settlement); one bank record to multiple opposite-direction movements.
+Sum signed amounts. Persist origin=day_amount_group link_groups and all participants.
+Group creation and withdrawal of unstarted delivery commit together before first
+intent. Rebuild training history before predicting new records after recognition.
+A split counts as one independent payment; settlements never train categories.
 
-Поиск комбинаций ограничен 16 участниками одной стороны и 20 000 посещений
-на счёт/день. При нескольких вариантах, пересечении предложений или исчерпании
-поиска соответствие не придумывается; при исчерпании отменяются все предложения
-этого дня. Нулевые взаимозачёты без записи ZenMoney не подавляются автоматически.
-Для оставшихся записей действует прежнее согласованное правило создания новых
-непросмотренных операций. Следовательно, при неразрешимой неоднозначности
-исключить любой возможный дубль математически нельзя.
+Combination search is limited to 16 participants on either side and 20,000 visits
+per account/day. Never invent a match for multiple alternatives, overlapping proposals,
+or exhausted search; exhaustion cancels all that day's proposals. Zero settlements
+without a ZenMoney record are not automatically suppressed. Remaining records follow
+the agreed new-unreviewed-record creation policy. Irreducible ambiguity therefore
+makes elimination of every possible duplicate mathematically impossible.
 
-Начатые доставки и уже известные UUID не переназначаются. Этот механизм
-предотвращает будущие создания при найденном соответствии, но не удаляет
-имеющиеся дубли и не исправляет записи, изменённые в мобильном приложении.
-Последующее явное удаление участника распознанной группы окончательно и
-не разрешает повторное создание банковских записей.
+Started deliveries/known UUIDs are never reassigned. This prevents future creation
+when matches exist; it neither deletes current duplicates nor corrects mobile edits.
+Later explicit deletion of a recognized group member remains final and never
+authorizes recreation of its bank records.
 
-## Очистка согласованных составных дублей
+## Cleanup of agreed composite duplicates
 
-Ручной duplicate_cleanup поддерживает прежний план single-пар и отдельный
-формат groups: kind, bank_ids, keeps (полные снимки), removals (bank_id и
-полный снимок копии). Подписанный SHA256-план проверяет независимость всех
-идентификаторов, один счёт/день и точную сумму со знаком, включая валютную
-банковскую сторону перевода. Каждой банковской записи соответствует ровно
-одна подтверждённая доставка, выбранная к удалению. Мобильная правка любого
-проверенного оригинала или копии останавливает удаление.
+Manual duplicate_cleanup supports the previous single-pair plan and a separate groups
+format: kind, bank_ids, keeps (complete snapshots), removals (bank_id and complete copy
+snapshot). The SHA256-approved plan validates independent identifiers, one account/day,
+and exact signed totals, including the currency transfer bank side. Each bank record
+has exactly one confirmed delivery selected for deletion. Any checked original/copy
+mobile edit stops deletion.
 
-До удаления сохраняются приватная SQLite-копия, план и fsync-журнал, затем
-каноническая single/split/settlement-группа. Mirror учитывает всё множество
-сохраняемых UUID: удаление отставной копии не подавляет исходную банковскую
-операцию, а удаление участника канонической группы остаётся окончательным.
-Подтверждение удаления требует tombstone, одного отсутствия в зеркале
-недостаточно. Повтор запуска с журналом выполняет только чтение и проверку,
-не запускает ни повторных, ни следующих финансовых запросов.
+Before deletion, save a private SQLite copy, plan, and fsync journal, then a canonical
+single/split/settlement group. Mirror logic considers the complete retained UUID set:
+deleting retired copies never suppresses the original bank transaction; deleting a
+canonical member remains final. Deletion confirmation requires a tombstone, not mere
+mirror absence. A journaled rerun reads/verifies only, sending neither repeat nor
+subsequent financial requests.
 
-Автотесты только с fake API: 442 теста полного Docker-прогона, в том числе
-составные группы обоих направлений, взаимозачёты, валютный перевод, изменённый
-снимок, неверные дата/счёт/сумма, пересечение, неполный план и потеря ответа
-до/после применения. Реальная очистка — отдельное явно разрешённое действие.
+Fake-API automated checks only: 442 tests in the full Docker run, including both
+composite directions, settlements, currency transfers, changed snapshots, wrong
+date/account/amount, overlap, incomplete plans, and response loss before/after
+application. Actual cleanup is a separately explicitly authorized action.
 
+## Matching side after remapping — review fix
 
-## Сторона сопоставления после смены привязки — исправление ревью
+`processing_targets` records the specific ZenMoney account for each bank_id/zen_id
+pair. Immutable rows commit with acceptance of an existing transaction/group or a
+send intent. `account_bindings` history no longer occupies every side of every transfer.
 
-`processing_targets` фиксирует конкретный счёт ZenMoney для каждой пары
-bank_id/zen_id. Запись неизменяема и сохраняется в одной транзакции с принятием
-существующей операции, группы либо намерением отправки. История
-`account_bindings` больше не занимает все стороны каждого перевода.
+v5→v6 migration creates a private backup and recovers only proven targets from
+immutable sent payloads and retained matching authorizations. Current mappings/mobile
+edited records are not evidence. For old duplicate_cleanup groups, original-copy
+authorization does not prove the retained original's account.
 
-Миграция v5→v6 создаёт приватную резервную копию и восстанавливает только
-доказанные цели из неизменных отправленных payload и сохранённых разрешений
-сопоставления. Текущая привязка и изменённые в мобильном приложении операции
-не считаются доказательствами. У старых групп duplicate_cleanup авторизация
-первоначального дубля не доказывает счёт сохранённого оригинала.
-
-Если доказательств не осталось, прежняя связь сохраняется без выдуманного
-счёта. Новые несопоставленные операции затронутого счёта/дня остаются pending,
-задание показывает existing_ownership_unknown. Другие счета и дни продолжают
-обрабатываться. Это ограничение относится к неизвестной истории владения,
-а обычная неоднозначность день/сумма по-прежнему обрабатывается прежним правилом.
-Восстановление доказанного target снимает блокировку при следующем цикле;
-ручное удаление истории или сброс UUID не требуются.
+Without evidence, preserve the old link without inventing an account. New unmatched
+records for affected accounts/days remain pending, with existing_ownership_unknown.
+Other accounts/days continue. This restriction concerns unknown ownership history;
+ordinary ambiguous day/amount matches retain prior policy. Restoring a proven target
+clears the block on the next cycle; no manual history deletion/UUID reset is needed.

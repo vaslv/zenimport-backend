@@ -53,19 +53,19 @@ def create_app(settings: Settings | None = None, *, clock=None, client_factory=C
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request: Request, exc):
-        return error_response(request.state.request_id, 'validation_error', 'Некорректный запрос', 422)
+        return error_response(request.state.request_id, 'validation_error', 'Invalid request', 422)
 
     @app.exception_handler(HTTPException)
     async def http_error(request: Request, exc):
         code = 'method_not_allowed' if exc.status_code == 405 else 'not_found'
-        response = error_response(request.state.request_id, code, 'Метод или ресурс недоступен', exc.status_code)
+        response = error_response(request.state.request_id, code, 'Method or resource unavailable', exc.status_code)
         if exc.headers:
             response.headers.update(exc.headers)
         return response
 
     @app.exception_handler(Exception)
     async def unexpected_error(request: Request, exc):
-        return error_response(request.state.request_id, 'internal_error', 'Внутренняя ошибка сервера', 500)
+        return error_response(request.state.request_id, 'internal_error', 'Internal server error', 500)
 
     @app.get('/health')
     def health():

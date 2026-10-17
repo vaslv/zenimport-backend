@@ -34,16 +34,16 @@ class ApiBoundary:
 
         supplied = [value for key, value in scope['headers'] if key.lower() == b'authorization']
         if len(supplied) != 1 or not secrets.compare_digest(supplied[0], self.authorization):
-            return await reject('unauthorized', 'Неверный токен подключения', 401)
+            return await reject('unauthorized', 'Invalid connection token', 401)
         parts = path.split('/')
         if len(parts) > 2 and parts[2] and parts[2] != 'v1':
-            return await reject('unsupported_api_version', 'Версия API не поддерживается', 404)
+            return await reject('unsupported_api_version', 'Unsupported API version', 404)
         lengths = [v for k, v in scope['headers'] if k.lower() == b'content-length']
         if lengths:
             if len(lengths) != 1 or not lengths[0].isdigit():
-                return await reject('validation_error', 'Некорректный запрос', 422)
+                return await reject('validation_error', 'Invalid request', 422)
             if len(lengths[0]) > 10 or int(lengths[0]) > MAX_BODY_BYTES:
-                return await reject('payload_too_large', 'Запрос превышает допустимый размер', 413)
+                return await reject('payload_too_large', 'Request exceeds the size limit', 413)
 
         body = bytearray()
         while True:
@@ -52,7 +52,7 @@ class ApiBoundary:
                 return
             chunk = event.get('body', b'')
             if len(body) + len(chunk) > MAX_BODY_BYTES:
-                return await reject('payload_too_large', 'Запрос превышает допустимый размер', 413)
+                return await reject('payload_too_large', 'Request exceeds the size limit', 413)
             body.extend(chunk)
             if not event.get('more_body', False):
                 break
@@ -82,4 +82,4 @@ class ApiBoundary:
         except Exception:
             if started:
                 raise RuntimeError(f'Response failed; request_id={identifier}') from None
-            await error_response(identifier, 'internal_error', 'Внутренняя ошибка сервера', 500)(scope, receive, send)
+            await error_response(identifier, 'internal_error', 'Internal server error', 500)(scope, receive, send)

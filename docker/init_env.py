@@ -4,5 +4,5 @@ from backend.config import create_env
 try:
     create_env('/workspace/.env')
 except FileExistsError:
-    raise SystemExit('.env уже существует; файл оставлен без изменений.')
-print('Создан .env со всеми настройками. API_TOKEN скопируйте в расширение; ZENMONEY_TOKEN заполните отдельно.')
+    raise SystemExit('.env already exists; the file was left unchanged.')
+print('Created .env with all settings. Copy API_TOKEN into the extension; set ZENMONEY_TOKEN separately.')

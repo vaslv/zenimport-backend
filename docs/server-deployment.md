@@ -1,61 +1,62 @@
-# ZenImport Backend на удалённом сервере
+# ZenImport Backend on a remote server
 
-Сервис работает одинаково на Linux AMD64 и ARM64. На сервере нужны Docker Engine
-и Compose; Python/Node и соседние проекты не нужны. Один экземпляр backend,
-один локальный Docker volume с SQLite. Публичный HTTP-порт не открывается:
-HTTPS завершается на вашем reverse proxy.
+The service runs the same way on Linux AMD64 and ARM64. The server needs Docker
+Engine and Compose, not Python/Node or neighboring projects. One backend instance,
+one local Docker volume containing SQLite. Do not expose public HTTP:
+terminate HTTPS at your reverse proxy.
 
-Для нового подключения допустима чистая БД. **При переезде действующего сервера
-переносите его БД с журналом доставки**, а не только токен/каталог ZenMoney:
-пустая БД не знает о прежних удалениях и произвольных правках дат/сумм.
-Не запускать старый и новый worker одновременно на один ZenMoney.
+A clean database is acceptable for a new connection. **When moving an existing
+server, transfer its database and delivery journal**, not only the token/ZenMoney
+catalog: an empty database knows nothing about prior deletions or arbitrary
+date/amount edits. Do not run old and new workers against the same ZenMoney account
+simultaneously.
 
-## Два способа установки
+## Two installation methods
 
-После публикации исходников можно собрать образ непосредственно на сервере:
+After source publication, build the image directly on the server:
 
 ```sh
 git clone https://github.com/vaslv/zenimport-backend.git
 cd zenimport-backend
-# Выберите проверенный релиз/коммит, а не изменяющуюся рабочую ветку.
+# Select a verified release/commit, not a changing working branch.
 ./scripts/build-image.sh
 ```
 
-Команда строит только нативную архитектуру, не делает push и печатает локальное
-имя образа. В образе есть установленный пакет zenmoney-python 0.7.0 и его зависимости;
-SDK checkout не нужен. Версия/ревизия/source записываются в OCI labels.
+This command builds only the native architecture, never pushes, and prints the local
+image name. The image includes installed zenmoney-python 0.7.0 and dependencies;
+an SDK checkout is unnecessary. Version/revision/source are recorded in OCI labels.
 
-Второй способ — готовый образ из будущего GHCR-релиза. Точный опубликованный
-`ghcr.io/vaslv/zenimport-backend@sha256:...` берётся из отчёта релиза. Сейчас образ
-ещё не опубликован. На сервере достаточно compose.server.yaml и скрипта init-server.sh
-из того же проверенного релиза (либо всего checkout); локальной сборки нет:
+The second method uses a prebuilt image from a future GHCR release. Obtain the exact
+published `ghcr.io/vaslv/zenimport-backend@sha256:...` from the release report. The image
+is not yet published. The server needs only compose.server.yaml and init-server.sh
+from the same verified release (or the entire checkout); no local build:
 
 ```sh
 export ZENIMPORT_IMAGE=ghcr.io/vaslv/zenimport-backend@sha256:VERIFIED_DIGEST
 docker pull "$ZENIMPORT_IMAGE"
 ```
 
-Можно перенести локально проверенный образ без registry: `docker save` на машине
-сборки, приватная передача архива и `docker load` на сервере. Архитектура архива
-должна соответствовать серверу. Сборка linux/amd64 на ARM-хосте использует эмуляцию;
-это проверка переносимости, не измерение производительности AMD64-сервера.
+A locally verified image can be transferred without a registry: `docker save` on
+the build machine, private archive transfer, and `docker load` on the server. Its
+architecture must match the server. Building linux/amd64 on ARM uses emulation;
+this checks portability, not physical AMD64 server performance.
 
-## Настройка из готового образа
+## Configuring a prebuilt image
 
-Работайте в отдельном каталоге сервера. Для локально собранного образа задайте
-в ZENIMPORT_IMAGE имя, выведенное build-image.sh. Для опубликованного — проверенный
-digest выше. init-server.sh использует сам готовый образ, не требует Python на хосте:
+Use a separate server directory. For a local build, set ZENIMPORT_IMAGE to the name
+printed by build-image.sh. For a published image, use the verified digest above.
+init-server.sh uses the prebuilt image itself and needs no host Python:
 
 ```sh
 ./scripts/init-server.sh
 ```
 
-Создаётся .env (600) с новым случайным API_TOKEN, выбранным образом и постоянным
-DATA_VOLUME=zenimport-server-data. Существующий файл не меняется. В редакторе
-допишите ZENMONEY_TOKEN; API_TOKEN понадобится расширению. Измените DATA_VOLUME,
-только если сознательно выбираете отдельный новый/восстановленный том.
-Не передавайте секреты аргументами команд, не добавляйте .env в Git.
-`docker compose config` показывает подставленные секреты — не публикуйте его вывод.
+Creates .env (600) with a new random API_TOKEN, chosen image, and persistent
+DATA_VOLUME=zenimport-server-data. Existing files are unchanged. Add ZENMONEY_TOKEN
+in an editor; the extension needs API_TOKEN. Change DATA_VOLUME only when deliberately
+selecting a separate new/restored volume. Never pass secrets as command arguments
+or commit .env. `docker compose config` exposes interpolated secrets; do not publish
+its output.
 
 ```sh
 docker compose -f compose.server.yaml up -d --wait backend
@@ -63,51 +64,44 @@ docker compose -f compose.server.yaml ps
 docker compose -f compose.server.yaml logs --tail 50 backend
 ```
 
-`compose.server.yaml` использует только image, не содержит build. HTTP слушает
-127.0.0.1:18792. Процесс UID/GID 10001, root read-only, без capabilities,
-no-new-privileges, writable /data и временный /tmp. Выделено 150 секунд на
-graceful stop; SDK-чтение может занимать до 60 секунд и повториться один раз.
-Health проверяет хранилище, а не завершение финансовой синхронизации.
+`compose.server.yaml` uses image only, with no build. HTTP listens on 127.0.0.1:18792.
+UID/GID 10001, read-only root, no capabilities, no-new-privileges, writable /data, and
+temporary /tmp. Graceful stop allows 150 seconds; an SDK read can take 60 seconds
+and retry once. Health checks storage, not completion of financial synchronization.
 
 ## HTTPS
 
-Пример Caddy для установки **на хосте**: deploy/Caddyfile.example.
-Замените домен, направьте DNS на сервер, разрешите входящие TCP 80/443.
-Caddy выпускает/обновляет сертификат автоматически; его сертификаты/состояние
-также должны храниться постоянно. При уже настроенном Nginx/Traefik можно
-использовать его: передавать Authorization и тела запросов без изменений,
-принимать до 2 MB, учитывать длительные ответы и не логировать токены/тела.
-Не публикуйте внутренний порт 18792 наружу.
+Caddy example for **host installation**: deploy/Caddyfile.example. Replace the domain,
+point DNS at the server, and allow inbound TCP 80/443. Caddy automatically issues/
+renews certificates; its certificate/state storage must also persist. Existing
+Nginx/Traefik can be used instead: pass Authorization and request bodies unchanged,
+accept up to 2 MB, allow long responses, and never log tokens/bodies.
+Do not expose internal port 18792 publicly.
 
-После запуска прокси проверьте с компьютера пользователя:
+After starting the proxy, check from the user's computer:
 
 ```sh
 curl --fail https://YOUR_DOMAIN/health
 ```
 
-Не использовать -k/отключение TLS-проверки. В расширении укажите корневой URL
-`https://YOUR_DOMAIN` без подпути и API_TOKEN нового backend, затем подтвердите
-доступ к этому хосту в Chrome. ZENMONEY_TOKEN остаётся только на сервере.
-Финальное имя хоста, DNS, публичный сертификат/прокси проверяются на вашем сервере;
-локальная приёмка не объявляет их уже настроенными.
+Do not use -k or disable TLS validation. In the extension, enter root URL
+`https://YOUR_DOMAIN` without a subpath and the new backend API_TOKEN, then approve
+Chrome access to that host. ZENMONEY_TOKEN stays on the server. The actual hostname,
+DNS, public certificate/proxy must be validated on your server; local acceptance
+makes no claim that these are configured already.
 
-## Переезд существующей установки
+## Moving an existing installation
 
-1. Завершить синхронизацию, остановить старый backend и не запускать его параллельно.
-2. После остановки экспортировать согласованный snapshot, сохранить приватную копию.
-   Не копировать один основной файл работающей SQLite без WAL.
-3. Восстановить snapshot в новый пустой том по [operations.md](operations.md),
-   сохранить старый том. Назначить этот том в серверном .env.
-4. Запустить новый образ, проверить health/версию/каталог, подключить расширение
-   к новому HTTPS-адресу и токену. Сначала проверить обычную повторную синхронизацию.
-5. Не откатывать журнал на более старую копию, если новый worker уже отправлял записи.
-   При обновлении образа сохранить то же имя тома. `down` сохраняет том;
-   `down --volumes` для рабочего окружения не использовать.
+1. Finish synchronization, stop the old backend, and never run it in parallel.
+2. After stopping, export a consistent snapshot and keep a private copy. Do not copy only the main file of a running SQLite database without WAL.
+3. Restore the snapshot into a new empty volume using [operations.md](operations.md), preserve the old volume, and select the restored volume in the server .env.
+4. Start the new image, check health/version/catalog, and connect the extension to the new HTTPS address/token. First check an ordinary repeat synchronization.
+5. Do not roll the journal back to an older copy after the new worker has sent records. Keep the same volume name during image updates. `down` preserves it; never use `down --volumes` in production.
 
-Подробные снимки/восстановление/обновление: [operations.md](operations.md).
-Проверенные границы A/B и пустой БД: [migration-lab.md](migration-lab.md).
+Detailed snapshots/restoration/updates: [operations.md](operations.md).
+Validated A/B and empty-database boundaries: [migration-lab.md](migration-lab.md).
 
-## Проверка образа перед релизом
+## Prerelease image validation
 
 ```sh
 ./scripts/test-platforms.sh
@@ -115,8 +109,8 @@ curl --fail https://YOUR_DOMAIN/health
 ./scripts/test-server-image.sh linux/amd64
 ```
 
-Все эти команды создают собственные проекты/тома с искусственными данными,
-не читают рабочий .env. Image-only проверка не имеет токена ZenMoney,
-проверяет bootstrap 600/отказ перезаписи, SDK, HTTP/auth, UID/read-only root,
-loopback bind, OCI revision и сохранение БД при пересоздании. Удаляет только
-своё испытательное окружение. Готовый рабочий образ собирается отдельно.
+These commands create their own projects/volumes with synthetic data and never
+read production .env. Image-only checks have no ZenMoney token; they verify mode
+600/no-overwrite bootstrap, SDK, HTTP/auth, UID/read-only root, loopback binding,
+OCI revision, and database preservation on recreation. They remove only their own
+test environment. Build the actual production image separately.

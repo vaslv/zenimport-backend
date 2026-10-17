@@ -26,7 +26,7 @@
       {
         "source_key": "fixture-account-vnd",
         "identity_scope": "profile",
-        "label": "Тестовый текущий счёт",
+        "label": "Test current account",
         "masked_number": "•• 1234",
         "currency": "VND",
         "scale": 0,
@@ -36,12 +36,12 @@
       {
         "source_key": "fixture-account-usd",
         "identity_scope": "profile",
-        "label": "Тестовый валютный счёт",
+        "label": "Test foreign currency account",
         "masked_number": "•• 5678",
         "currency": "USD",
         "scale": 2,
         "supported": false,
-        "unsupported_reason": "Чтение USD ещё не проверено для этого коннектора"
+        "unsupported_reason": "USD reads have not been verified for this connector"
       }
     ]
   },
@@ -80,7 +80,7 @@
         "direction": "expense",
         "amount": "125000",
         "currency": "VND",
-        "description": "Тестовая покупка",
+        "description": "Test purchase",
         "beneficiary_account": "fixture-beneficiary",
         "beneficiary_name": "FIXTURE SHOP",
         "balance": "1000000",
@@ -123,7 +123,7 @@
     "accounts": [
       {
         "id": "00000000-0000-4000-8000-000000000010",
-        "title": "Тестовый VND",
+        "title": "Test VND",
         "currency": "VND",
         "instrument": 3
       }
@@ -132,7 +132,7 @@
   "ErrorResponse": {
     "error": {
       "code": "delivery_uncertain",
-      "message": "Проверяем результат отправки",
+      "message": "Verifying delivery results",
       "retryable": true,
       "request_id": "00000000-0000-4000-8000-000000000005"
     }
@@ -140,7 +140,7 @@
   "AccountView": {
     "id": "00000000-0000-4000-8000-000000000006",
     "source_key": "fixture-account-vnd",
-    "label": "Тестовый текущий счёт",
+    "label": "Test current account",
     "masked_number": "•• 1234",
     "currency": "VND",
     "scale": 0,
@@ -160,7 +160,7 @@
       {
         "id": "00000000-0000-4000-8000-000000000006",
         "source_key": "fixture-account-vnd",
-        "label": "Тестовый текущий счёт",
+        "label": "Test current account",
         "masked_number": "•• 1234",
         "currency": "VND",
         "scale": 0,

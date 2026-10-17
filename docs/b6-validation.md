@@ -1,69 +1,46 @@
-# B6 — самостоятельная проверка backend
+# B6 — independent backend validation
 
-16 октября 2026. Реализация проверок/снимков: **c6a5c9f**.
-Выполнен `scripts/test-platforms.sh` на Docker Engine 29.4.0, Compose 5.1.2,
-CPython 3.12.15. Скрипт последовательно вызвал один и тот же полный прогон
-для двух платформ:
+October 16, 2026. Check/snapshot implementation: **c6a5c9f**.
+Ran `scripts/test-platforms.sh` on Docker Engine 29.4.0, Compose 5.1.2,
+CPython 3.12.15. The script sequentially ran the same complete suite for two platforms:
 
-| Платформа | Фактическое исполнение | Результат |
+| Platform | Actual execution | Result |
 |---|---|---|
-| linux/arm64 | Linux/aarch64, нативная ISA в Linux VM OrbStack | **347 passed**, HTTP/lifecycle/snapshot прошли |
-| linux/amd64 | Linux/x86_64, эмуляция на ARM64-машине OrbStack | **347 passed**, HTTP/lifecycle/snapshot прошли |
+| linux/arm64 | Linux/aarch64, native ISA in an OrbStack Linux VM | **347 passed**, HTTP/lifecycle/snapshot passed |
+| linux/amd64 | Linux/x86_64, emulation on an ARM64 OrbStack machine | **347 passed**, HTTP/lifecycle/snapshot passed |
 
-Это фактический запуск Python/контейнеров обеих архитектур, а не только сборка.
-Нативный физический AMD64-сервер не использовался. Образы/registry не публиковались.
-Одно прежнее предупреждение Starlette о тестовом httpx TestClient остаётся;
-смена зависимостей не требовалась.
+Python/containers actually ran on both architectures; this was not merely a build.
+No native physical AMD64 server was used. No images/registry were published.
+The existing Starlette httpx TestClient warning remains; dependency changes were unnecessary.
 
-## Что проверено
+## Validated behavior
 
-- Runtime/config/tests собираются из собственного Docker-контекста, SDK 0.6.0
-  из vendor с проверкой SHA256. Исходники соседнего SDK/Chrome не используются.
-- Выполняемый Python сообщает ожидаемую архитектуру; UID/GID 10001, root FS
-  только для чтения, `.env` в образе отсутствует. У каждой платформы собственные
-  имена disposable Compose-проекта и volume; порт наружу не публикуется.
-- Все 340 прежних тестов B1–B5 и семь новых проверок snapshot: committed WAL,
-  приватный файл, сохранность identity, отказ перезаписи/чужой БД, сбой/гонка
-  публикации, CLI export/restore. SDK/unit тесты работают с network=none.
-- Настоящий HTTP/auth, приём/продолжение частичного задания, повтор команды/
-  страницы, пересоздание backend с сохранностью финансов и разрешения доставки.
-- Отдельная test-only app factory запускает **обычный backend и lifespan-worker**
-  через Uvicorn. Настоящий SDK использует persistent fake remote в MockTransport;
-  сценарий идёт по HTTP во внутренней Docker-сети, не обращается к ZenMoney.
-- Первая непросмотренная запись подтверждается. Во время второй fake API сначала
-  фиксирует запись, затем держит ответ. Контейнер получает SIGKILL. После запуска
-  worker подтверждает прежний UUID чтением, повторного upsert нет.
-- Третья отправка так же держится незавершённой; SIGTERM запускает shutdown.
-  Только после входа в shutdown тест освобождает ответ. Worker завершает текущий
-  запрос, сервер пишет Application shutdown complete и выходит с кодом **143**
-  на обеих платформах. После запуска все три записи подтверждены, новых upsert нет.
-- После остановки SQLite backup сохраняется, проверяется и восстанавливается
-  **в новый файл**. Пересозданный сервер использует восстановленную БД: прежний
-  instance_id, все UUID, целостность, viewed=false и ровно три прежние записи.
-- В конце обеих платформ удалены только собственные тестовые контейнеры,
-  сети, образы и volumes. Рабочий сервер/том не менялись.
+- Runtime/config/tests build from their own Docker context; SDK 0.6.0 comes from vendor with SHA256 verification. No neighboring SDK/Chrome source is used.
+- Running Python reports the expected architecture; UID/GID 10001, read-only root filesystem, no `.env` in the image. Each platform has its own disposable Compose project/volume names; no port is published.
+- All 340 prior B1–B5 tests and seven new snapshot checks: committed WAL, private file, identity preservation, overwrite/foreign database rejection, publication failure/race, CLI export/restore. SDK/unit tests use network=none.
+- Real HTTP/auth, partial job acceptance/resumption, repeated command/page, and backend recreation preserving financial data and delivery authorization.
+- A separate test-only app factory runs the **ordinary backend and lifespan worker** through Uvicorn. The actual SDK uses a persistent fake remote in MockTransport; the scenario uses HTTP on an internal Docker network without contacting ZenMoney.
+- The first unreviewed write is confirmed. During the second, the fake API commits the write and holds its response. The container receives SIGKILL. On restart, the worker confirms the original UUID by reading; no repeat upsert occurs.
+- The third delivery also remains unfinished; SIGTERM initiates shutdown. Only after shutdown begins does the test release the response. The worker completes the current request, the server logs Application shutdown complete, and exits with **143** on both platforms. After restart, all three records are confirmed without new upserts.
+- After stopping, a SQLite backup is saved, validated, and restored **into a new file**. The recreated server uses the restored database: the original instance_id, every UUID, integrity, viewed=false, and exactly the three original records.
+- Both platform runs remove only their own test containers, networks, images, and volumes. The production server/volume are unchanged.
 
-## Артефакты
+## Artifacts
 
-- `scripts/test-docker.sh [linux/arm64|linux/amd64]` — один полный прогон;
-  без аргумента выбирается архитектура Docker-сервера.
-- `scripts/test-platforms.sh` — ARM64 и AMD64 последовательно, без пропуска
-  неподдерживаемой платформы и без публикации образов.
-- `backend/snapshot.py` — согласованный export/restore в новое назначение,
-  абсолютные пути, проверка собственной текущей схемы/целостности, 600,
-  атомарная публикация без замены даже при гонке. Не является мигратором legacy.
-- [operations.md](operations.md) — запуск local/remote, HTTPS boundary,
-  остановка/обновление, снимок и восстановление в новый volume, результаты.
+- `scripts/test-docker.sh [linux/arm64|linux/amd64]`: one complete run; defaults to the Docker server architecture.
+- `scripts/test-platforms.sh`: ARM64 then AMD64, without skipping unsupported platforms or publishing images.
+- `backend/snapshot.py`: consistent export/restore into a new destination, absolute paths, own current schema/integrity validation, mode 600, and atomic no-replacement publication even during races. It is not a legacy migrator.
+- [operations.md](operations.md): local/remote startup, HTTPS boundary, stop/update, snapshot/restore into a new volume, and results.
 
-## Что остаётся
+## Remaining work
 
-Самостоятельная часть B6 завершена. Общая интеграция **E5** из исходного критерия
-приёмки B6 ещё не выполнена: новый Chrome/коннектор E1–E4 пока не выделен.
-Следующий этап — **E1**. После E1–E4 нужно пройти E5 с поддельным ZenMoney,
-затем M1–M3 до переключения LIVE.
+The independent B6 portion is complete. Overall integration **E5** from the original
+B6 acceptance criteria was not yet performed: the new E1–E4 Chrome/connector had
+not been extracted. Next: **E1**. After E1–E4, run E5 with fake ZenMoney,
+then M1–M3 before LIVE cutover.
 
-Не проверялись настоящий API, банк, рабочая БД, внешний HTTPS на целевом сервере
-и мобильная вкладка новых. Поле viewed=false проверено в SDK payload; это не
-доказательство отображения в мобильном клиенте. Снимок возвращает журнал на
-момент его создания; восстановление устаревшей копии не гарантирует сохранность
-более поздних попыток/отсутствие дублей за утраченный период.
+The real API, bank, production database, external HTTPS on the target server, and
+mobile New tab were not checked. viewed=false was verified in SDK payloads; this
+does not prove its display in the mobile client. A snapshot restores the journal to
+its creation time; restoring an old copy cannot guarantee preservation of later
+attempts or absence of duplicates during the lost period.

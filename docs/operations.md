@@ -1,24 +1,24 @@
-# Запуск, обновление и восстановление backend
+# Backend startup, updates, and recovery
 
-Один Dockerfile/Compose для Linux ARM64 и AMD64. Docker Engine/Compose нужны
-на машине запуска; отдельные Python/Node и соседние checkout SDK/Chrome не нужны.
-Всё ниже относится к новому ZenImportBackend. Команды используют стандартный
-DATABASE_PATH=/data/zenimport.sqlite3; при своей настройке замените путь во
-всех командах снимка/восстановления. Рабочий том прежнего ZenImport
-сюда не подключать; перенос реальных данных остаётся этапом M1.
+One Dockerfile/Compose for Linux ARM64 and AMD64. The target machine needs Docker
+Engine/Compose, not separate Python/Node installations or neighboring SDK/Chrome
+checkouts. Everything below concerns the new ZenImportBackend. Commands use default
+DATABASE_PATH=/data/zenimport.sqlite3; if customized, replace it in every snapshot/
+restore command. Do not mount the legacy ZenImport production volume here; migration
+of real data remains M1.
 
-## Первый запуск
+## First startup
 
-В каталоге проекта:
+From the project directory:
 
 ```sh
 docker compose --profile tools run --build --rm --no-deps --user "$(id -u):$(id -g)" init
 ```
 
-Команда создаёт `.env` с правами 600, случайным API_TOKEN и отдельным постоянным
-DATA_VOLUME. Существующий файл не заменяет. Впишите ZENMONEY_TOKEN на сервере;
-API_TOKEN затем используется расширением. Секреты не включать в Git, образ,
-скриншоты и команды с токеном в аргументах. Токен ZenMoney не передавать в Chrome.
+Creates `.env` with mode 600, a random API_TOKEN, and a separate persistent DATA_VOLUME.
+Existing files are not replaced. Set ZENMONEY_TOKEN on the server; the extension uses
+API_TOKEN. Never put secrets in Git, images, screenshots, or command arguments.
+Do not send the ZenMoney token to Chrome.
 
 ```sh
 docker compose up --build -d --wait backend
@@ -26,77 +26,75 @@ docker compose ps
 docker compose logs --tail 50 backend
 ```
 
-Health доступен на `http://127.0.0.1:18792/health`. Это проверка хранилища,
-а не доказательство завершённой финансовой синхронизации. `/api/v1/info`
-требует Bearer API_TOKEN. Для работы используйте самостоятельное расширение
-ZenImport Chrome с контрактом v1; старый popup с ним несовместим.
-Синхронизация через Chrome 0.1.8 проверена на настоящем VietinBank;
-результат зафиксирован в [журнале приёмки](refactor/05-progress.md).
+Health is available at `http://127.0.0.1:18792/health`. It checks storage, not completion
+of financial synchronization. `/api/v1/info` requires Bearer API_TOKEN. Use the
+independent ZenImport Chrome extension with contract v1; the old popup is incompatible.
+Chrome 0.1.8 synchronization was tested against actual VietinBank; results are in the
+[acceptance log](refactor/05-progress.md).
 
-По умолчанию Docker выбирает нативную архитектуру. Для отдельной сборки
-используйте `docker build --platform linux/arm64 --target runtime .` либо
-`linux/amd64`. При переносе готового образа на другую машину учитывайте его
-архитектуру. Registry/push не обязательны: можно собирать на целевой машине.
-Эмуляция удобна для проверки, но не заменяет измерение на нативном сервере.
+Docker defaults to the native architecture. Build separately with
+`docker build --platform linux/arm64 --target runtime .` or `linux/amd64`.
+Consider image architecture when transferring it to another machine. A registry/push
+is optional: build on the target machine instead. Emulation helps validation but
+does not replace measurements on native servers.
 
-Сервис работает UID/GID 10001, с read-only root, writable `/data`, временным
-`/tmp`, без capabilities и повышения привилегий. Используйте локальный Docker
-volume. Произвольный bind mount потребует заранее подготовленных прав 10001;
-сетевой SQLite-том и несколько экземпляров backend не поддерживаются.
+The service uses UID/GID 10001, read-only root, writable `/data`, temporary `/tmp`,
+no capabilities, and no privilege escalation. Use a local Docker volume. Arbitrary
+bind mounts require permissions prepared for UID 10001; shared network SQLite volumes
+and multiple backend instances are unsupported.
 
-## Сервер
+## Server
 
-Те же команды и `.env`, те же постоянные пути внутри контейнера. Доступ снаружи
-через собственный HTTPS reverse proxy к loopback `127.0.0.1:18792`. Прокси должен
-передавать Authorization, не логировать тела/токены, принимать до 2 MB и учитывать,
-что первоначальное чтение ZenMoney может занимать дольше обычного GET.
-Сам backend TLS-сертификаты не выпускает. Не открывайте его HTTP-порт напрямую
-в интернет. Подключение HTTPS/права/реальная сеть проверяются на целевом сервере;
-локальные контейнерные тесты не являются проверкой вашего внешнего TLS.
+Use the same commands, `.env`, and persistent container paths. External access goes
+through your HTTPS reverse proxy to loopback `127.0.0.1:18792`. It must forward
+Authorization, never log bodies/tokens, accept up to 2 MB, and allow initial ZenMoney
+reads to take longer than ordinary GET requests. The backend does not issue TLS
+certificates. Do not expose its HTTP port directly to the internet. Validate HTTPS,
+permissions, and actual networking on the target server; local container tests do
+not validate your external TLS.
 
-Стабильное имя DATA_VOLUME в `.env` важно: другой каталог/Compose project не
-должны неожиданно подключить пустую БД. Не изменяйте это имя при обычном обновлении.
-`docker compose config` выводит подставленные секреты — его вывод не публиковать.
+Keep DATA_VOLUME stable in `.env`: another directory/Compose project must not
+unexpectedly attach an empty database. Do not change it during ordinary updates.
+`docker compose config` outputs interpolated secrets; never publish its output.
 
-## Остановка и обновление
+## Stopping and updating
 
 ```sh
 docker compose stop backend
 ```
 
-SIGTERM прекращает новые попытки; сервер завершает текущий обмен. Compose даёт
-30 секунд, затем может завершить процесс принудительно. Intent сохранён до сети:
-после crash результат проверяется по старому UUID, без слепого повтора.
-В зависимости от обработки сигнала процесс может завершиться с кодом 0 или 143;
-важны журнал штатного shutdown и отсутствие принудительного SIGKILL.
+SIGTERM stops new attempts; the server finishes the current exchange. Compose allows
+30 seconds before possible forced termination. Intent is persisted before networking;
+after a crash, the result is checked using the old UUID without blind retries.
+Depending on signal handling, exit code may be 0 or 143; what matters is a graceful
+shutdown log and absence of forced SIGKILL.
 
-После остановки сохраните снимок по инструкции ниже, затем обновите код/образ:
+After stopping, save a snapshot as described below, then update the code/image:
 
 ```sh
 docker compose up --build -d --wait backend
 ```
 
-После изменения `.env` используйте `up -d --force-recreate --wait backend`.
-Обычный `docker compose down` сохраняет volume. **Не используйте `down --volumes`
-для рабочего окружения.** Автоматическая миграция собственной старой схемы
-создаёт приватный pre-vN backup. Legacy v12 преобразуется только отдельной
-командой в новый файл, описанной в [financial-storage.md](financial-storage.md).
+After `.env` changes, use `up -d --force-recreate --wait backend`. Ordinary
+`docker compose down` preserves the volume. **Never use `down --volumes` in production.**
+Automatic own-schema upgrades create private pre-vN backups. Legacy v12 conversion
+requires the separate new-file command in [financial-storage.md](financial-storage.md).
 
-## Снимок и восстановление
+## Snapshot and restoration
 
-Для согласованной точки восстановления сначала остановите backend. Экспортёр
-использует SQLite backup (включая committed WAL), проверяет владельца/схему,
-FK/целостность и публикует файл с правами 600. Ни источник, ни существующее
-назначение не перезаписываются. Новый снимок требует нового имени файла.
+Stop the backend first for a consistent recovery point. The exporter uses SQLite
+backup including committed WAL, validates ownership/schema/FKs/integrity, and publishes
+a mode-600 file. Neither source nor existing destination is overwritten. Every new
+snapshot needs a new filename.
 
 ```sh
 docker compose run --rm --no-deps backend python -m backend.snapshot export \
   --source /data/zenimport.sqlite3 --destination /data/backup-before-update.sqlite3
 ```
 
-Снимок внутри того же volume не защищает от потери самого диска. Сохраните
-отдельную копию в приватном каталоге машины. Например, после `up --no-start`
-(контейнер создан, но приложение не запущено) доступна команда Compose cp:
+A snapshot in the same volume does not protect against disk loss. Keep another copy
+in a private host directory. For example, after `up --no-start` creates the container
+without starting the application, use Compose cp:
 
 ```sh
 mkdir -m 700 backups
@@ -105,15 +103,14 @@ docker compose cp backend:/data/backup-before-update.sqlite3 ./backups/backup.sq
 chmod 600 ./backups/backup.sqlite3
 ```
 
-`up --no-start` не создаёт новых финансовых записей. Не копируйте только основной
-файл работающей SQLite вместо согласованного snapshot; не удаляйте WAL/SHM для
-«починки». `backend.snapshot export` также способен снять online-копию, но после
-этой точки worker может отправить другие операции. Восстановление старого снимка
-теряет более поздний журнал попыток; автоматическое отсутствие дублей за этот
-утраченный период гарантировать нельзя. Предпочтительна последняя полная копия
-после остановки, при неизвестном состоянии не сбрасывать журнал отправки.
+`up --no-start` creates no financial records. Never substitute copying the main file
+of running SQLite for a consistent snapshot or remove WAL/SHM to repair it.
+`backend.snapshot export` can also take online copies, but the worker may send more
+transactions afterward. Restoring an older snapshot loses later attempt history;
+automatic duplicate prevention cannot be guaranteed during that lost period. Prefer
+the latest complete copy after stopping; never reset delivery journals for unknown states.
 
-Восстанавливайте в **новый** volume, сохраняя старый как исходник:
+Restore into a **new** volume, retaining the old one as the source:
 
 ```sh
 DATA_VOLUME=zenimport-backend-restored docker compose run --rm --no-deps \
@@ -122,53 +119,53 @@ DATA_VOLUME=zenimport-backend-restored docker compose run --rm --no-deps \
   'python -m backend.snapshot restore --source /input/backup.sqlite3 --destination /data/zenimport.sqlite3 && chown 10001:10001 /data/zenimport.sqlite3'
 ```
 
-Одноразовый helper читает приватную копию от root и возвращает владельца
-восстановленного файла UID/GID 10001; сам сервис продолжает работать без root
-и без этих capabilities. Это также позволяет сохранить host-каталог 700 и
-снимок 600 на обычном Linux, не открывая их всем пользователям.
+The one-time helper reads the private copy as root and returns restored-file ownership
+to UID/GID 10001; the service itself remains non-root without these capabilities.
+This also permits mode-700 host directories and mode-600 snapshots on ordinary Linux
+without opening them to everyone.
 
-Перед использованием нового имени убедитесь, что это отдельный пустой volume.
-Restore откажется заменить существующий файл. Этот helper переносит текущую
-собственную схему; чужая/неподдерживаемая схема не принимается. После проверки
-впишите новое DATA_VOLUME в `.env` и выполните `up -d --force-recreate --wait backend`.
-Не запускайте два backend для одного ZenMoney одновременно. Возврат к старому
-volume допустим лишь если более новый ещё ничего не отправлял: финансовый журнал
-нельзя откатывать как обычный кеш. Снимок новой схемы не запускайте старым образом,
-который её не поддерживает; сохраните подходящий образ/исходник вместе со снимком.
+Before selecting a new name, ensure it identifies a separate empty volume. Restore
+refuses to replace existing files. This helper transfers the current own schema;
+foreign/unsupported schemas are rejected. After validation, set the new DATA_VOLUME
+in `.env` and run `up -d --force-recreate --wait backend`. Never run two backends
+against the same ZenMoney account simultaneously. Returning to the old volume is
+safe only if the newer one has not sent anything: financial journals are not disposable
+caches. Never open a new-schema snapshot with an older unsupported image; retain a
+matching image/source alongside each snapshot.
 
-## Результат синхронизации
+## Synchronization results
 
-JobView отдельно показывает сбор и доставку. `complete` доставки означает полный
-сбор и обработку всех записей. `blocked`/`uncertain` требуют дальнейшей проверки,
-не повторной записи. Нажатие синхронизации повторяет чтение старых UUID; удалённые
-в ZenMoney записи не создаются заново. Подробности: [delivery.md](delivery.md).
-Ошибки не должны содержать операции/токены; health 503 или отказ запуска с чужой
-схемой — повод проверить путь, volume и права, а не создавать вместо неё новую БД.
+JobView separates capture and delivery. Delivery `complete` means complete capture
+and processing of every record. `blocked`/`uncertain` require further verification,
+not repeat writes. Synchronize repeats reads of old UUIDs; transactions deleted in
+ZenMoney are not recreated. Details: [delivery.md](delivery.md). Errors must not contain
+transactions/tokens; health 503 or rejection of a foreign schema calls for checking
+path/volume/permissions, not replacing it with a new database.
 
-## Автопроверки
+## Automated checks
 
 ```sh
 scripts/test-docker.sh linux/arm64
 scripts/test-docker.sh linux/amd64
-# Или обе последовательно:
+# Or both sequentially:
 scripts/test-platforms.sh
 ```
 
-Нужна поддержка указанной архитектуры в Docker (нативная либо эмуляция) и Compose
-с `!reset`. Неподдерживаемая архитектура приводит к ошибке, не пропускается.
-Прогон задаёт собственные фиктивные токены, project/volume, не читает `.env` и
-не публикует порты. Unit/SDK тесты идут без сети; HTTP-сценарии в изолированной
-внутренней сети. Тестовая app factory с SDK MockTransport существует только
-в tests-образе, в runtime её нет и настроить подмену API через .env нельзя.
+Docker must support the selected architecture natively or through emulation, and
+Compose must support `!reset`. Unsupported architectures fail rather than skip.
+The suite supplies its own fake tokens/project/volume, never reads `.env`, and
+publishes no ports. Unit/SDK tests have no network; HTTP scenarios use an isolated
+internal network. The SDK MockTransport app factory exists only in the test image,
+not runtime; .env cannot configure a fake API.
 
-Проверяются фактическая архитектура Python, UID/read-only root, HTTP/auth,
-повторные команды/страницы, целостность/сохранность после пересоздания сервиса,
-доставка через настоящий worker, SIGKILL между fake API commit и ответом,
-восстановление без повторной записи, штатный shutdown с ещё незавершённой отправкой, снимок и новый файл БД.
-Cleanup удаляет только ресурсы своего уникального проекта. Фактические результаты
-и ограничения — в [журнале](refactor/05-progress.md). Общая проверка с новым Chrome
-(E5), реальные данные (M1) и банк/мобильный ZenMoney (M3) выполняются отдельно.
+Checks cover actual Python architecture, UID/read-only root, HTTP/auth, repeated
+commands/pages, integrity/preservation after recreation, actual worker delivery,
+SIGKILL between fake API commit and response, recovery without repeat writes,
+graceful shutdown with a write in flight, snapshot, and a new database file.
+Cleanup removes only the unique test project's resources. Actual results/limitations
+are in the [log](refactor/05-progress.md). New Chrome integration (E5), real data (M1),
+and bank/mobile ZenMoney (M3) are checked separately.
 
-Официальные справочные страницы Docker: [platform](https://docs.docker.com/reference/compose-file/services/#platform),
-[сборки и эмуляция](https://docs.docker.com/build/building/multi-platform/),
+Official Docker references: [platform](https://docs.docker.com/reference/compose-file/services/#platform),
+[multiplatform builds and emulation](https://docs.docker.com/build/building/multi-platform/),
 [stop_grace_period](https://docs.docker.com/reference/compose-file/services/#stop_grace_period).

@@ -1,51 +1,51 @@
-# Проект 3: Chrome extension и модули банков
+# Project 3: Chrome extension and bank modules
 
-Цель: получить историю в открытом личном кабинете, передать backend, показать ход одной синхронизации. Исходник: `/Users/vaslv/Projects/Vaslv/ZenImport/extension`. Предлагаемый проект: `ZenImportChrome`.
+Goal: read history in an open bank session, send it to the backend, and show one synchronization's progress. Source: `/Users/vaslv/Projects/Vaslv/ZenImport/extension`. Proposed project: `ZenImportChrome`.
 
-Эскиз: [три состояния popup](../zenimport-popup-wireframe.html). Он иллюстрирует структуру, не является готовым UI или автоматически проверенной вёрсткой.
+Sketch: [three popup states](../zenimport-popup-wireframe.html). It illustrates structure, not a finished UI or automatically verified layout.
 
-## E1. Самостоятельный каркас
+## E1. Independent skeleton
 
-Зависит от B0. Выделить сборку MV3, popup, background coordinator, клиент backend и модули банков. Не менять сборщик/фреймворк без практической необходимости. Удалить продуктовую SPA/options page и её маршруты, UI-инъекции, category/type controls, toggle, старые кнопки отправки/сверки. Сбор данных остаётся: удаление UI не означает удаление нужных content scripts.
+Depends on B0. Extract MV3 build, popup, background coordinator, backend client, and bank modules. Do not change bundler/framework without practical need. Remove product SPA/options page/routes, injected UI, category/type controls, toggle, and old send/reconciliation buttons. Data capture remains: removing UI does not mean removing needed content scripts.
 
-Адрес сервера/токен backend доступны только расширению; банковская страница их не получает. Разрешения ограничить реально поддерживаемыми банками и выбранным сервером. Неподдерживаемая вкладка/истёкший вход дают краткое состояние popup, не запускают сбор другого банка.
+Server address/backend token are extension-only; the bank page never receives them. Limit permissions to actually supported banks and the selected server. Unsupported tabs/expired login produce brief popup states without starting another bank's capture.
 
-Приёмка: устанавливается собранное расширение, открывается popup, банковский DOM не содержит элементов продукта, отсутствует путь к старому редактору. Новое задание не начинается от простого открытия банковской страницы.
+Acceptance: built extension installs, popup opens, bank DOM has no product elements, old editor is unreachable. Merely opening a bank page never starts a new job.
 
-## E2. Контракт коннектора и VietinBank
+## E2. Connector contract and VietinBank
 
-Исходные ориентиры: `auto-background.js`, `auto-content.js`, `vietinbank-json.js`, `history-period.js`, `full-sync.js`, `docs/vietinbank-automation.md`. Разделить общий координатор и знание конкретного банка.
+Source references: `auto-background.js`, `auto-content.js`, `vietinbank-json.js`, `history-period.js`, `full-sync.js`, `docs/vietinbank-automation.md`. Separate common coordination from bank-specific knowledge.
 
-Коннектор предоставляет: поддержку страницы; контекст доступа; полный/частичный список счетов; возможности (валюты, пояс, окно запроса, глубина); чтение интервала/страницы; дополнительные детали; нормализованные записи и доказательства полноты. Не выполняет отправку в ZenMoney и категоризацию.
+Connectors provide page support, access context, complete/partial account discovery, capabilities (currencies, time zone, request window, depth), interval/page capture, extra details, normalized records, and completeness evidence. They neither send to ZenMoney nor categorize.
 
-До заявления поддержки нескольких счетов наблюдать реальный источник их списка, смену счёта, доступность деталей и стабильность ID. Невозможность получить полный список явно обозначать, не считать одну видимую строку полным перечнем. Снять обезличенные фикстуры, не сохранять авторизационные поля.
+Before claiming multiple-account support, observe the actual list source, switching, detail availability, and stable IDs. Explicitly report incomplete discovery rather than treating one visible row as a full list. Capture anonymized fixtures without auth fields.
 
-Сохранить старую идентичность: trxId, а при его отсутствии прежний fingerprint с версией и алиасами. Не заменять hash без миграции. Не объявлять USD поддержку только потому, что UI разрешает такой счёт: текущий парсер ограничен VND, валюты подтверждаются отдельными фикстурами. Если счёт обнаружен, но не поддерживается, показать причину и не импортировать искажённые суммы.
+Preserve old identity: trxId, otherwise the previous versioned fingerprint and aliases. Never replace hashes without migration. Do not claim USD merely because UI permits an account: the parser currently supports VND; currencies need separate fixtures. Show reasons for discovered unsupported accounts and never import distorted amounts.
 
-Приёмка: нормальные/пустые страницы, вход истёк, неправильный счёт, изменившийся период/total, повтор строк, отсутствующий trxId, точные суммы, детали контрагента, допустимые/неподдерживаемые валюты. Общий координатор тестируется также с искусственным вторым банком без добавления реальной интеграции.
+Acceptance: normal/empty pages, expired login, wrong account, changed period/total, duplicate rows, missing trxId, exact amounts, counterparty details, supported/unsupported currencies. Also test the common coordinator with a synthetic second bank without implementing an actual integration.
 
-## E3. Возобновляемый сбор
+## E3. Resumable capture
 
-Получать план от backend; последовательно читать включённые счета и окна. Для VietinBank использовать подтверждённые ограничения, сейчас до 30 дней. Передавать страницу, ждать сохранения, затем продвигать checkpoint. Состояние задания живёт не в popup; переживает его закрытие и остановку service worker.
+Obtain plans from the backend; sequentially read enabled accounts/windows. Use confirmed VietinBank limits, currently up to 30 days. Upload a page, wait for persistence, then advance checkpoints. Job state belongs outside the popup and survives its closure/service worker termination.
 
-По возобновлении сверить серверный checkpoint, текущую вкладку/счёт/профиль. Не принимать запоздалый ответ предыдущего задания. Подтверждать интервал только после всех страниц/деталей. При входе/закрытии вкладки остановить сбор с сохранением данных. Обычные необходимые запросы во время сбора допустимы; постоянную имитацию активности для удержания сессии убрать.
+On resume, compare server checkpoints and current tab/account/profile. Reject delayed previous-job responses. Complete intervals only after every page/detail. Login expiry/tab closure stops capture without data loss. Ordinary necessary capture requests are permitted; remove continuous simulated activity for session keepalive.
 
-Приёмка: закрытие popup; остановка worker между отправкой и ACK; повтор страницы; смена счёта/вкладки; вход истёк; отмена; сбой второго счёта; два расширения одного backend; выключенный счёт. Сервер завершает отправку уже собранного независимо от Chrome.
+Acceptance: popup closure; worker stop between send/ACK; repeated page; account/tab switch; expired login; cancellation; second-account failure; two extensions on one backend; disabled accounts. The server finishes delivery independently of Chrome.
 
 ## E4. Popup
 
-Обычный экран: название/банк, «Синхронизировать», краткий прогресс или итог, свёрнутые «Настройки». Во время сбора основная кнопка может стать «Остановить сбор»; это не отменяет уже доставленное. Нет дополнительных финансовых действий.
+Ordinary screen: name/bank, Synchronize, brief progress/result, collapsed Settings. During capture, the primary button may become Stop capture; this never undoes delivered records. No other financial actions.
 
-Первое подключение: при необходимости раскрыть адрес сервера и токен backend; загрузить список ZenMoney-счетов; каждому банковскому счёту выбрать цель в совместимой валюте либо «Не загружать». Не выбранное значение явно отличается от игнорирования. Все отключены — нет запуска. Нужный новый ZenMoney-счёт пользователь создаёт на телефоне; popup обновляет список.
+First connection: expand server address/backend token when needed; load ZenMoney accounts; assign each bank account a compatible-currency target or Do not import. Unselected differs from ignored. All disabled means no start. Users create new ZenMoney accounts on their phone; the popup refreshes the list.
 
-Период: дата 30 дней назад, быстрый выбор шести календарных месяцев, произвольная дата не в будущем. При новом счёте настройки показываются при открытии popup; остальные настроенные могут продолжать работать. Привязки можно изменить в настройках с ограничениями B0.
+Period: date 30 days ago, six-calendar-month shortcut, custom nonfuture date. New accounts expose settings on popup opening while other configured accounts can continue. Settings permit mapping changes within B0 restrictions.
 
-Разовое старое чтение — отдельное пустое поле даты в настройках; непустой запрос применяется при следующей синхронизации и очищается после полного выполнения. Обычная смена токена не вызывает backfill. Длинные названия, много счетов, клавиатура и короткие ошибки должны работать без горизонтального переполнения.
+One-time old-history capture uses a separate empty date field in settings; nonempty input applies to the next synchronization and clears after complete execution. Ordinary token changes never cause backfill. Long titles, many accounts, keyboard navigation, and short errors must work without horizontal overflow.
 
-Приёмка: заполнение/сохранение; недоступный backend; несовместимая версия; новый счёт; все игнорируются; 30 дней/6 месяцев/дата; повтор открытия; частичный результат; счёт с недоступной целью. Тесты проверяют поведение, а не точное внутреннее расположение функций.
+Acceptance: form/save; unavailable backend; incompatible version; new account; all ignored; 30 days/6 months/date; reopening; partial result; unavailable target. Test behavior, not precise internal function placement.
 
-## E5. Самостоятельные и сквозные проверки
+## E5. Independent and end-to-end checks
 
-Парсеры/периоды — unit; popup и worker — браузерные тесты настоящего собранного расширения в изолированном Docker. Интеграция с B6 и fake ZenMoney: два включённых счёта, один исключённый; новые без категории/с прогнозом/с возможным совпадением; повтор и удаление; потерянный ответ; принудительное перечитывание.
+Parsers/periods: unit tests. Popup/worker: browser tests of the actual built extension in isolated Docker. B6/fake ZenMoney integration: two enabled accounts, one ignored; new uncategorized/predicted/possibly matching records; repeat and deletion; lost response; forced rereading.
 
-Выход: воспроизводимый архив расширения, инструкция установки/обновления, список реально проверенных сценариев. Не публиковать в Store и не считать Docker-fixture проверкой живого банка. Реальный сбор и мобильный список новых — M3.
+Output: reproducible extension archive, install/update instructions, actual tested scenarios. Never publish to the Store or treat Docker fixtures as live bank verification. Actual capture/mobile New list belong to M3.

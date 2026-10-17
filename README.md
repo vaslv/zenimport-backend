@@ -1,85 +1,84 @@
 # ZenImport Backend
 
-Самостоятельный Docker-сервис для получения банковской истории из Chrome и добавления новых операций в ZenMoney. Код расширения и checkout SDK для сборки не нужны: проверенный wheel `zenmoney-python` 0.7.0 включён в `vendor/`.
+An independent Docker service that receives bank history from Chrome and adds new transactions to ZenMoney. Neither extension source nor an SDK checkout is required to build: a verified `zenmoney-python` 0.7.0 wheel is included in `vendor/`.
 
-Самостоятельные backend и Chrome выделены; финансовое хранилище v6, зеркало/прогноз и долговечная доставка реализованы. Новый локальный backend запущен на чистой базе по решению пользователя 16 октября 2026. Актуальное состояние, настройки расширения и ограничения первого импорта: [docs/local-deployment.md](docs/local-deployment.md). Живая мобильная приёмка отложена; старое расширение к новому протоколу не подключать.
+The backend and Chrome extension are separate projects; financial storage v6, mirroring/prediction, and durable delivery are implemented. At the user's direction, the new local backend started with a clean database on October 16, 2026. Current status, extension settings, and initial import limitations: [docs/local-deployment.md](docs/local-deployment.md). Live mobile acceptance is deferred; do not connect the old extension to the new protocol.
 
-План: [docs/refactor/README.md](docs/refactor/README.md). Состояние: [docs/refactor/05-progress.md](docs/refactor/05-progress.md). Контракт: [docs/sync-api-v1.md](docs/sync-api-v1.md). Решения о переносе старых модулей: [docs/extraction-map.md](docs/extraction-map.md).
+Plan: [docs/refactor/README.md](docs/refactor/README.md). Status: [docs/refactor/05-progress.md](docs/refactor/05-progress.md). Contract: [docs/sync-api-v1.md](docs/sync-api-v1.md). Legacy module extraction decisions: [docs/extraction-map.md](docs/extraction-map.md).
 
-## Локальный запуск
+## Local startup
 
-Нужны Docker Engine и Compose. Python/Node на компьютере не требуются.
+Docker Engine and Compose are required. Host Python/Node installations are not needed.
 
 ```sh
-# Только если .env ещё нет:
+# Only when .env does not exist:
 docker compose --profile tools run --build --rm --no-deps --user "$(id -u):$(id -g)" init
-# После проверки настроек:
+# After reviewing the settings:
 docker compose up --build -d --wait backend
 ```
 
-Генератор создаёт `.env` с правами 600, случайным `API_TOKEN` и явными настройками. Существующий файл не перезаписывается; токен не печатается. `API_TOKEN` — для подключения расширения, `ZENMONEY_TOKEN` — только для сервера. Без токена ZenMoney возможен запуск сервиса, но недоступны каталог целей и актуализация зеркала. Compose читает `.env`; приложение само файлы конфигурации не разыскивает.
+The generator creates `.env` with mode 600, a random `API_TOKEN`, and explicit settings. It never overwrites an existing file or prints the token. `API_TOKEN` connects the extension; `ZENMONEY_TOKEN` belongs only on the server. The service can start without a ZenMoney token, but the target catalog and mirror refresh are unavailable. Compose reads `.env`; the application does not search for configuration files itself.
 
-Сервис доступен на `http://127.0.0.1:18792`, отдельно от прежнего порта 18791. Токен backend минимум 24 символа, без пробелов. `DATABASE_PATH` — абсолютный путь **в контейнере**, по умолчанию `/data/zenimport.sqlite3`. Для данных используется отдельный именованный том `DATA_VOLUME=zenimport-backend-data`; имя сохранено в `.env` и не зависит от каталога запуска. Один процесс/один экземпляр backend.
+The service is available at `http://127.0.0.1:18792`, separately from the former port 18791. The backend token must contain at least 24 characters and no whitespace. `DATABASE_PATH` is an absolute path **inside the container**, default `/data/zenimport.sqlite3`. Data uses the separate named volume `DATA_VOLUME=zenimport-backend-data`; its name is stored in `.env` and does not depend on the launch directory. One process/one backend instance.
 
-| Запрос | Ответ |
+| Request | Response |
 |---|---|
-| GET `/health` без токена | 200, если хранилище доступно; иначе 503 |
-| GET `/api/v1/info` с Bearer API_TOKEN | Версия, ограничения запросов, состояние подключения |
-| Регистрация/настройки/каталог/задания/страницы/complete/stop | Реализованы на B3; [маршруты](docs/sync-api-v1.md), [правила](docs/capture.md) |
+| GET `/health` without a token | 200 when storage is available; otherwise 503 |
+| GET `/api/v1/info` with Bearer API_TOKEN | Version, request limits, connection status |
+| Registration/settings/catalog/jobs/pages/complete/stop | Implemented in B3; [routes](docs/sync-api-v1.md), [rules](docs/capture.md) |
 
-`not_configured` означает отсутствие серверного токена ZenMoney. При заданном токене `ready` возвращается только после успешного чтения SDK, не старше 300 секунд. Каталог и новые команды синхронизации актуализируют зеркало; при запуске выполняется только ранее разрешённая доставка/проверка, новые задания не создаются. При сбое ZenMoney сбор банка продолжается, доставка ждёт свежего зеркала. Подробности и правила прогноза: [docs/mirror-predictions.md](docs/mirror-predictions.md). Доставка, неизвестный результат и восстановление: [docs/delivery.md](docs/delivery.md). Отдельных HTML-страниц/Swagger/редактора нет.
+`not_configured` means the server has no ZenMoney token. With a configured token, `ready` is returned only after a successful SDK read no older than 300 seconds. The catalog and new sync commands refresh the mirror; startup only resumes previously authorized delivery/verification and creates no new jobs. Bank capture continues during ZenMoney outages; delivery waits for a fresh mirror. Prediction rules: [docs/mirror-predictions.md](docs/mirror-predictions.md). Delivery, uncertain outcomes, and recovery: [docs/delivery.md](docs/delivery.md). No standalone HTML pages, Swagger, or editor are served.
 
 ```sh
 docker compose logs --tail 50 backend
 docker compose down
 ```
 
-Обычный `down` сохраняет именованный том. После изменения конфигурации пересоздайте контейнер через `up -d --force-recreate --wait backend`. Не меняйте имя тома при обычном обновлении — это подключит другую базу.
+An ordinary `down` preserves the named volume. After configuration changes, recreate the container with `up -d --force-recreate --wait backend`. Do not change the volume name during an ordinary update: that connects a different database.
 
-## Размещение на сервере
+## Server deployment
 
-Полная инструкция запуска/обновления, снимка и восстановления: [docs/operations.md](docs/operations.md). Фактический прогон платформ: [docs/b6-validation.md](docs/b6-validation.md).
+Complete startup/update, snapshot, and restore instructions: [docs/operations.md](docs/operations.md). Actual platform validation: [docs/b6-validation.md](docs/b6-validation.md).
 
-Перенесите этот проект либо собранный образ на нужную машину; собирайте для архитектуры этой машины. Один и тот же Dockerfile/Compose используется локально и удалённо. Настройки задаются при запуске, в образе секретов нет. Публикация образа в registry не обязательна.
+Transfer this project or its built image to the target machine; build for that machine's architecture. The same Dockerfile/Compose works locally and remotely. Settings are supplied at runtime; the image contains no secrets. Publishing an image to a registry is optional.
 
-На сервере оставьте HTTP-порт привязанным к loopback и настройте свой HTTPS reverse proxy на `127.0.0.1:18792`. Расширение будет использовать внешний HTTPS-адрес и отдельный API_TOKEN. Токен ZenMoney в расширение не передаётся. Требуются постоянное локальное хранилище Docker и резервное копирование; несколько экземпляров сервиса/сетевой общий SQLite-том не поддерживаются.
+On a server, keep HTTP bound to loopback and configure your HTTPS reverse proxy to `127.0.0.1:18792`. The extension uses the external HTTPS address and a separate API_TOKEN. Never pass the ZenMoney token to the extension. Persistent local Docker storage and backups are required; multiple service instances/shared network SQLite volumes are unsupported.
 
-Сервис не подключает том старого приложения: база с чужим application_id/схемой отвергается **до изменений**. Конвертер и политика хранения описаны в [docs/financial-storage.md](docs/financial-storage.md); репетиция на реальной копии выполнена отдельно (docs/migration-rehearsal.md); для текущего запуска пользователь выбрал чистую базу. Для backup используйте согласованный SQLite backup либо остановите сервис и сохраните весь том с WAL; копирование только основного файла работающей SQLite не является надёжным backup.
+The service does not mount the old application's volume: databases with another application_id/schema are rejected **before changes**. Conversion and storage policy: [docs/financial-storage.md](docs/financial-storage.md). A rehearsal on a real copy was performed separately (docs/migration-rehearsal.md); the user chose a clean database for the current deployment. Use a consistent SQLite backup, or stop the service and preserve the entire volume including WAL; copying only the main file of a running SQLite database is not a reliable backup.
 
-## Проверки
+## Checks
 
 ```sh
 scripts/test-docker.sh
-# Либо обе архитектуры последовательно:
+# Or both architectures sequentially:
 scripts/test-platforms.sh
 ```
 
-Скрипт задаёт искусственный токен и уникальные имена Compose-проекта/тома, не читает `.env`, не публикует порт и не использует рабочую БД. Проверяет фактическую архитектуру/UID/read-only root, конфигурационный образ и unit/SDK тесты без сети, настоящий HTTP во внутренней тестовой сети, продолжение задания, SIGKILL, штатный shutdown во время отправки и восстановление снимка без повторной записи. Проверяется установленный закреплённый пакет SDK с fake HTTP, без соседней библиотеки. Удаляет только собственное тестовое окружение.
+The script supplies a synthetic token and unique Compose project/volume names, does not read `.env`, publishes no port, and never uses the production database. It checks actual architecture/UID/read-only root, the configuration image, network-isolated unit/SDK tests, real HTTP on an internal test network, job recovery, SIGKILL, graceful shutdown during delivery, and snapshot restoration without repeat writes. The installed pinned SDK is tested using fake HTTP, without a neighboring library. Only the script's own test environment is removed.
 
-Тестовый override требует Compose с поддержкой `!reset`. Отдельно можно выполнить `scripts/test-contracts.sh`. ARM64 и AMD64 фактически прошли по 347 тестов и контейнерные сценарии; AMD64 выполнялся под эмуляцией OrbStack на ARM64-хосте. Подробности и границы — в docs/b6-validation.md.
+The test override requires Compose support for `!reset`. `scripts/test-contracts.sh` can also run separately. ARM64 and AMD64 actually passed 347 tests each and the container scenarios; AMD64 ran under OrbStack emulation on an ARM64 host. Details and boundaries: docs/b6-validation.md.
 
-## Структура
+## Structure
 
-- `backend/app.py`, `http.py` — жизненный цикл, API, аутентификация, ограничение тела и ошибки без входных данных.
-- `backend/snapshot.py` — проверенный SQLite export/restore в новый файл, без перезаписи исходника или существующего назначения.
-- `backend/config.py` — настройки и безопасное создание `.env`.
-- `backend/storage.py`, `schema_v*.sql`, `records.py` — версионированная БД, ограничения, финансовые сущности, идентичности и версии записей.
-- `backend/accounts.py`, `capture_policy.py`, `capture.py`, `sync_api.py` — обнаружение/настройки, правила данных, задания, страницы и HTTP-маршруты.
-- `backend/mirror.py`, `predictions.py` — read-only SDK diff/cursor/удаления и прогноз из актуальных подтверждённых платежей.
-- `backend/delivery.py` — разрешения полных версий, единственный worker, создание viewed=false, подтверждение UUID и восстановление без слепого повтора.
-- `backend/migrate_legacy.py`, `legacy_archive.py` — явная конвертация legacy v12 в отдельную БД с проверяемым архивом.
-- `backend/sync_contracts.py` — модели v1, перенесённые с B0.
-- `vendor/` — закреплённый SDK и SHA256; `requirements*.lock.txt` — точные зависимости.
-- `tests/`, `fixtures/sync-v1/` — автономные и контейнерные проверки.
-- `docs/` — контракт, этапы и происхождение извлечённого кода.
+- `backend/app.py`, `http.py`: lifecycle, API, authentication, body limits, and errors without input data.
+- `backend/snapshot.py`: validated SQLite export/restore into a new file, never overwriting the source or an existing destination.
+- `backend/config.py`: settings and safe `.env` creation.
+- `backend/storage.py`, `schema_v*.sql`, `records.py`: versioned database, constraints, financial entities, identities, and record versions.
+- `backend/accounts.py`, `capture_policy.py`, `capture.py`, `sync_api.py`: discovery/settings, data policy, jobs, pages, and HTTP routes.
+- `backend/mirror.py`, `predictions.py`: read-only SDK diff/cursor/deletions and predictions from current confirmed transactions.
+- `backend/delivery.py`: complete-version authorization, one worker, viewed=false creation, UUID verification, and recovery without blind retries.
+- `backend/migrate_legacy.py`, `legacy_archive.py`: explicit legacy v12 conversion into a separate database with a verifiable archive.
+- `backend/sync_contracts.py`: v1 models carried over from B0.
+- `vendor/`: pinned SDK and SHA256; `requirements*.lock.txt`: exact dependencies.
+- `tests/`, `fixtures/sync-v1/`: independent and container checks.
+- `docs/`: contract, stages, and extracted code provenance.
 
-Проект выделен из ZenImport `f3b2838` локальной копией Git без hardlinks, remotes отсутствуют. Полная прежняя история сохранена. Локальные коммиты разрешены; push/теги/публикация требуют отдельного разрешения.
+Extracted from ZenImport `f3b2838` by a local Git copy without hardlinks; initially no remotes. The complete prior history is retained. Local commits are allowed; pushing/tags/publication require separate permission.
 
-Read-only отчёт возможных лишних операций ZenMoney: GET `/api/v1/connections/{id}/discrepancies`. Страница находится в Chrome-расширении; область сравнения, формат и ограничения описаны в [docs/discrepancies.md](docs/discrepancies.md).
+Read-only report of potentially extra ZenMoney transactions: GET `/api/v1/connections/{id}/discrepancies`. The page belongs to the Chrome extension; comparison scope, format, and limitations: [docs/discrepancies.md](docs/discrepancies.md).
 
-Изолированная репетиция смены сервера и явно запускаемая приёмка отдельного
-тестового аккаунта: [docs/migration-lab.md](docs/migration-lab.md).
+Isolated server migration rehearsal and explicitly invoked separate test account acceptance: [docs/migration-lab.md](docs/migration-lab.md).
 
-Удалённый сервер из готового образа: [docs/server-deployment.md](docs/server-deployment.md).
-Исходный репозиторий: https://github.com/vaslv/zenimport-backend, MIT.
-Порядок публикации SDK → backend → Chrome: [docs/publication.md](docs/publication.md).
+Remote deployment from a prebuilt image: [docs/server-deployment.md](docs/server-deployment.md).
+Source repository: https://github.com/vaslv/zenimport-backend, MIT.
+SDK → backend → Chrome publication sequence: [docs/publication.md](docs/publication.md).

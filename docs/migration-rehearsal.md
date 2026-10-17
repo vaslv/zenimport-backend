@@ -1,35 +1,35 @@
-# M1 — репетиция на копии, 16 октября 2026
+# M1 — rehearsal on a copy, October 16, 2026
 
-Исходный `zenimport-live-data` подключался к offline-контейнеру **readonly**. SQLite backup учитывал WAL; user_version=12, application_id=0, integrity_check прошёл. Исходный сервер не останавливался, файлы/настройки оригинала не изменялись. Копия не содержит действующего подключения к API: миграция/проверка исполнялись отдельной CLI с `--network none`, без переменных с настоящими токенами.
+Source `zenimport-live-data` was mounted **read-only** into an offline container. SQLite backup included WAL; user_version=12, application_id=0, integrity_check passed. The source server was not stopped, and original files/settings were unchanged. The copy has no active API connection: migration/validation ran through a separate CLI with `--network none`, without real token variables.
 
-Исходная копия: SHA256 `5bd31747c01b314f3b20c8c81287b8fbd11e359f4045f04f5989cbeed692d99e`. Приватные результаты находятся в игнорируемом `data/rehearsal-20261016`, не попадают в Git/Docker context. Реальное переключение не выполнялось, этот снимок не заменяет окончательный backup M4.
+Source copy SHA256: `5bd31747c01b314f3b20c8c81287b8fbd11e359f4045f04f5989cbeed692d99e`. Private results are in ignored `data/rehearsal-20261016`, excluded from Git/Docker context. No actual cutover took place; this snapshot does not replace the final M4 backup.
 
-## Результат
+## Results
 
-| Проверка | Результат |
+| Check | Result |
 |---|---:|
-| Архив исходных таблиц/строк с точным содержимым и SQLite-типами | 36 / 58 651 |
-| Счета / банковские операции / прежние alias | 1 / 561 / 561 |
-| Группы / банковские участники / участники ZenMoney | 539 / 543 / 541 |
-| Сущности зеркала / tombstones | 32 672 / 1 844 |
-| Банковские исключения / правила получателей | 4 / 1 |
-| Пригодные ручные категории новых записей | 4 |
-| Задания создания / попытки / подтверждения | 71 / 140 / 545 |
-| Доставка: доставлены / подготовлены | 60 / 11 |
-| Обработка: доставлены / pending / prepared / suppressed | 543 / 3 / 11 / 4 |
+| Source table/row archive with exact contents and SQLite types | 36 / 58,651 |
+| Accounts / bank transactions / legacy aliases | 1 / 561 / 561 |
+| Groups / bank participants / ZenMoney participants | 539 / 543 / 541 |
+| Mirror entities / tombstones | 32,672 / 1,844 |
+| Bank exclusions / payee rules | 4 / 1 |
+| Usable manual categories for new records | 4 |
+| Creation jobs / attempts / confirmations | 71 / 140 / 545 |
+| Delivery: delivered / prepared | 60 / 11 |
+| Processing: delivered / pending / prepared / suppressed | 543 / 3 / 11 / 4 |
 
-Проверены не только количества: все ключи и raw банковских записей, точные суммы/знаки/валюты/даты/описания, исходные account bindings, содержимое групп/участников/исключений/правил, raw и финансовые проекции зеркала, soft/hard удаления и cursor, UUID заданий и неизменные payload начатых попыток. Все исходные ответы/неиспользуемые черновики дополнительно сохранены lossless-архивом с отпечатком содержимого.
+Checks went beyond counts: every bank record key/raw value; exact amounts/signs/currencies/dates/descriptions; original account bindings; group/participant/exclusion/rule contents; raw and financial mirror projections; soft/hard deletions and cursor; job UUIDs and immutable payloads of started attempts. All source responses/unused drafts are additionally retained in a lossless archive with a content fingerprint.
 
-Повторная конвертация: `repeated=true`, логический отпечаток всей целевой БД неизменен. SQLite snapshot восстановлен **в новый файл**; его полный логический отпечаток совпал с целевым. SHA256 исходной копии после всех проверок прежний. Integrity/FK проверки прошли.
+Repeated conversion: `repeated=true`, entire target database logical fingerprint unchanged. The SQLite snapshot was restored **into a new file**; its complete logical fingerprint matched the target. The source copy SHA256 remained unchanged after all checks. Integrity/FK checks passed.
 
-Старые счета намеренно остаются unconfigured; требуется подтвердить цель/период в новом popup. Coverage и delivery_authorizations не придуманы по историческому наличию: обе таблицы пусты. 11 подготовленных записей не отправляются автоматически от одного запуска. Старые правки существующих записей и типы долг/перевод архивированы согласно принятой политике; пригодные ручные категории сохранены отдельно. Удалённые/доставленные операции не считаются новыми.
+Legacy accounts intentionally remain unconfigured; the new popup must confirm target/period. Coverage and delivery_authorizations were not invented from historical presence: both tables are empty. Eleven prepared records are not automatically sent merely on startup. Legacy existing-record edits and debt/transfer types are archived under the agreed policy; usable manual categories are stored separately. Deleted/delivered transactions are not considered new.
 
-## Воспроизведение
+## Reproduction
 
-`python -m backend.snapshot export-legacy --source /absolute/legacy.sqlite3 --destination /absolute/new-copy.sqlite3` — явный backup только schema 12, не перезаписывает назначение.
+`python -m backend.snapshot export-legacy --source /absolute/legacy.sqlite3 --destination /absolute/new-copy.sqlite3`: explicit schema 12 backup only, never overwrites the destination.
 
-`python -m backend.rehearsal --source-copy /absolute/new-copy.sqlite3 --destination /absolute/converted.sqlite3 --restore-check /absolute/restored.sqlite3` — конвертация, независимая сверка проекций/архива, повтор и восстановление. Использовать только приватный каталог копий и offline-контейнер без настоящих токенов. Объём данной базы почти 2 ГБ; конвертированная копия с полным архивом около 4 ГБ, дополнительно нужны место для проверки восстановления и временной сортировки SQLite.
+`python -m backend.rehearsal --source-copy /absolute/new-copy.sqlite3 --destination /absolute/converted.sqlite3 --restore-check /absolute/restored.sqlite3`: conversion, independent projection/archive verification, repeat, and restoration. Use only a private copy directory and an offline container without real tokens. This source database is nearly 2 GB; the converted copy with its full archive is about 4 GB, with additional space needed for restore validation and SQLite temporary sorting.
 
-Искусственные проверки нового инструмента: WAL, запрет чужой схемы/перезаписи, полный repeat/restore и обнаружение изменённой суммы при сохранном архиве; полный Docker ARM64: **352 passed** и lifecycle проверки прошли. M2 — проверка AMD64 и запуска восстановленной копии; M3/M4 остаются отдельной приёмкой.
+Synthetic checks for the new tool: WAL, foreign schema/overwrite prevention, complete repeat/restore, and detection of a changed amount despite an intact archive. Full ARM64 Docker run: **352 passed** and lifecycle checks passed. M2 validates AMD64 and restored-copy startup; M3/M4 remain separate acceptance stages.
 
-После M2 созданные SQLite-копии сжаты в .sqlite3.gz с проверкой полного распакованного SHA256; манифест archives.json приватный. Для повторения сначала распаковать копии в новый приватный каталог. Итог M2: docs/m2-validation.md.
+After M2, created SQLite copies were compressed to .sqlite3.gz with complete uncompressed SHA256 verification; archives.json is private. Extract copies into a new private directory before repeating. M2 outcome: docs/m2-validation.md.

@@ -1,63 +1,62 @@
-# Финансовое хранилище — B2
+# Financial storage — B2
 
-Текущая версия независимой БД — **5**, `application_id=0x5A494231`; базовая
-финансовая схема B2 — версия 2. Настройки/задания B3: [capture.md](capture.md). Зеркало/прогноз B4: [mirror-predictions.md](mirror-predictions.md). Доставка B5: [delivery.md](delivery.md).
-Версия старого
-ZenImport — **12**; это другая последовательность версий. Runtime открывает
-только свою БД. Пустая новая БД создаётся автоматически; собственные B1/v1, B2/v2, B3/v3 и B4/v4
-обновляются транзакционно с приватным SQLite backup, включая WAL.
-Чужая/старая/будущая схема не изменяется при запуске.
+The current independent database version is **5**, `application_id=0x5A494231`;
+the baseline B2 financial schema is version 2. B3 settings/jobs: [capture.md](capture.md).
+B4 mirror/predictions: [mirror-predictions.md](mirror-predictions.md).
+B5 delivery: [delivery.md](delivery.md). Legacy ZenImport version **12** belongs to
+a different version sequence. Runtime opens only its own database. A new empty
+database is created automatically; own B1/v1, B2/v2, B3/v3, and B4/v4 upgrade
+transactionally with private SQLite backups, including WAL. Foreign/legacy/future
+schemas are not modified at startup.
 
-## Данные и ограничения
+## Data and constraints
 
-| Группа | Таблицы и назначение |
+| Group | Tables and purpose |
 |---|---|
-| Подключения и счета | `connections`, `bank_accounts`, `connection_accounts`; способ доступа отделён от канонического банковского счёта |
-| Настройки | Версия/выбор/начальная дата в `bank_accounts`, прежние назначения в `account_bindings` |
-| Банковская история | `bank_transactions`, `bank_aliases`, `bank_versions`: постоянный UUID, исходные поля, алиасы и неизменяемые версии |
-| Получение истории | `capture_jobs`, `capture_intervals`, `capture_pages`, `coverage`: основание для B3, полнота не выводится из даты последней операции |
-| Постоянный журнал | `bank_processing`, `processing_receipts`: факт обработки сохраняется независимо от текущего зеркала и наличия локальной связи |
-| Доставка | `deliveries`, `delivery_attempts`: постоянный UUID ZenMoney, payload, неизвестный результат, история попыток и `needs_rebuild` |
-| Зеркало | `zen_sync_runs`, `zen_entities`, `zen_movements`, `zen_tags`: оригинальные JSON и точные денежные проекции всех видов SDK |
-| Разрешение и план доставки | `delivery_authorizations`, `delivery_schedule`: проверенная полная банковская версия/задание/цель и долговечная задержка проверок |
-| Состояние зеркала/прогноз | `zen_mirror_state`, `category_payments`, `category_predictions`: cursor/источник/свежесть и пересчитываемые независимые платежи/прогнозы |
-| Удаления | `zen_deletions`, `zen_tombstones`: история ответов и постоянная идентичность удалённых объектов |
-| Старые связи | `link_groups`, `link_bank_members`, `link_zen_members`: подтверждённые 1:N/N:M, включая две стороны перевода между счетами |
-| Исключения и категории | `bank_exclusions`, `zen_exclusions`, `recipient_rules`, `category_choices`, `category_evidence` |
-| Архив миграции | `legacy_imports`, `legacy_objects`, `legacy_rows`: исходная схема, все строки и проверяемый отпечаток |
+| Connections/accounts | `connections`, `bank_accounts`, `connection_accounts`: access method separate from the canonical bank account |
+| Settings | Version/selection/start date in `bank_accounts`; previous mappings in `account_bindings` |
+| Bank history | `bank_transactions`, `bank_aliases`, `bank_versions`: persistent UUID, source fields, aliases, immutable versions |
+| History capture | `capture_jobs`, `capture_intervals`, `capture_pages`, `coverage`: B3 foundation; completeness is not inferred from the last transaction date |
+| Permanent journal | `bank_processing`, `processing_receipts`: processing survives current mirror state and local link absence |
+| Delivery | `deliveries`, `delivery_attempts`: persistent ZenMoney UUID, payload, unknown outcome, attempt history, `needs_rebuild` |
+| Mirror | `zen_sync_runs`, `zen_entities`, `zen_movements`, `zen_tags`: original JSON and exact financial projections of all SDK kinds |
+| Delivery authorization/planning | `delivery_authorizations`, `delivery_schedule`: verified complete bank version/job/target and durable verification delay |
+| Mirror state/prediction | `zen_mirror_state`, `category_payments`, `category_predictions`: cursor/source/freshness and recomputable independent payments/predictions |
+| Deletions | `zen_deletions`, `zen_tombstones`: response history and permanent deleted-object identity |
+| Legacy links | `link_groups`, `link_bank_members`, `link_zen_members`: confirmed 1:N/N:M, including both inter-account transfer sides |
+| Exclusions/categories | `bank_exclusions`, `zen_exclusions`, `recipient_rules`, `category_choices`, `category_evidence` |
+| Migration archive | `legacy_imports`, `legacy_objects`, `legacy_rows`: source schema, every row, and verifiable fingerprint |
 
-Суммы банка — положительные десятичные **строки**, направление отдельно.
-Максимум 24 целых и 12 дробных знаков; нулевые суммы банка запрещены.
-`save_record` дополнительно проверяет валюту/scale и календарную дату в зоне
-банка. Повтор записи сохраняет UUID, изменившиеся данные создают версию.
-Существующее состояние обработки при этом не сбрасывается.
+Bank amounts are positive decimal **strings**, with direction stored separately.
+Maximum 24 integer and 12 fractional digits; zero bank amounts are prohibited.
+`save_record` additionally checks currency/scale and calendar date in the bank time
+zone. Repeated records retain UUIDs; changed data creates a version without resetting
+existing processing state.
 
-Суммы ZenMoney хранятся текстом, полный JSON — без преобразования через float.
-Сущности всех видов, неизвестные поля и исходные ответы сохраняются. Ссылки
-журнала на UUID ZenMoney намеренно не имеют FK на текущее зеркало: удаление
-объекта из зеркала не должно удалять доказательство прежней обработки.
+ZenMoney amounts are text; complete JSON never passes through float. All entity
+kinds, unknown fields, and original responses are preserved. Journal references to
+ZenMoney UUIDs intentionally have no FK to the current mirror: removing a mirror
+object must not erase proof of prior processing.
 
-БД обеспечивает уникальность банковских идентичностей/алиасов и UUID доставки,
-принадлежность алиаса счёту, FK, неизменяемость банковской идентичности и
-начатого payload. Версии, попытки и подтверждения добавляются без перезаписи.
-`delivered` нельзя вернуть в очередь; `suppressed` нельзя восстановить.
-`INSERT OR REPLACE` не обходит защиту на соединениях хранилища, где включены
-`foreign_keys` и `recursive_triggers`. Все соединения открывать через
-`storage.transaction`/`configured`, не голым sqlite3 для финансовых мутаций.
+The database enforces unique bank identities/aliases and delivery UUIDs, alias account
+ownership, FKs, immutable bank identity, and immutable started payloads. Versions,
+attempts, and confirmations are append-only. `delivered` cannot reenter the queue;
+`suppressed` cannot be restored. `INSERT OR REPLACE` does not bypass protections on
+storage connections with `foreign_keys` and `recursive_triggers` enabled. Open every
+financial mutation connection through `storage.transaction`/`configured`, not raw sqlite3.
 
-Обработчики заданий B3 и зеркало/прогноз B4 реализованы. Сетевые чтения SDK
-выполняются вне транзакции; сырой diff, удаления, cursor и прогноз сохраняются
-атомарно. Импортированный legacy cursor не доказывает свежесть: требуется
-полное чтение B4. B5 отправляет только разрешённые полные версии с viewed=false; crash/неясный
-исход не разрешают повтор записи. Смена схемы сама не создаёт разрешений.
+B3 job handlers and B4 mirror/prediction are implemented. SDK network reads occur
+outside transactions; raw diff, deletions, cursor, and predictions are applied
+atomically. Imported legacy cursors do not prove freshness: a full B4 read is required.
+B5 sends only authorized complete versions with viewed=false; crashes/unknown outcomes
+do not authorize repeat writes. Schema changes alone create no authorizations.
 
-## Явная конвертация legacy v12
+## Explicit legacy v12 conversion
 
-Рабочую БД на B2 не переносили. Следующая команда предназначена для
-**отдельной согласованной копии** на этапе M1. В каталоге `migration-input`
-должна лежать копия SQLite со всеми нужными данными WAL; каталог
-`migration-output` должен существовать и быть доступен указанному UID.
-Не подключать рабочий том старого приложения к этой команде.
+B2 did not migrate the production database. The command below is for a **separate,
+agreed copy** during M1. `migration-input` must contain a SQLite copy including all
+required WAL data; `migration-output` must exist and be writable by the specified UID.
+Do not mount the old application's production volume into this command.
 
 ```sh
 docker build --target runtime -t zenimport-backend:local .
@@ -69,62 +68,40 @@ docker run --rm --network none --read-only \
   --source /input/legacy.sqlite3 --destination /output/converted.sqlite3
 ```
 
-Исходник открывается `mode=ro` в одной read-транзакции, включая зафиксированные
-WAL-данные. Для запуска с read-only mount используйте согласованную копию
-без активного писателя; инструменты backup/подготовка реальной копии — M1.
-Конвертер проверяет версию/FK/целостность, переносит в приватный временный
-каталог, сверяет архив, затем атомарно публикует новый файл с правами 600.
-Существующий файл не перезаписывается даже при гонке. Нужен запас места под
-новую БД, полный архив строк/схемы, индексы, WAL и временную сортировку.
+The source opens with `mode=ro` in one read transaction, including committed WAL.
+For a read-only mount, use a consistent copy without an active writer; backup tools/
+real copy preparation belong to M1. The converter checks version/FKs/integrity,
+converts inside a private temporary directory, validates the archive, then atomically
+publishes a new mode-600 file. Existing files are never overwritten, even in a race.
+Allow enough space for the new database, full row/schema archive, indexes, WAL,
+and temporary sorting.
 
-Все SQL-объекты и строки архивируются, в том числе неизвестные таблицы,
-устаревшие черновики, оригинальные payload и raw. Типы SQLite сохраняются:
-NULL, целое как строка, REAL как hex, TEXT без изменения, BLOB как base64.
-Архивный SQL **никогда не исполняется**. Нормализация работает только с
-известными таблицами v12. Неизвестная валюта, нарушенная связь, противоречащие
-UUID либо повреждённые проекции останавливают конвертацию без публикации.
+Every SQL object/row is archived, including unknown tables, obsolete drafts,
+original payloads, and raw data. SQLite types are preserved: NULL, integer as string,
+REAL as hex, unchanged TEXT, BLOB as base64. Archived SQL is **never executed**.
+Normalization uses known v12 tables only. Unknown currencies, broken relationships,
+conflicting UUIDs, or corrupt projections stop conversion without publication.
 
-Повтор с тем же логическим снимком проверяет отпечаток содержимого архива и
-возвращает `repeated=true`, не меняя финансовые данные. Другой исходник в уже
-существующее назначение не импортируется. Вывод CLI содержит только количества
-и состояния, ошибки не печатают строки операций/токены/payload.
+Repeating the same logical snapshot validates the archive content fingerprint and
+returns `repeated=true` without changing financial data. Another source cannot be
+imported into an existing destination. CLI output contains only counts/states;
+errors never print transaction rows/tokens/payloads.
 
-## Политика переноса
+## Migration policy
 
-- Сохраняются UUID счетов/банковских операций/групп/ZenMoney, точные суммы,
-  raw, исключения, правила, текущее зеркало, исходные ответы и cursor.
-- Старая привязка сохраняется в `account_bindings`. Счёт остаётся
-  `unconfigured`: профиль доступа, начало периода и выбор пользователя надо
-  подтвердить в B3/E2. Старый импорт не доказывает полноту интервала, поэтому
-  `coverage` и `last_complete_end` не заполняются предположениями.
-- Подтверждённые группы и прежние `linked/sent` сохраняют обработанность даже
-  без текущей записи зеркала. Подтверждения `creation_verified`, `sent` и ручной
-  `confirm/link` из аудита учитываются, даже если старый UI удалил связь.
-  Явные soft/hard deletions подавляют повтор; зеркало из архивов не восстанавливается.
-- Начатый или недоказанно неначатый запрос сохраняет UUID и **точный текст**
-  текущего payload. `conflict/uncertain` становятся `uncertain`; наличие
-  ожидаемого UUID в зеркале считается подтверждением существования, даже если
-  пользователь уже изменил поля. Данные телефона не исправляются.
-- Состояние `prepared` недостаточно: проверяются `creation_local`,
-  `creation_intent`, `creation_retry_prepared`. Попытки прежнего UUID того же
-  платежа также блокируют слепую отправку нового UUID. Извлечённые попытки
-  сохраняют числа без потерь, точный исходный текст аудита остаётся в архиве.
-- Только доказанно неначатые запросы пересобираются SDK с прежним UUID,
-  направлением по знаку, пригодной ручной категорией и `viewed=false`.
-  Нет достаточных данных цели — старый payload сохраняется с `needs_rebuild=1`;
-  B5 обязан блокировать его отправку до безопасной подготовки.
-- Старые правки существующих ZenMoney-записей и типы долг/перевод остаются в
-  архиве. Ручная пригодная категория нового платежа переносится отдельно.
-  Автопрогнозы не становятся подтверждёнными примерами; B4 пересчитывает
-  `category_evidence`/`category_payments` из сохранённых связей и свежего зеркала,
-  только после просмотра соответствующих платежей пользователем.
+- Preserve account/bank transaction/group/ZenMoney UUIDs, exact amounts, raw data, exclusions, rules, current mirror, original responses, and cursor.
+- Preserve old mappings in `account_bindings`. Accounts remain `unconfigured`: B3/E2 must confirm access profile, period start, and user selection. Legacy imports do not prove interval completeness, so never invent `coverage` or `last_complete_end`.
+- Confirmed groups and prior `linked/sent` retain processing even without a current mirror record. Audit `creation_verified`, `sent`, and manual `confirm/link` confirmations count even if the old UI removed a link. Explicit soft/hard deletions suppress retries; archives never restore the mirror.
+- Started or not-provably-unstarted requests retain UUIDs and the **exact text** of current payloads. `conflict/uncertain` become `uncertain`; an expected UUID in the mirror proves existence even after user field changes. Phone data is never corrected.
+- `prepared` alone is insufficient: inspect `creation_local`, `creation_intent`, and `creation_retry_prepared`. Previous UUID attempts for the same payment also block blind delivery of a new UUID. Extracted attempts preserve numbers losslessly; exact original audit text remains archived.
+- Only proven unstarted requests are rebuilt through the SDK with their original UUID, sign-based direction, eligible manual category, and `viewed=false`. If target information is insufficient, retain the old payload with `needs_rebuild=1`; B5 must block delivery until safe preparation.
+- Legacy edits to existing ZenMoney records and debt/transfer types remain archived. Eligible manual categories for new payments migrate separately. Automatic predictions do not become confirmed examples; B4 rebuilds `category_evidence`/`category_payments` from retained links and the fresh mirror only after the user reviews the corresponding payments.
 
-## Проверки
+## Validation
 
-`scripts/test-docker.sh`: искусственная v12 с разбитыми платежами,
-взаиморасчётами, переводом между счетами, удалениями, неизвестными попытками,
-старыми черновиками и неизвестными полями/BLOB; точные VND/USD; повтор;
-повреждения/гонка/сбой; WAL; rollback B1→B2 и backup. Затем CLI и health на
-конвертированной базе, HTTP/auth и сохранность финансовых данных после
-пересоздания контейнера. Ни рабочая БД, ни настоящий API не используются.
-Репетиция на реальной копии и мобильная приёмка остаются M1/M3.
+`scripts/test-docker.sh`: synthetic v12 with split payments, settlements, inter-account
+transfers, deletions, unknown attempts, old drafts, unknown fields/BLOBs; exact VND/USD;
+repetition; corruption/race/failure; WAL; B1→B2 rollback and backup. Then CLI and health
+against a converted database, HTTP/auth, and preservation of financial data after
+container recreation. Neither production database nor real API is used. A real-copy
+rehearsal and mobile acceptance remain M1/M3.

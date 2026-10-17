@@ -1,11 +1,11 @@
-# M2 — итоговая матрица, 16 октября 2026
+# M2 — final matrix, October 16, 2026
 
-Backend: 352 проверки и lifecycle (HTTP/auth, повторный запуск, SIGKILL, graceful stop, snapshot/restore) прошли на ARM64 и linux/amd64. AMD64 проверен под эмуляцией OrbStack, не на физическом x86-сервере. Chrome: 13 unit и 9 browser/integration (3 popup и 6 интеграционных) с настоящими собранными JavaScript, HTTP и SQLite backend, stateful fake SDK. Контейнеры тестов без внешней сети. Подробности браузерной матрицы в соседнем ZenImportChrome/docs/testing.md.
+Backend: 352 checks and lifecycle scenarios (HTTP/auth, restart, SIGKILL, graceful stop, snapshot/restore) passed on ARM64 and linux/amd64. AMD64 ran under OrbStack emulation, not on a physical x86 server. Chrome: 13 unit and nine browser/integration tests (three popup and six integration) using actual built JavaScript, HTTP, SQLite backend, and a stateful fake SDK. Test containers have no external networking. Browser matrix details: neighboring ZenImportChrome/docs/testing.md.
 
-Восстановленная реальная копия M1 запущена обычным runtime без SDK-токена, с network none. /health и /api/v1/info прошли; zenmoney_state=not_configured. После корректной остановки отпечаток 21 финансовой таблицы остался прежним: 073d1abf249cedd3c084038b062d3d5e822cf67908f760acfa691f55e5a8ef8b. 11 prepared записей не отправлены. Исходный рабочий том не подключался к этому runtime.
+The restored real M1 copy ran in the ordinary runtime without an SDK token, with network none. /health and /api/v1/info passed; zenmoney_state=not_configured. After a graceful stop, the fingerprint of 21 financial tables was unchanged: 073d1abf249cedd3c084038b062d3d5e822cf67908f760acfa691f55e5a8ef8b. Eleven prepared records were not sent. The original production volume was not mounted into this runtime.
 
-Воспроизведение: scripts/test-restored-copy.sh <приватный data/rehearsal-...> <локальный runtime image>. scripts/check-financial-copy.py выводит только хеши и количества. Неизменность mutable runtime/mirror freshness не требуется; полное содержимое исходного архива независимо проверено M1.
+Reproduction: scripts/test-restored-copy.sh <private data/rehearsal-...> <local runtime image>. scripts/check-financial-copy.py outputs only hashes and counts. Mutable runtime/mirror freshness need not be unchanged; M1 independently verified the complete source archive.
 
-Большие файлы legacy-copy/converted/restored после проверки сжаты в .sqlite3.gz; распакованные SHA256 повторно сверены, затем удалены только созданные несжатые копии. Манифест archives.json хранится рядом с приватными копиями, не в Git. Для повторного запуска сначала распаковать нужные файлы в новый приватный каталог; оригинальный рабочий том не использовать вместо копии.
+After validation, large legacy-copy/converted/restored files were compressed to .sqlite3.gz; uncompressed SHA256 values were checked again, and only created uncompressed copies were removed. The archives.json manifest stays beside the private copies, outside Git. Before rerunning, extract the required files into a new private directory; never substitute the original production volume for a copy.
 
-M3 (живой банк/мобильная приёмка) и M4 (окончательное переключение) не выполнены. Внешний HTTPS, настоящий перечень/переключение счетов банка и отображение viewed=false мобильным приложением не подтверждены этими тестами.
+M3 (live bank/mobile acceptance) and M4 (final cutover) are incomplete. These tests do not confirm external HTTPS, actual bank account listing/switching, or mobile viewed=false display.

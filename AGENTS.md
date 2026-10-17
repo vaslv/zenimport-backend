@@ -1,15 +1,15 @@
 # ZenImportBackend
 
-Общение по-русски. План: docs/refactor/README.md; состояние:
-docs/refactor/05-progress.md; контракт: docs/sync-api-v1.md.
-Это самостоятельный backend; старые исходники доступны в истории f3b2838.
-Работать по этапам, проверять scripts/test-docker.sh, обновлять журнал.
-По завершённым этапам делать локальные Git-коммиты. Push, теги и публикация
-требуют отдельного явного разрешения пользователя.
-Не использовать рабочую БД и настоящий ZenMoney в автотестах.
-SDK устанавливается из проверенного vendor wheel, без соседнего checkout.
-Chrome/коннекторы/редакторы/встроенный банковский UI сюда не добавлять.
-По запросу пользователя от 16 октября разрешён read-only API отчёта расхождений;
-страница просмотра находится только в расширении, финансовых действий отчёт не выполняет.
-Документацию сторонних библиотек при изменении их использования проверять
-через Context7. Фактические live/platform-проверки отделять от фикстур.
+Communicate in Russian. Plan: docs/refactor/README.md; status:
+docs/refactor/05-progress.md; contract: docs/sync-api-v1.md.
+This is an independent backend; legacy sources remain in Git at f3b2838.
+Work in stages, run scripts/test-docker.sh, and update the progress log.
+Create local Git commits for completed stages. Pushing, tags, and publication
+require separate explicit user permission.
+Do not use the production database or real ZenMoney in automated tests.
+Install the SDK from the verified vendor wheel, not a neighboring checkout.
+Do not add Chrome/connectors/editors/embedded bank UI to this project.
+The user's October 16 request permits a read-only discrepancy report API;
+its page belongs exclusively to the extension and performs no financial actions.
+Check third-party library documentation through Context7 when changing its usage.
+Distinguish actual live/platform validation from fixture-based checks.

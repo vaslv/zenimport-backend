@@ -7,18 +7,18 @@ from .sync_contracts import Capabilities
 
 
 MESSAGES = {
-    'not_found': 'Ресурс не найден', 'validation_error': 'Некорректный запрос',
-    'unsupported_bank': 'Банк не поддерживается', 'unsupported_currency': 'Валюта или масштаб не поддерживается',
-    'account_unconfigured': 'Настройте все найденные счета', 'account_disabled': 'Счёт отключён',
-    'settings_conflict': 'Настройки счёта изменились', 'account_busy': 'Счёт уже участвует в другом задании',
-    'capture_busy': 'Сбор уже выполняется другим браузером', 'lease_expired': 'Разрешение сборщика истекло',
-    'idempotency_conflict': 'Содержимое повторного запроса отличается',
-    'history_incomplete': 'История получена не полностью', 'capture_context_changed': 'Контекст получения изменился',
-    'zenmoney_unavailable': 'Нет актуального каталога ZenMoney',
-    'zenmoney_account_unavailable': 'Выбранный счёт ZenMoney недоступен',
-    'delivery_uncertain': 'Сначала требуется проверить результат прежней отправки',
-    'existing_ownership_unknown': 'Не удалось определить счёт прежнего сопоставления',
-    'bank_login_required': 'Войдите в личный кабинет банка',
+    'not_found': 'Resource not found', 'validation_error': 'Invalid request',
+    'unsupported_bank': 'Unsupported bank', 'unsupported_currency': 'Unsupported currency or scale',
+    'account_unconfigured': 'Configure all discovered accounts', 'account_disabled': 'Account disabled',
+    'settings_conflict': 'Account settings have changed', 'account_busy': 'Account is already part of another job',
+    'capture_busy': 'Another browser is already capturing history', 'lease_expired': 'Capture lease expired',
+    'idempotency_conflict': 'Repeated request content differs',
+    'history_incomplete': 'History capture is incomplete', 'capture_context_changed': 'Capture context has changed',
+    'zenmoney_unavailable': 'No current ZenMoney catalog is available',
+    'zenmoney_account_unavailable': 'The selected ZenMoney account is unavailable',
+    'delivery_uncertain': 'Verify the previous delivery result first',
+    'existing_ownership_unknown': 'Could not identify the account used by the previous match',
+    'bank_login_required': 'Sign in to online banking',
 }
 
 

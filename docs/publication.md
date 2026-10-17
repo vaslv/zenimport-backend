@@ -1,68 +1,34 @@
-# Порядок публикации трёх проектов
+# Publication sequence for the three projects
 
-1. https://github.com/vaslv/zenmoney-python — независимый пакет **zenmoney-python 0.7.0**,
-   импорт `zenmoney_api`, MIT. Подготовленные wheel/sdist/SHA256SUMS и CI находятся
-   в SDK. Сначала публикуются его коммиты и первый проверенный GitHub Release.
-2. https://github.com/vaslv/zenimport-backend — backend 0.1.0, MIT. Зависит от
-   отдельного SDK-пакета с точной версией/digest; включает Compose для установки
-   из готового образа, без SDK checkout. До релиза SDK использован локальный wheel.
-3. https://github.com/vaslv/zenimport-chrome — MV3 0.1.9, MIT, с PRIVACY.md,
-   воспроизводимым ZIP и CI. Настройки подключения вводятся пользователем в popup.
+1. https://github.com/vaslv/zenmoney-python: independent **zenmoney-python 0.7.0** package, import `zenmoney_api`, MIT. Prepared wheel/sdist/SHA256SUMS and CI belong to the SDK. Publish its commits and first verified GitHub Release first.
+2. https://github.com/vaslv/zenimport-backend: backend 0.1.0, MIT. Depends on the separate SDK package pinned by exact version/digest; includes Compose deployment from a prebuilt image without an SDK checkout. A local wheel is used before SDK release.
+3. https://github.com/vaslv/zenimport-chrome: MV3 0.1.9, MIT, with PRIVACY.md, reproducible ZIP, and CI. Users enter connection settings in the popup.
 
-## Что уже подготовлено локально
+## Already prepared locally
 
-- Remotes origin указывают на созданные репозитории; начальная MIT-лицензия и
-  история GitHub сохраняются обычным локальным merge, без force/rewrite.
-- CI SDK/Chrome/backend выполняет проверки; нет push из workflow, создания тегов,
-  автопубликации PyPI/GHCR/Chrome Web Store или выполнения живых финансовых тестов.
-- Backend SDK pin согласован между pyproject, wheel, SHA256 и requirements-sdk.lock.txt.
-  pip устанавливает пакет с проверкой digest и не ищет его в ещё не опубликованном индексе.
-- Docker runtime содержит только сервис/SDK/минимальный helper настройки; .env,
-  финансовая история, SQLite, тесты, браузер и live runner исключены.
-- Image-only compose.server.yaml хранит SQLite в постоянном явно названном томе,
-  открывает HTTP только на loopback. Настройка HTTPS описана отдельно.
+- Origin remotes point to the created repositories; initial MIT licenses and GitHub history are preserved by ordinary local merges, without force/rewrite.
+- SDK/Chrome/backend CI runs checks; workflows do not push, create tags, automatically publish to PyPI/GHCR/Chrome Web Store, or run live financial tests.
+- The backend SDK pin agrees across pyproject, wheel, SHA256, and requirements-sdk.lock.txt. pip verifies the digest and never searches an unpublished index.
+- Docker runtime contains only the service/SDK/minimal configuration helper; .env, financial history, SQLite, tests, browser, and live runner are excluded.
+- Image-only compose.server.yaml keeps SQLite in an explicitly named persistent volume and exposes HTTP only on loopback. HTTPS setup is documented separately.
 
-## После отдельного разрешения на публикацию
+## After separate publication permission
 
-Для SDK выполнить порядок из `ZenMoneyAPI/docs/publication.md`. Пока на GitHub
-есть только исходная лицензия; локальная подготовка сама ничего туда не отправила.
-После SDK-релиза скачать его wheel/manifest и обновить кеш через
-`scripts/update_sdk.py --wheel ... --sha256 ...`, повторить проверки backend.
-Версия из pyproject и хеш должны соответствовать опубликованному пакету;
-обычный backend build не обращается к соседнему SDK-проекту.
+Follow `ZenMoneyAPI/docs/publication.md` for the SDK. At preparation time, GitHub contains only the initial license; local preparation itself sends nothing there. After SDK release, download its wheel/manifest and update the cache with `scripts/update_sdk.py --wheel ... --sha256 ...`, then rerun backend checks. The pyproject version and digest must match the published package; ordinary backend builds never access a neighboring SDK project.
 
-Проверить, что origin/main не изменился, затем по отдельному разрешению отправить
-коммиты backend без force и дождаться успешного CI. Git-теги и их push согласуются
-отдельно. Версия образа должна соответствовать выбранному тегу/коммиту сервиса.
+Check that origin/main is unchanged, then separately obtain permission to push backend commits without force and wait for successful CI. Git tag creation/pushing require separate approval. The image version must correspond to the chosen service tag/commit.
 
-Для публикации образа в GHCR нужен доступ GitHub Packages, репозиторий
-`ghcr.io/vaslv/zenimport-backend` и отдельное разрешение выполнить registry push.
-Предпочтительны короткоживущие CI credentials/защищённое окружение; не сохранять
-registry-токен в коде/Dockerfile/build args. После авторизации можно создать
-multi-platform image из проверенного коммита:
+GHCR publication requires GitHub Packages access, repository `ghcr.io/vaslv/zenimport-backend`, and separate permission for registry push. Prefer short-lived CI credentials/protected environments; never store registry tokens in code/Dockerfile/build args. After authorization, a multiplatform image can be built from the verified commit:
 
 ```sh
-# Только после отдельного разрешения registry push и настройки входа в GHCR:
-docker buildx build --platform linux/amd64,linux/arm64 --target final \
-  --build-arg VCS_REF=VERIFIED_COMMIT \
-  --build-arg SOURCE_URL=https://github.com/vaslv/zenimport-backend \
-  --tag ghcr.io/vaslv/zenimport-backend:0.1.0 --push .
+# Only after separate registry push permission and GHCR login setup:
+docker buildx build --platform linux/amd64,linux/arm64 --target final   --build-arg VCS_REF=VERIFIED_COMMIT   --build-arg SOURCE_URL=https://github.com/vaslv/zenimport-backend   --tag ghcr.io/vaslv/zenimport-backend:0.1.0 --push .
 ```
 
-Этот пример сейчас не выполнялся. Multi-platform registry manifest создаётся
-публикацией; локально проверяются оба исполняемых образа отдельно. После push
-проверить manifest/digest и установить **по digest**, а не latest. Для открытого
-скачивания настроить публичную видимость пакета GHCR. Сам публичный GitHub-репозиторий
-не гарантирует публичность container package. На сервере проверить HTTPS,
-восстановление согласованной БД и одну повторную синхронизацию.
+This example has not been executed. Publishing creates the multiplatform registry manifest; both executable images are validated locally and separately. After pushing, verify manifest/digest and install **by digest**, not latest. Configure public GHCR package visibility for open downloads. A public GitHub repository does not itself make its container package public. On the server, verify HTTPS, restoration of a consistent database, and one repeated synchronization.
 
-Для Chrome после отдельного разрешения push/тег/Release приложить только
-проверенный ZIP, его SHA256 и описание приватности. Store отдельно не планируется.
+For Chrome, after separate push/tag/Release approval, attach only the verified ZIP, its SHA256, and privacy description. Store publication is not separately planned.
 
-## Ограничения
+## Limitations
 
-CI-файлы проверены локально, но ещё не выполнялись на GitHub: push не разрешён.
-Готовность локальных сборок не означает уже опубликованный SDK/образ или
-настроенный внешний сервер. Живые рабочие операции в этом этапе не используются.
-Секреты, .local, .env, серверные базы и приватные evidence не включаются в Git,
-Docker context, Python-архивы и ZIP расширения.
+CI files were checked locally but had not yet run on GitHub: push was not authorized. Local build readiness does not mean the SDK/image is published or an external server configured. This stage uses no live production transactions. Secrets, .local, .env, server databases, and private evidence are excluded from Git, Docker context, Python archives, and the extension ZIP.

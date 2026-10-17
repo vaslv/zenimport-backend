@@ -1,17 +1,17 @@
-# Приёмка B1 — 15 октября 2026
+# B1 acceptance — October 15, 2026
 
-- Репозиторий создан из ZenImport f3b2838 без hardlinks, remote удалён; история сохранена.
-- Docker Engine 29.4.0, Compose 5.1.2, linux/arm64 (Engine сообщает aarch64), CPython 3.12.15.
-- `scripts/test-docker.sh`: успешно. 93 теста: 56 моделей B0, 35 bootstrap/config/auth/storage, 2 SDK/состав runtime.
-- Отдельный config image создаёт .env с искусственной конфигурацией в tmpfs при UID 10001, без сети; файл не попадает в проект/образ и не печатается.
-- Unit/контрактные контейнеры без сети. Smoke-контейнеры во внутренней сети, без опубликованного порта.
-- Настоящий HTTP: /health 200, /api/v1/info без токена 401, с искусственным токеном 200.
-- Backend принудительно пересоздан; health и API работают, instance_id постоянного тома остался прежним.
-- Тестовый том и контейнеры удалены скриптом; настройки .env не читались. Рабочий контейнер и его том не использовались.
-- Установлен vendored SDK 0.6.0, SHA256 b28722f6ee09ea79726cbab64fa769171904b6c9a2e6b825bc2d2c88437e1e58; fake HTTP подтвердил заданный UUID, viewed=false, точный Decimal и отсутствие категории.
-- Проверены отказ без модификаций для старой/чужой/будущей/повреждённой БД, сохранность при повторном bootstrap, HTTP-лимит с Content-Length и chunked без него, отсутствие эха входных данных в 422/500.
-- В runtime нет extension/tools, HTML-редактора и старых модулей отправки правок. Docker-контекст ограничен whitelist.
+- Repository copied from ZenImport f3b2838 without hardlinks; remote removed, history preserved.
+- Docker Engine 29.4.0, Compose 5.1.2, linux/arm64 (Engine reports aarch64), CPython 3.12.15.
+- `scripts/test-docker.sh`: successful. 93 tests: 56 B0 models, 35 bootstrap/config/auth/storage, two SDK/runtime composition checks.
+- A separate config image creates .env with synthetic configuration in tmpfs as UID 10001 without networking; the file is neither placed in the project/image nor printed.
+- Unit/contract containers have no network. Smoke containers use an internal network with no published port.
+- Real HTTP: /health 200, /api/v1/info without a token 401, with a synthetic token 200.
+- Backend forcibly recreated; health and API work, and the persistent volume's instance_id is unchanged.
+- The script removed the test volume/containers; .env settings were not read. The production container and volume were not used.
+- Installed vendored SDK 0.6.0, SHA256 b28722f6ee09ea79726cbab64fa769171904b6c9a2e6b825bc2d2c88437e1e58; fake HTTP confirmed the specified UUID, viewed=false, exact Decimal, and absent category.
+- Verified rejection without modification of legacy/foreign/future/corrupt databases, preservation on repeated bootstrap, HTTP limits with Content-Length and chunked bodies without it, and no input echo in 422/500 responses.
+- Runtime contains no extension/tools, HTML editor, or legacy edit delivery modules. Docker context is allowlisted.
 
-Одно предупреждение: текущий Starlette TestClient объявляет использование httpx устаревающим и рекомендует httpx2. Это предупреждение тестового адаптера, а не ошибка SDK/runtime. Зависимости сохранены при выделении; миграция тестового клиента при необходимости отдельная задача.
+One warning: current Starlette TestClient deprecates httpx usage and recommends httpx2. This is a test adapter warning, not an SDK/runtime error. Dependencies were preserved during extraction; test client migration is a separate task if needed.
 
-AMD64, живой банк, настоящий ZenMoney и мобильное отображение viewed=false на B1 не проверялись. Финансовая схема/миграция, загрузка истории и доставка ещё не реализованы. B1 не является приёмкой всей синхронизации.
+AMD64, a live bank, real ZenMoney, and mobile viewed=false display were not tested in B1. Financial schema/migration, history capture, and delivery were not yet implemented. B1 is not acceptance of the entire synchronization flow.

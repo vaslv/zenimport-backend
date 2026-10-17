@@ -1,37 +1,37 @@
-# Перенос данных и общая приёмка
+# Data migration and overall acceptance
 
-Эти этапы требуют готовности B6/E5. Пользователь разрешил реализацию плана 15 октября; политика старых черновиков ниже применяется при подготовке миграции на копии. Подробное основание — раздел «Перенос текущих данных» общего проекта.
+These stages require completed B6/E5. The user authorized plan implementation on October 15; apply the legacy draft policy below when preparing copy-based migration. Detailed rationale: Current data migration in the overall design.
 
-## M1. Репетиция на копии
+## M1. Rehearse on a copy
 
-Создать согласованную резервную копию SQLite, учитывая WAL: не копировать только основной файл из активно изменяющейся базы. Зафиксировать версию схемы/приложения, контрольные суммы и достаточное место. Копия не подключается к рабочему ZenMoney. Исходную базу и архивы не чистить.
+Create a consistent SQLite backup including WAL; never copy only the main file of an actively changing database. Record schema/application version, checksums, and available space. The copy must not connect to production ZenMoney. Do not clean the original database/archives.
 
-Проверить перенос банковских записей/исходных данных, счетов/привязок, групп 1:N/N:M, исключений, правил, зеркала/cursor, удалений, UUID и попыток. Количества дополнить сравнением ключей, содержимого и денежных значений. Запустить миграцию второй раз — результат тот же. Известная отправка остаётся обработанной даже при отсутствии текущей цели в зеркале.
+Verify bank records/raw data, accounts/mappings, 1:N/N:M groups, exclusions, rules, mirror/cursor, deletions, UUIDs, and attempts. Supplement counts with key/content/money comparisons. Run migration again with identical results. Known deliveries remain processed even when current targets are absent from the mirror.
 
-Предлагаемая политика: правки уже существующих ZenMoney-записей только архивируются; ручная пригодная категория новой записи сохраняется; старые несохранённые типы перевода/долга архивируются, новые записи идут расходом/приходом. Не начатые отправки могут получить новый формат с прежним UUID и viewed=false; начатые/неопределённые сохраняют payload и сначала проверяются. Не менять viewed у ранее доставленных записей.
+Proposed policy: archive edits to existing ZenMoney records only; retain eligible manual categories for new records; archive unsaved legacy transfer/debt types, with new records becoming expense/income. Unstarted deliveries may get new formatting with their original UUID and viewed=false; started/uncertain deliveries retain payloads and are checked first. Never change viewed on previously delivered records.
 
-Покрытие истории переносится только при доказанной полноте. Иначе повторно прочитать выбранный период с прежними идентичностями и журналом доставки.
+Migrate history coverage only with proven completeness. Otherwise reread the chosen period with original identities/delivery history.
 
-Выход: отчёт по каждой группе данных, отсутствие потерь, список непроверяемых старых состояний и проверенный путь восстановления. Если факт не доказан, не маркировать миграцию успешной.
+Output: report per data group, no loss, uncheckable legacy states listed, and validated recovery path. Never declare migration successful without evidence.
 
-## M2. Полная проверка без реального API
+## M2. Complete validation without the real API
 
-Запустить собранные проекты на тестовой БД и fake ZenMoney. Подтвердить все критерии общего проекта, особенно: удаление не восстанавливается, изменения не перезаписываются, ambiguous создаётся как новое, unknown-send не повторяется вслепую, пустой интервал двигает покрытие, остановка worker не теряет данные.
+Run built projects against a test database/fake ZenMoney. Confirm every overall acceptance criterion, especially: deletions never return, edits are not overwritten, ambiguous records are created as new, unknown-send never retries blindly, empty intervals advance coverage, and stopping workers loses no data.
 
-Проверить запуск с постоянным томом и повторное создание контейнера. Образ работает без соседних исходников. Записать точные версии артефактов и результаты обеих заявленных платформ.
+Check persistent-volume startup and container recreation. Images work without neighboring sources. Record exact artifact versions and both claimed platform results.
 
-## M3. Проверки, которые нельзя заменить фикстурами
+## M3. Checks fixtures cannot replace
 
-В авторизованном VietinBank подтвердить список счетов, переключение, пределы истории, подробности и устойчивость ключей. Не запрашивать банковский пароль для передачи серверу.
+In an authenticated VietinBank session, verify account lists/switching, history limits, details, and key stability. Never request a bank password for server transmission.
 
-На согласованной операции/тестовом аккаунте проверить фактическое создание и отображение viewed=false в текущем мобильном ZenMoney, изменение категории/типа, затем отдельно удаление и повторную синхронизацию. Набор live-записей согласовать заранее; не использовать ценную историческую операцию для разрушительной проверки. Обнаруженное поведение фиксировать, а не предполагать по Android/iOS другого пользователя.
+Using an agreed transaction/test account, verify actual viewed=false creation/display in current mobile ZenMoney, category/type edits, then separate deletion and repeat synchronization. Agree live writes in advance; do not use valuable historical records for destructive checks. Record observed behavior instead of assuming it from another user's Android/iOS.
 
-## M4. Переключение
+## M4. Cutover
 
-После согласования результата остановить старый отправитель/активные задания. Выполнить окончательный backup и миграцию; явно подключить нужный том, исключить пустую БД от нового Compose-имени. Старый и новый писатели не должны работать одновременно.
+After acceptance, stop the old sender/active jobs. Take the final backup and migrate; explicitly attach the correct volume, avoiding an empty database caused by a new Compose name. Old/new writers must never run simultaneously.
 
-Первый запуск — чтение/проверка старых неопределённых отправок. Новые записи только после пользовательской кнопки. Сначала проверить один выбранный счёт и итог, затем остальные.
+First startup reads/verifies old uncertain deliveries. New writes require the user button. Check one selected account/result first, then others.
 
-Откат после новых отправок не равен восстановлению старого backup: он потеряет новые UUID и создаст риск дублей. До переключения выбрать и испытать путь сохранения актуального журнала при откате версии либо согласованного восстановления. Не объявлять возможность автоматического downgrade схемы без теста.
+Rollback after new writes is not simply restoring an old backup: it loses new UUIDs and risks duplicates. Before cutover, select/test preservation of the current journal during version rollback or agreed restoration. Never claim automatic schema downgrade without a test.
 
-Готово: рабочие данные сохранены, повтор безопасен, мобильная приёмка подтверждена, инструкции запуска/резервирования/восстановления воспроизводимы. Push, теги, публикация и удаление старого проекта отдельно не разрешены.
+Complete: production data preserved, repeats safe, mobile acceptance confirmed, reproducible startup/backup/recovery instructions. Pushing, tags, publication, and deleting the old project are not separately authorized.

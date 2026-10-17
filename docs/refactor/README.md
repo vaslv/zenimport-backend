@@ -1,47 +1,47 @@
-# ZenImport: передача рефакторинга исполнителю
+# ZenImport: refactoring handoff
 
-Дата: 15 октября 2026. Статус: реализация разрешена пользователем; B0, S1 и B1–B5 завершены. Самостоятельная часть B6 завершена; E5-интеграция после готовности расширения. Следующий этап — E1.
+Date: October 15, 2026. Status: implementation authorized by the user; B0, S1, and B1–B5 complete. The independent B6 portion is complete; E5 integration follows extension readiness. Next stage: E1.
 
-## Читать небольшими порциями
+## Read in small portions
 
-Начать с этого файла и `00-contracts.md`, затем открыть только план нужного проекта. Полная история чата не нужна. Подробный контекст решений — [проект](../zenimport-refactor-design-2026-10-15.md); читать его при неоднозначности, не повторять целиком в каждом задании.
+Start with this file and `00-contracts.md`, then open only the relevant project plan. The complete chat history is unnecessary. Detailed decision context: [design](../zenimport-refactor-design-2026-10-15.md); consult it for ambiguity rather than repeating it in every task.
 
-15 октября пользователь поручил начать последовательную реализацию с регулярными локальными Git-коммитами. Проект принят как основание для реализации, включая подготовку предложенной миграции на копии. Переключение рабочего окружения выполняется после проверок M1–M3; конкретный набор настоящих тестовых записей по-прежнему согласовывается отдельно.
+On October 15, the user requested sequential implementation with regular local Git commits. The design is accepted as the implementation basis, including preparation of the proposed copy-based migration. Production cutover follows M1–M3 validation; the specific set of actual test writes still requires separate agreement.
 
-## Проекты и документы
+## Projects and documents
 
-| Проект | План | Исходник / предполагаемое размещение |
+| Project | Plan | Source / proposed location |
 |---|---|---|
-| SDK ZenMoney | [01-sdk.md](01-sdk.md) | `/Users/vaslv/Projects/Vaslv/ZenMoneyAPI`, уже существует |
-| Backend | [02-backend.md](02-backend.md) | самостоятельный `/Users/vaslv/Projects/Vaslv/ZenImportBackend`; старый исходник остаётся в ZenImport |
-| Chrome и модули банков | [03-extension.md](03-extension.md) | исходник `/Users/vaslv/Projects/Vaslv/ZenImport/extension`; новый самостоятельный проект `ZenImportChrome` |
-| Перенос и общая приёмка | [04-migration.md](04-migration.md) | выполняется после готовности backend и Chrome |
+| ZenMoney SDK | [01-sdk.md](01-sdk.md) | `/Users/vaslv/Projects/Vaslv/ZenMoneyAPI`, already exists |
+| Backend | [02-backend.md](02-backend.md) | Independent `/Users/vaslv/Projects/Vaslv/ZenImportBackend`; legacy source remains in ZenImport |
+| Chrome and bank modules | [03-extension.md](03-extension.md) | Source `/Users/vaslv/Projects/Vaslv/ZenImport/extension`; new independent project `ZenImportChrome` |
+| Migration and overall acceptance | [04-migration.md](04-migration.md) | After backend and Chrome readiness |
 
-ZenImportBackend уже выделен в самостоятельный соседний репозиторий на B1. ZenImportChrome пока не создан. Историю исходного Git сохранить; не переименовывать и не удалять исходный репозиторий как побочный эффект выделения.
+ZenImportBackend was extracted into an independent neighboring repository in B1. ZenImportChrome has not yet been created at this checkpoint. Preserve original Git history; do not rename/delete the original repository as an extraction side effect.
 
-Проверенный исходный ориентир: ZenImport `9271b3b`, SDK используется как закреплённый wheel 0.6.0. Перед работой проверить актуальные версии и незакоммиченные изменения. Копии `outputs/zenimport-current` и `outputs/zenbridge` не являются рабочим исходником.
+Verified source baseline: ZenImport `9271b3b`, SDK pinned as wheel 0.6.0. Check current versions/uncommitted changes before working. `outputs/zenimport-current` and `outputs/zenbridge` copies are not the working source.
 
-## Порядок выполнения
+## Execution order
 
-1. B0: уточнить и закрепить контракт между проектами. S1: проверить уже существующий SDK.
-2. B1–B2: выделить backend и подготовить хранение/миграцию на искусственной базе.
-3. B3–B5: приём истории, зеркало, обучение и надёжная очередь отправки.
-4. E1–E3: выделить расширение, коннектор VietinBank, сбор нескольких счетов. E4: компактный popup.
-5. B6 + E5: самостоятельные Docker-проверки и общая проверка с поддельным ZenMoney.
-6. M1–M4: репетиция миграции, проверка реального банка/мобильного клиента, согласованное переключение.
+1. B0: clarify and fix cross-project contracts. S1: audit the existing SDK.
+2. B1–B2: extract the backend and prepare storage/migration on a synthetic database.
+3. B3–B5: history ingestion, mirror, learning, reliable delivery queue.
+4. E1–E3: extract extension/VietinBank connector and multiple-account capture. E4: compact popup.
+5. B6 + E5: independent Docker checks and joint fake-ZenMoney validation.
+6. M1–M4: migration rehearsal, real bank/mobile checks, agreed cutover.
 
-Один запрос исполнителю — один пункт, например B3, а не весь рефакторинг. Документацию и тесты писать вместе с изменением. После этапа обновлять `05-progress.md`: сделано, доказательства, незакрытые вопросы, следующий шаг. Не считать успешные тесты старого коммита проверкой новых изменений.
+One implementation request covers one item, such as B3, rather than the entire refactor. Write documentation/tests with each change. After a stage, update `05-progress.md`: completed work, evidence, open questions, next step. Successful tests of an earlier commit do not validate new changes.
 
-## Как распределять модели
+## Model allocation
 
-Практическая рекомендация: GPT‑6.1 Sol для основной реализации; GPT‑6 Luna High для ограниченных задач после закрепления контрактов (popup, фикстуры, документация, отдельные тесты); Astra — для итоговой проверки миграции, идентичности и очереди при сложных противоречиях. Это не гарантия результата или конкретной экономии.
+Practical recommendation: GPT‑6.1 Sol for primary implementation; GPT‑6 Luna High for bounded tasks after contracts are fixed (popup, fixtures, documentation, individual tests); Astra for final migration/identity/queue review when complex contradictions arise. This guarantees neither results nor specific savings.
 
-Рекомендация соответствует [официальному описанию моделей](https://learn.chatgpt.com/docs/models). На [расход лимита](https://learn.chatgpt.com/docs/pricing) влияют также контекст, сложность, рассуждения, инструменты и кеширование. Не передавать большой разговор в каждое новое задание; не запускать параллельных агентов без необходимости. Конкретный процент экономии заранее неизвестен.
+The recommendation follows the [official model description](https://learn.chatgpt.com/docs/models). [Usage limits](https://learn.chatgpt.com/docs/pricing) also depend on context, complexity, reasoning, tools, and caching. Do not pass this large conversation into every new task or launch parallel agents unnecessarily. The exact savings percentage is unknown.
 
-## Начальное сообщение исполнителю
+## Initial implementation prompt
 
-> Прочитай README.md и 00-contracts.md из этого комплекта, затем план выбранного проекта и текущий 05-progress.md. Выполни только этап [ID]. Перед изменениями прочитай применимые AGENTS.md и проверь актуальный исходник. Не возвращай редакторы и сверку в браузер. Проверяй в Docker на изолированных данных. Обнови журнал выполнения и укажи фактически выполненные проверки. Если этап зависит от неустановленного контракта или неподтверждённого поведения банка, сначала установи этот факт и зафиксируй его. Не меняй рабочую базу, не отправляй реальные операции, не создавай Git-теги и не выполняй push без отдельного разрешения.
+> Read README.md and 00-contracts.md in this set, then the selected project plan and current 05-progress.md. Implement stage [ID] only. Before changes, read applicable AGENTS.md and check current source. Do not restore browser editors or reconciliation. Validate in Docker with isolated data. Update the execution log with actually performed checks. If a stage depends on an undefined contract or unverified bank behavior, establish and record that fact first. Do not modify production databases, send real transactions, create Git tags, or push without separate permission.
 
-Использовать новый обычный чат с этими файлами для самостоятельного этапа; форк всей беседы не нужен. Создание новых чатов и переключение модели этим комплектом не выполнялись.
+Use a new ordinary chat with these files for an independent stage; forking the full conversation is unnecessary. This document set created no chats and switched no models.
 
-После B1 этапы backend ведутся в ZenImportBackend. Ближайший — E1. Запуск/восстановление: [operations.md](../operations.md), проверка платформ: [b6-validation.md](../b6-validation.md). Доставка: [delivery.md](../delivery.md). Зеркало и прогноз: [mirror-predictions.md](../mirror-predictions.md). Подробная карта переноса: [extraction-map.md](../extraction-map.md); факт Docker-проверок: [b1-validation.md](../b1-validation.md).
+After B1, backend stages belong to ZenImportBackend. Next: E1. Startup/recovery: [operations.md](../operations.md), platform checks: [b6-validation.md](../b6-validation.md). Delivery: [delivery.md](../delivery.md). Mirror/prediction: [mirror-predictions.md](../mirror-predictions.md). Detailed extraction map: [extraction-map.md](../extraction-map.md); actual Docker results: [b1-validation.md](../b1-validation.md).

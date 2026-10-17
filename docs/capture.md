@@ -1,115 +1,104 @@
-# Настройки счетов и получение истории — B3
+# Account settings and history capture — B3
 
-Реализованы маршруты регистрации подключений, каталога целей, настройки счетов,
-заданий, lease, страниц, complete, capture-status и stop из
-[sync-api-v1.md](sync-api-v1.md). HTTP-контракт v1 не менялся. Схема SQLite —
-**5**: собственные v1/v2/v3/v4 обновляются транзакционно с приватным backup;
-финансовые данные и UUID сохраняются.
+Implemented connection registration, target catalog, account settings, jobs, leases,
+pages, complete, capture-status, and stop routes from [sync-api-v1.md](sync-api-v1.md).
+The v1 HTTP contract is unchanged. SQLite schema **5**: own v1/v2/v3/v4 databases
+upgrade transactionally with a private backup; financial data and UUIDs are preserved.
 
-## Обнаружение и настройки
+## Discovery and settings
 
-Канонический ключ — банк, область идентичности, профиль при scope=profile,
-ключ источника и валюта. scope=bank переиспользует UUID/настройки/покрытие между
-подключениями; одинаковое название не объединяет счета. Поддержка и наличие
-хранятся отдельно для пары подключения/счёта. Неполный список сохраняет прежние
-счета. Полный отмечает отсутствующие и прекращает их незавершённый сбор,
-сохраняя историю и настройки.
+The canonical key consists of bank, identity scope, profile for scope=profile,
+source key, and currency. scope=bank reuses UUID/settings/coverage across connections;
+identical titles do not merge accounts. Support and presence are stored separately
+for each connection/account pair. Partial lists preserve previous accounts. Complete
+lists mark missing accounts and stop their unfinished capture while retaining history
+and settings.
 
-Сервер пока знает VietinBank: Asia/Ho_Chi_Minh, масштабы VND=0, USD/EUR=2,
-whitelist подробностей прежнего парсера. Это правила нормализованных данных,
-**не подтверждение** всех валют/счетов/глубины истории живого банка. Коннектор
-указывает реально поддерживаемые счета; фактическая проверка — E3/M3.
-Для VietinBank details_state=unavailable не принимается: подробности доступны
-и должны быть собраны. Старый placeholder подключения без возможностей требует
-нового фактического discover перед сбором.
+The server currently knows VietinBank: Asia/Ho_Chi_Minh, scales VND=0, USD/EUR=2,
+and the legacy parser's details allowlist. These are normalized-data rules,
+**not confirmation** of all currencies/accounts/history depth in the actual bank.
+The connector reports actually supported accounts; live verification belongs to E3/M3.
+VietinBank rejects details_state=unavailable: details are available and must be captured.
+A legacy placeholder connection without capabilities requires actual rediscovery
+before capture.
 
-GET /zenmoney/accounts читает зеркало. Требуется метка service_meta
-`zenmoney_refreshed_at` в Unix-секундах не старше 300 секунд. Возвращаются обычные
-неархивные/неудалённые счета с известной валютой инструмента; debt/loan исключены.
-Без свежей метки — 503 zenmoney_unavailable. B4 перед чтением каталога
-актуализирует зеркало через SDK вне транзакции. Метка сохраняется атомарно
-с cursor и данными; см. [mirror-predictions.md](mirror-predictions.md).
+GET /zenmoney/accounts reads the mirror. service_meta `zenmoney_refreshed_at` must be
+Unix seconds no older than 300 seconds. Returns regular nonarchived/nondeleted accounts
+with a known instrument currency; debt/loan excluded. Missing freshness returns 503
+zenmoney_unavailable. B4 refreshes the mirror through the SDK outside the transaction
+before catalog reads. Freshness is saved atomically with cursor/data; see
+[mirror-predictions.md](mirror-predictions.md).
 
-Enabled требует цели той же валюты и допустимой начальной даты. Версия настроек
-проверяется атомарно: изменение увеличивает её, точный повтор с прежней/текущей
-версией безопасен, другое устаревшее значение даёт 409. Начальная дата явная;
-выбор 30 дней / шесть календарных месяцев / произвольной даты — popup E2/E4.
+Enabled requires a same-currency target and valid start date. Settings versions are
+checked atomically: changes increment the version; an exact repeat with the previous/
+current version is safe; another stale value returns 409. Start date is explicit;
+30 days / six calendar months / custom date selection belongs to popup E2/E4.
 
-Изменение настроек отменяет только незавершённые интервалы данного счёта.
-Настройки/цель старого задания остаются снимком. Неначатый prepared payload
-сохраняет UUID, получает needs_rebuild=1 и теряет прежнюю авторизацию.
-Неопределённая/начатая отправка запрещает смену цели, даже через промежуточное
-отключение. Отключить счёт разрешено всегда. Доставленные записи не перепривязываются.
+Settings changes cancel only this account's unfinished intervals. Old job settings/
+targets remain snapshots. An unstarted prepared payload retains its UUID, gets
+needs_rebuild=1, and loses its prior authorization. An uncertain/started delivery
+prohibits target changes, including through intermediate disabling. Disabling an
+account is always permitted. Delivered records are never rebound.
 
-## Периоды, команды и разрешение сборщика
+## Periods, commands, and capture leases
 
-- Первый период начинается с import_start. При неполной истории сначала
-  закрываются пробелы, доказанные полные островки пропускаются.
-- last_complete_end — конец непрерывного покрытия от import_start; это не
-  максимальная дата операции или отдельно завершённого интервала.
-- Обычное продолжение начинается с max(import_start, frontier−14 дней).
-  Конец фиксируется по дате банка при создании задания. После долгой паузы
-  продолжается прежний снимок с прежним концом.
-- Интервалы включительны, объединяются и разбиваются по max_window_days.
-  На одно задание максимум 10 000 интервалов.
-- reimport_from обходит старое покрытие. Остаток хранится в reimport_ranges:
-  следующий обычный клик продолжает его, даже при старом полном coverage.
-  Другая версия настроек не наследует это прежнее разрешение.
+- Initial capture starts at import_start. Incomplete history fills gaps first and skips proven complete islands.
+- last_complete_end ends continuous coverage from import_start; it is not the latest transaction date or an independently completed interval's end.
+- Ordinary continuation starts at max(import_start, frontier−14 days). The end is frozen to the bank date at job creation. After a long pause, the original snapshot resumes with its original end.
+- Intervals are inclusive, merged, and split by max_window_days. Maximum 10,000 intervals per job.
+- reimport_from bypasses old coverage. Remaining work is stored in reimport_ranges: the next ordinary click resumes it even with prior full coverage. Another settings version does not inherit this authorization.
 
-job_requests сохраняет UUID и каноническое тело команды. Повтор возвращает
-прежнее задание; другое тело того же UUID даёт idempotency_conflict. Новая
-команда при активном задании присоединяется; другой reimport_from даёт
-account_busy. Область счетов задания фиксирована, вновь включённый счёт попадёт
-в следующее задание. Отключение действует сразу. Транзакция, уникальный индекс
-активного job и account_capture_locks защищают общий счёт от конкурентного сбора.
+job_requests stores the command UUID and canonical body. Repeats return the original
+job; a different body with the same UUID returns idempotency_conflict. A new command
+joins an active job; another reimport_from returns account_busy. Job account scope is
+frozen; newly enabled accounts enter the next job. Disabling is immediate. Transactions,
+an active-job unique index, and account_capture_locks protect shared accounts from
+concurrent capture.
 
-Lease действует 120 секунд. Тот же worker продлевает его; захват после истечения
-увеличивает epoch. Старый epoch не принимает новые данные. Истечение сохраняет
-страницы и переводит сбор в paused. Paused сохраняет блокировку счетов до
-продолжения/stop. Команды, lease/epoch, страницы и снимки переживают перезапуск.
+Leases last 120 seconds. The same worker renews them; takeover after expiry increments
+epoch. Old epochs cannot submit new data. Expiry preserves pages and pauses capture.
+Paused jobs retain account locks until resume/stop. Commands, leases/epochs, pages,
+and snapshots survive restart.
 
-## Приём и полнота
+## Ingestion and completeness
 
-Страница и все операции/версии сохраняются одной транзакцией до ACK.
-Проверяются номер, totals, период/зона, валюта/scale/баланс, подробности,
-принадлежность интервалу/заданию/счёту, настройки и lease. Идентичный повтор
-возвращает ACK без нового lease даже после завершения/остановки/отключения;
-он не меняет записи и счётчики. Worker/epoch не входят в fingerprint.
-Другое содержимое номера либо изменённые totals прерывают незавершённый снимок,
-сохраняя исходную страницу.
+A page and all its transactions/versions are saved in one transaction before ACK.
+Checks cover page number, totals, period/time zone, currency/scale/balance, details,
+interval/job/account ownership, settings, and lease. Identical retries return ACK
+without a new lease even after completion/stop/disabling; records/counters are unchanged.
+Worker/epoch are excluded from the fingerprint. Changed content for the same page
+number or changed totals fail the unfinished snapshot while preserving the original page.
 
-Complete требует номеров 1..N, согласованных totals, точного количества и
-уникальности банковских идентичностей во всём интервале. captured_records
-ссылается на неизменяемую bank_versions. Дубль между страницами откатывает всю
-отклонённую страницу, включая новые записи/версии. Пропущенную страницу можно
-дослать; до этого history_incomplete без покрытия. Пустой результат — страница
-1/0 с [] и затем complete; он тоже продвигает frontier.
+Complete requires pages 1..N, consistent totals, exact count, and unique bank identities
+across the entire interval. captured_records references immutable bank_versions.
+Cross-page duplicates roll back the entire rejected page, including new records/versions.
+Missing pages can be submitted later; until then, history_incomplete with no coverage.
+An empty result is page 1/0 with [] followed by complete; it also advances the frontier.
 
-Bank login required сохраняет paused снимок до следующего клика. Сообщение
-коннектора об изменённом контексте/нарушенной полноте делает снимок failed,
-даже если клиент попросил paused: новый job получает новые ID интервалов.
-Смена версии/возможностей коннектора также прекращает старый снимок.
-Ошибка одного счёта не удаляет другие данные и не мешает завершать остальные
-интервалы. Stop отменяет только незавершённый сбор.
+Bank login required retains a paused snapshot until the next click. Connector reports
+of changed context/broken completeness fail the snapshot even if the client requested
+paused; the new job gets new interval IDs. Connector version/capability changes also
+terminate old snapshots. One account's failure neither removes other data nor prevents
+completion of remaining intervals. Stop cancels only unfinished capture.
 
-Backend не может доказать полноту реального банка при ложных totals или
-идентичностях от браузера. Правильный обход, подробности и распознавание смены
-аккаунта — E3/M3. B3 проверяет согласованность протокола и не принимает
-клиентский флаг complete вместо серверной проверки.
+The backend cannot prove actual bank completeness when browser totals/identities are
+false. Correct traversal, details, and account-change detection belong to E3/M3.
+B3 validates protocol consistency and never substitutes a client complete flag for
+server verification.
 
-## Передача B4/B5
+## B4/B5 handoff
 
-job_accounts хранит версии настроек, цель, начальную/разрешённую даты;
-job_context — версию коннектора/зону/возможности. captured_records связывает
-банковскую версию с принятой страницей. coverage появляется только после complete.
-Подтверждённые страницы, команды и снимки неизменяемы.
+job_accounts retains settings versions, target, start/authorized dates; job_context
+retains connector version/time zone/capabilities. captured_records links a bank version
+to an accepted page. Coverage appears only after complete. Confirmed pages, commands,
+and snapshots are immutable.
 
-B5 выбирает версии завершённых интервалов/проверенных старых данных, проверяет
-актуальные enabled/версию/цель перед каждой попыткой и уважает needs_rebuild
-и постоянный журнал B2. Более новая версия из неполного интервала не даёт
-разрешения отправить её. Stop/закрытие Chrome не отзывают доставку уже разрешённых
-полных интервалов; отключение счёта запрещает новые попытки. B5 сохраняет разрешение на
-конкретную полную версию при start/complete и будит независимый worker.
-Сбор и доставка имеют отдельный прогресс; неизвестный результат не считается
-доставленным. B4 сохраняет предварительный прогноз при приёме страницы; он
-не разрешает отправку неполного интервала. См. [delivery.md](delivery.md).
+B5 selects versions from completed intervals/verified legacy data, rechecks current
+enabled/version/target before every attempt, and respects needs_rebuild and the
+permanent B2 journal. A newer version in an incomplete interval does not authorize
+sending it. Stop/Chrome closure do not revoke delivery of already authorized complete
+intervals; disabling prevents new attempts. B5 persists authorization for a specific
+complete version at start/complete and wakes an independent worker. Capture and
+delivery progress are separate; unknown outcomes are not delivered. B4 saves preliminary
+predictions with page ingestion; these do not authorize incomplete-interval delivery.
+See [delivery.md](delivery.md).

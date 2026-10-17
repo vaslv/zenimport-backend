@@ -1,61 +1,61 @@
-# Проект 2: backend
+# Project 2: backend
 
-Цель: самостоятельный сервис, принимающий историю банков и надёжно добавляющий новые операции в ZenMoney. Исходник: `/Users/vaslv/Projects/Vaslv/ZenImport/backend`. Предлагаемый проект: соседний `ZenImportBackend`.
+Goal: an independent service receiving bank history and reliably adding new transactions to ZenMoney. Source: `/Users/vaslv/Projects/Vaslv/ZenImport/backend`. Proposed neighboring project: `ZenImportBackend`.
 
-## B0. Зафиксировать границы и контракты
+## B0. Fix boundaries and contracts
 
-Вход: `00-contracts.md`, актуальные `backend/models.py`, `app.py`, `config.py`, SDK S1. Определить схемы HTTP, версии, точные суммы/даты, идемпотентность запросов, ограничения размера, аутентификацию и коды ошибок. Подготовить обезличенные фикстуры для расширения. Решить, как извлекать репозитории с сохранением истории, не меняя исходник до проверки копий.
+Inputs: `00-contracts.md`, current `backend/models.py`, `app.py`, `config.py`, SDK S1. Define HTTP schemas, versions, exact amounts/dates, request idempotency, size limits, authentication, and error codes. Prepare anonymized extension fixtures. Decide repository extraction preserving history without changing the source before validating copies.
 
-Выход: конкретный API-контракт, краткая карта модулей/сущностей и тестовые ответы. Готово, когда E1 может работать с mock backend без догадок о формате. Это этап проектирования; неизвестные факты банка не заменять предположениями.
+Output: a concrete API contract, brief module/entity map, and test responses. Complete when E1 can use a mock backend without guessing formats. This is design work; never replace unknown bank facts with assumptions.
 
-## B1. Выделить самостоятельную сборку
+## B1. Extract an independent build
 
-Сохранить работающий Python-стек, закреплённый SDK и воспроизводимые зависимости. Перенести необходимый runtime из исходника. Предлагаемые границы: HTTP API; настройка/счета; приём истории; хранилище; зеркало ZenMoney; обучение; очередь доставки; миграции. Это обязанности модулей, не требование создать отдельный слой/класс для каждой функции.
+Preserve the working Python stack, pinned SDK, and reproducible dependencies. Transfer required runtime from the source. Proposed boundaries: HTTP API; settings/accounts; history ingestion; storage; ZenMoney mirror; learning; delivery queue; migrations. These are module responsibilities, not a requirement for a separate layer/class per function.
 
-Убрать обслуживание SPA и зависимости от браузерного редактора. Старые модули не удалять до определения используемых функций и источников миграции. Составить таблицу «перенесено / заменено / только архив» для `creation.py`, `zenstore.py`, `link_groups.py`, `reconciliation.py`, `category_drafts.py`, `operations.py`.
+Remove SPA serving/browser editor dependencies. Do not remove old modules before identifying reused functions and migration sources. Classify `creation.py`, `zenstore.py`, `link_groups.py`, `reconciliation.py`, `category_drafts.py`, and `operations.py` as carried over / replaced / archive only.
 
-Приёмка: чистая сборка без checkout SDK/extension, health, явная конфигурация БД и токенов, запуск без записи в ZenMoney. Документация запуска local/remote.
+Acceptance: clean build without SDK/extension checkouts, health, explicit database/token configuration, startup without ZenMoney writes. Document local/remote startup.
 
-## B2. Хранение и миграция на тестовой базе
+## B2. Storage and test-database migration
 
-Вход: `db.py`, `docs/zenmoney-storage.md`, `docs/sdk-migration.md`, `scripts/verify_migration.py`. Не считать номер схемы актуальным без чтения текущего кода.
+Inputs: `db.py`, `docs/zenmoney-storage.md`, `docs/sdk-migration.md`, `scripts/verify_migration.py`. Never assume the current schema number without reading actual code.
 
-Сущности: подключения как способы доступа; канонические банковские счета/версии настроек; исходные операции и их версии/алиасы; задания и интервалы/страницы; постоянный журнал доставки с UUID/попытками/удалениями; зеркало/cursor ZenMoney; подтверждённые обучающие свидетельства; архив старых черновиков. Допустимо переиспользовать текущие таблицы: не переписывать данные ради названий.
+Entities: connections as access methods; canonical bank accounts/settings versions; source transactions and versions/aliases; jobs/intervals/pages; permanent delivery journal with UUIDs/attempts/deletions; ZenMoney mirror/cursor; confirmed learning evidence; legacy draft archive. Reuse current tables when appropriate; do not rewrite data merely for naming.
 
-Уникальность банковской идентичности и UUID обеспечивается БД, а не только кодом. Подтверждённые группы 1:N/N:M и исключения сохраняются. Все изменения схемы версионированы; повтор миграции не меняет результат. Сетевые вызовы вне длинных транзакций.
+Database constraints, not code alone, enforce bank identity/UUID uniqueness. Preserve confirmed 1:N/N:M groups and exclusions. Version every schema change; repeating migration must not change results. Keep network calls outside long transactions.
 
-Приёмка: миграция искусственной старой базы, повторный запуск, точность сумм, сохранность всех ключей/архивов/связей/исключений и UUID. Реальная копия — этап M1.
+Acceptance: synthetic legacy database migration, repeat startup, exact amounts, and preservation of every key/archive/link/exclusion/UUID. A real copy belongs to M1.
 
-## B3. Приём истории, периоды и задания
+## B3. History ingestion, periods, and jobs
 
-Обеспечить сохранение страницы до ACK, идемпотентность повтора, проверку принадлежности счёту/заданию и версии настроек. Интервал complete только после проверки всех страниц и деталей, включая корректный пустой результат. Количество операций и покрытие не вычислять по последней дате транзакции.
+Persist pages before ACK; ensure repeat idempotency and account/job/settings-version ownership. Mark intervals complete only after every page/detail is checked, including valid empty results. Do not infer counts/coverage from the last transaction date.
 
-Планировать первичную историю, 14-дневное перекрытие, незавершённые интервалы и разовое принудительное перечитывание. Повтор кнопки присоединяется к заданию; два клиента не собирают/отправляют один счёт конкурентно. Отключение счёта останавливает дальнейшую работу, сохраняет результаты начатых запросов.
+Plan initial history, 14-day overlap, unfinished intervals, and one-time forced rereading. Repeated clicks join jobs; two clients must not capture/deliver one account concurrently. Disabling stops further work while preserving in-flight outcomes.
 
-Приёмка: повтор/перестановка страниц; пропущенная страница; изменение контекста счёта; пустой интервал; границы месяца/года; долгий перерыв; частичный первый импорт; новый счёт; отключение; конфликт версий; повторное чтение старого полного интервала. Сбой одного счёта не теряет остальные.
+Acceptance: repeated/reordered/missing pages; changed account context; empty interval; month/year boundaries; long gaps; partial initial import; new account; disabling; version conflicts; rereading old complete intervals. One account's failure must not lose others.
 
-## B4. Зеркало ZenMoney и прогноз
+## B4. ZenMoney mirror and prediction
 
-Использовать SDK; атомарно сохранять принятые данные и cursor, включая удаления. Перед отправкой актуализировать зеркало и проверить целевой счёт. При недоступности ZenMoney сбор банка может продолжаться, запись в ZenMoney ждёт актуализации.
+Use the SDK; persist received data/cursor atomically, including deletions. Refresh the mirror and validate the target before sending. Bank capture may continue during ZenMoney outages; writes wait for freshness.
 
-Обучающие примеры брать из доказанных связей и актуальных пользовательских категорий. Повтор fetch, split и собственные непросмотренные предсказания не увеличивают число примеров. Изменение/удаление на телефоне обновляет либо исключает свидетельство. Сохранённая ручная пригодная категория имеет приоритет; далее правило/однозначная история; иначе пусто. Не смешивать направления и произвольные одинаковые описания разных получателей.
+Learning uses proven links/current user categories. Repeated fetches, splits, and our unreviewed predictions do not increase example counts. Mobile changes/deletions update or exclude evidence. Eligible saved manual categories take precedence, then a rule/unambiguous history, otherwise empty. Never mix directions or arbitrary identical descriptions across different payees.
 
-Приёмка: три одинаковых примера; только два; другая категория; удаление; смена типа; повтор fetch; split; известный получатель без счёта; собственные viewed=false; ручной выбор. Категория отправленной записи никогда не обновляется из-за нового прогноза.
+Acceptance: three equal examples; only two; another category; deletion; type change; repeated fetch; split; known payee without account; our viewed=false; manual choice. A new prediction never updates a previously sent transaction's category.
 
-## B5. Долговечная доставка
+## B5. Durable delivery
 
-Вход: S1–S3 по необходимости, B2–B4. До сети сохранить UUID и подготовленный payload. Готовность только для полного интервала/проверенных прежних данных. Использовать SDK expense/income с явным viewed=false. Ранее обработанное/исключённое пропускать; предположительный смысловой дубль отправлять согласно решению пользователя.
+Inputs: S1–S3 as needed, B2–B4. Persist UUID/prepared payload before networking. Eligible only for complete intervals/verified legacy data. Use SDK expense/income with explicit viewed=false. Skip previously processed/excluded records; send suspected semantic duplicates under the user's decision.
 
-Один исполнитель очереди: короткая транзакция фиксирует попытку, затем сеть, затем результат. После crash в attempting — проверка UUID, не повтор upsert. При неоднозначном/частичном результате независимо проверить каждый UUID; полученный diff применить к зеркалу и проверить оставшиеся подходящим чтением SDK. Изменившиеся пользовательские поля не делают уже существующий UUID поводом для исправления. Явно удалённый UUID не восстанавливать.
+One queue executor: a short transaction records an attempt, then network, then result. A crash in attempting triggers UUID verification, never repeat upsert. For ambiguous/partial results, independently verify every UUID; apply returned diff to the mirror and verify remaining records with an appropriate SDK read. Mobile field changes on an existing UUID are never grounds to correct it. Never restore an explicitly deleted UUID.
 
-Временные чтения повторять с ограниченной задержкой и учётом ответа сервера. Безопасность повтора записи доказывается, не выводится из одного HTTP-кода. Неограниченный неизвестный исход остаётся техническим состоянием с понятным прогрессом, без финансового редактора.
+Retry transient reads with bounded delay and server-response awareness. Prove write retry safety rather than infer it from one HTTP status. Indefinitely unknown outcomes remain a technical state with clear progress, without a financial editor.
 
-Приёмка: fake API применил запись и потерял ответ; удалил/изменил её до проверки; частично принял пакет; отверг до применения; timeout; crash до/после запроса; закрытый Chrome; повтор кнопки; архивирование целевого счёта; перезапуск сервиса. Ни один сценарий не создаёт новый UUID для прежней операции.
+Acceptance: fake API commits and loses response; deletes/changes before verification; partially accepts a batch; rejects before application; timeout; crash before/after request; closed Chrome; repeated button; archived target; service restart. No scenario generates a new UUID for an old transaction.
 
-## B6. Docker и общий прогон
+## B6. Docker and overall validation
 
-Один runtime-образ, непривилегированный пользователь, постоянный том SQLite, корректная остановка и health. Local — loopback; remote — инструкция HTTPS/reverse proxy. Не добавлять брокер/PostgreSQL/кластер только ради разделения проекта. Проверить arm64 и amd64 фактически, указать непроверенную платформу честно.
+One runtime image, non-root user, persistent SQLite volume, graceful stop, health. Local: loopback; remote: HTTPS/reverse proxy instructions. Do not add brokers/PostgreSQL/clusters merely because the project is split. Actually validate arm64 and amd64; honestly identify untested platforms.
 
-Сделать самостоятельный `scripts/test-docker.sh` с уникальным тестовым Compose-проектом и временным томом. Очистка касается только тестового окружения. Ориентир — исходный `scripts/test-docker.sh`, но без наследования лишних UI-тестов и без доступа к рабочему токену/тому.
+Create independent `scripts/test-docker.sh` with a unique test Compose project/temporary volume. Cleanup only test resources. The original `scripts/test-docker.sh` is a reference, without unnecessary UI tests or production token/volume access.
 
-Готово: unit/контрактные тесты, HTTP-проверка, перезапуск с сохранностью, интеграция E5, обезличенные ошибки, документация восстановления и результата синхронизации. Затем M1, не сразу переключение LIVE.
+Complete: unit/contract tests, HTTP checks, restart preservation, E5 integration, anonymized errors, recovery/sync-result documentation. Then M1, not immediate LIVE cutover.

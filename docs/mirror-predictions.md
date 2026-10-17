@@ -1,131 +1,115 @@
-# Зеркало ZenMoney и прогноз категорий — B4
+# ZenMoney mirror and category prediction — B4
 
-Реализация: `backend/mirror.py`, `backend/predictions.py`, добавлены со схемой
-SQLite **4**; текущая версия хранилища описана в [financial-storage.md](financial-storage.md).
-SDK 0.6.0 из vendor используется напрямую. На этом этапе выполняются только
-чтения `Client.read_diff`; ни одной записи/изменения в ZenMoney нет.
-Отправитель, фоновая доставка и проверка цели непосредственно перед записью
-реализованы в B5: [delivery.md](delivery.md). Далее описан read-only модуль B4.
-Wire-контракт v1 и интерфейс расширения не менялись.
+Implementation: `backend/mirror.py`, `backend/predictions.py`, introduced with SQLite
+schema **4**; current storage version: [financial-storage.md](financial-storage.md).
+The vendored SDK 0.6.0 is used directly. This stage performs only
+`Client.read_diff` reads, with no ZenMoney writes/updates. Sender, background delivery,
+and target revalidation immediately before writes are implemented in B5:
+[delivery.md](delivery.md). This document describes the read-only B4 module.
+The v1 wire contract and extension interface are unchanged.
 
-## Когда обновляется зеркало
+## Mirror refresh triggers
 
-- GET `/api/v1/zenmoney/accounts` и изменение enabled-настроек получают свежий
-  каталог; успешный снимок можно переиспользовать до 300 секунд.
-- Новая команда POST `/api/v1/jobs` принудительно актуализирует зеркало.
-  Точный повтор request_id возвращает прежнее задание без дополнительного fetch.
-- Получение страниц банка не вызывает SDK: операции и предварительный прогноз
-  сохраняются вместе со страницей до ACK.
-- `/api/v1/info` только читает состояние, сетевых запросов не делает.
-  `ready` — успешное зеркало не старше 300 секунд; `unavailable` — просрочка
-  либо сбой; `not_configured` — токен отсутствует. Время последнего успешного
-  чтения сохраняется после ошибки и не означает, что зеркало сейчас свежее.
+- GET `/api/v1/zenmoney/accounts` and enabled-setting updates obtain a fresh catalog; successful snapshots can be reused for 300 seconds.
+- New POST `/api/v1/jobs` commands force mirror refresh. Exact request_id repeats return the original job without another fetch.
+- Bank page ingestion never calls the SDK: transactions/preliminary predictions are saved with the page before ACK.
+- `/api/v1/info` only reads state, never the network. `ready` means a successful mirror no older than 300 seconds; `unavailable` means stale/failed; `not_configured` means no token. Last successful read time survives failures and does not mean the mirror is currently fresh.
 
-Запуск зеркала сам по себе не вызывает API. В B5 worker может продолжить
-ранее разрешённую доставку/проверку после запуска сервера. Токен не попадает в расширение,
-журнал ошибок или БД. В состоянии зеркала хранится SHA256 токена для привязки
-курсора к источнику. Смена токена/отключение SDK сбрасывает свежесть и требует
-нового полного чтения; постоянный финансовый журнал при этом сохраняется.
-Это не механизм объединения разных пользователей ZenMoney.
+Starting the mirror alone makes no API calls. In B5, a worker may resume previously
+authorized delivery/verification after server startup. Tokens never enter the extension,
+error log, or database. Mirror state stores a token SHA256 to bind the cursor to its
+source. Changing the token/disabling the SDK resets freshness and requires a new full
+read while preserving the permanent financial journal. This is not a way to combine
+different ZenMoney users.
 
-## Атомарность и точность
+## Atomicity and precision
 
-Первое чтение — cursor=0 с SDK `FORCE_FETCH`; далее инкрементальный cursor.
-Для первого снимка нужны явно присутствующие коллекции account, instrument,
-tag, transaction, в том числе пустые. Если API их не вернул, свежесть не
-объявляется. Это консервативное условие проверено на fake API; фактический
-ответ нового/пустого аккаунта надо проверить на M3, до включения LIVE.
-Остальные коллекции проецируются при наличии; неизвестные коллекции остаются
-в исходном diff. Отсутствие коллекции в ответе не очищает её проекцию.
+Initial reads use cursor=0 with SDK `FORCE_FETCH`; subsequent reads use the incremental
+cursor. The first snapshot requires explicitly present account, instrument, tag, and
+transaction collections, including empty ones. Without them, freshness is not declared.
+This conservative condition is tested with a fake API; the actual response of a new/
+empty account must be checked in M3 before LIVE. Other collections are projected when
+present; unknown collections remain in raw diff. An omitted collection never clears
+its projection.
 
-Сеть работает вне SQLite-транзакции. После чтения одной транзакцией сохраняются
-оригинальный JSON, сущности всех видов SDK, точные движения/категории, удаления,
-постоянные tombstones, cursor, поколение, свежесть, свидетельства и прогнозы.
-Повреждённый ответ/сбой проекции откатывает всё применение. Последний успешный
-снимок и cursor остаются, но актуальность отзывается. Денежные числа идут через
-SDK Decimal/encode_json, без float; неизвестные поля не теряются.
+Network calls run outside SQLite transactions. One subsequent transaction persists
+original JSON, every SDK entity kind, exact movements/categories, deletions, permanent
+tombstones, cursor, generation, freshness, evidence, and predictions. Invalid responses/
+projection failures roll back the entire application. The last successful snapshot/
+cursor remain, but freshness is revoked. Monetary values use SDK Decimal/encode_json,
+never float; unknown fields are retained.
 
-В одном процессе чтения сериализуются. CAS поколения и источника дополнительно
-не позволяет запоздалому ответу примениться поверх нового снимка или токена.
-Runtime по-прежнему поддерживает один экземпляр, а не кластер писателей.
-Временное чтение (transport/429/5xx) повторяется один раз через 0,1 секунды;
-400/401/403 и некорректный ответ не повторяются. SDK не предоставляет заголовок
-Retry-After в HTTPError; повторы записи этим механизмом не разрешаются.
+Reads serialize within one process. Generation/source CAS additionally prevents stale
+responses from overwriting newer snapshots/tokens. Runtime still supports one instance,
+not a writer cluster. Transient reads (transport/429/5xx) retry once after 0.1 seconds;
+400/401/403 and invalid responses do not retry. SDK HTTPError does not expose
+Retry-After; this mechanism does not authorize write retries.
 
-Сбой SDK не откатывает уже созданное задание/банковские страницы: сбор может
-продолжаться, delivery_state становится blocked с zenmoney_unavailable.
-Успешное обновление снимает именно эту причину блокировки; не разрешает
-неопределённые отправки и не подменяет проверку целевого счёта B5.
+SDK failure never rolls back an existing job/bank pages: capture can continue while
+delivery_state becomes blocked with zenmoney_unavailable. Successful refresh clears
+only that blocking reason; it neither authorizes uncertain deliveries nor replaces
+B5 target account validation.
 
-## Уважение данных телефона
+## Respecting mobile data
 
-Подтверждение строится только по известным UUID из доставок, попыток,
-постоянных подтверждений и исторических групп. Найденный UUID считается
-существующим независимо от изменений полей на телефоне; payload не исправляется.
-Явное soft/hard deletion навсегда подавляет повтор соответствующей банковской
-операции. Даже появление этого UUID позднее не возвращает её в очередь.
-Отсутствие UUID в полном или частичном ответе само по себе не доказывает ни
-удаление, ни неуспех прежней записи: uncertain остаётся uncertain.
-Само зеркало не сопоставляет смысловые совпадения. Перед новой доставкой B5
-сохраняет явно запрошенное пользователем сопоставление по счёту/дню/направлению/
-инструменту/точной сумме. Receipt с origin=day_amount_order не обучает категории:
-соответствие повторяющихся сумм по времени не доказывает получателя. Ручная
-согласованная очистка дублей создаёт канонические single-группы оригиналов;
-отставной UUID копии остаётся в журнале, а его удаление не подавляет оригинал.
+Confirmation uses only known UUIDs from deliveries, attempts, permanent receipts,
+and historical groups. A found UUID proves existence regardless of mobile field
+changes; payloads are never corrected. Explicit soft/hard deletion permanently
+suppresses the corresponding bank transaction. Even later reappearance of that UUID
+does not requeue it. Absence from a full or partial response proves neither deletion
+nor failed prior creation: uncertain remains uncertain.
 
-## Прогноз
+The mirror itself does not match semantic similarities. Before new delivery, B5
+persists the user-requested account/day/direction/instrument/exact-amount match.
+An origin=day_amount_order receipt never trains categories: timestamp ordering of
+equal amounts does not prove the payee. Agreed manual duplicate cleanup creates
+canonical single groups for originals; retired copy UUIDs stay journaled, and their
+deletion never suppresses the original.
 
-Приоритет: пригодный ручной выбор из category_choices → однозначное явное
-правило recipient_rules → минимум **три независимых подтверждённых платежа**
-одной категории без противоречий → NULL. Неизвестным операциям «Корректировка»
-не назначается. Кандидаты сортируются по числу независимых платежей, затем
-названию и ID. Прогноз возможен только при свежем зеркале и пригодной категории
-для направления расход/приход. Ручной выбор хранится отдельно от проекции.
+## Prediction
 
-История разделена по каноническому банковскому счёту, направлению и получателю:
-Beneficiary account → нормализованное имя при отсутствии account → точное
-нормализованное описание при отсутствии обоих (минимум шесть символов).
-Нормализация только Unicode NFKC, регистр и пробелы; банковские референсы не
-удаляются, нечёткое сходство не используется. Известный account не заменяется
-описанием для поиска совпадения. Явное правило по имени действует только для
-указанного банка и направления; неоднозначные правила не дают автокатегорию.
+Priority: eligible manual category_choices → unambiguous explicit recipient_rules →
+at least **three independent confirmed payments** in one category without conflicts →
+NULL. Unknown transactions are not assigned Adjustment. Candidates sort by independent
+payment count, then title and ID. Prediction requires a fresh mirror and a category
+valid for the expense/income direction. Manual choice is separate from the projection.
 
-Подходят только явно связанные доставленные платежи на обычном известном
-ZenMoney-счёте с соответствующей валютой, направлением и точной суммой.
-Все части должны быть viewed=true, без hold/удаления/исключений. Собственные
-непросмотренные записи не учат модель, в том числе если категория появилась в первом ответе ZenMoney на отправку tag=NULL. Такой ответ сохраняется как удалённое состояние, а не как подтверждённый наш прогноз. Один split с одной категорией — один
-пример; смешанный/некатегоризированный просмотренный платёж блокирует уверенность.
-Settlement/N:M, переводы/долги и общий UUID у нескольких банковских платежей
-не дают примеров. Повтор fetch не увеличивает счётчики. Свидетельства
-пересчитываются из актуальных данных: смена категории меняет статистику,
-удаление/смена типа исключает прежнее доказательство. Платёж не обучает сам себя.
+History is partitioned by canonical bank account, direction, and payee: Beneficiary
+account → normalized name when account is absent → exact normalized description when
+both are absent (at least six characters). Normalization uses only Unicode NFKC,
+case, and whitespace; bank references are not stripped and fuzzy similarity is not
+used. Known accounts are not replaced by descriptions for matching. Explicit name
+rules apply only within the specified bank/direction; ambiguous rules never yield
+an automatic category.
 
-## Передача B4 → B5
+Eligible examples are explicitly linked delivered payments on a known regular ZenMoney
+account with matching currency, direction, and exact amount. Every part must be
+viewed=true, with no hold/deletion/exclusion. Our own unreviewed records never train
+the model, even when ZenMoney assigns a category in its first tag=NULL response.
+That response is remote state, not confirmation of our prediction. A single-category
+split counts as one example; a mixed/uncategorized reviewed payment blocks confidence.
+Settlements/N:M, transfers/debts, and one UUID shared by several bank payments yield
+no examples. Repeated fetches do not increase counts. Evidence is rebuilt from current
+data: category edits change statistics, deletion/type changes remove prior evidence.
+A payment never trains its own prediction.
 
-- `Mirror.refresh(force=True)` обязательно вызвать перед отправкой **вне**
-  открытой транзакции; затем снова проверить настройки и актуальную цель.
-- `category_payments`/`category_evidence` — пересчитываемые свидетельства;
-  `category_predictions` — предварительная проекция текущей банковской версии,
-  с источником, причиной, кандидатами и поколением зеркала. Это не разрешение
-  отправить неполный интервал.
-- `predictions.predict(db, bank_id, now, revision=...)` позволяет взять именно
-  версию из завершённого интервала, а не более новую из незавершённого.
-- Неначатая prepared-доставка при изменении версии/категории получает
-  needs_rebuild=1. UUID и payload не заменяются B4. Попытки, uncertain,
-  delivered/suppressed исключены из подготовки; начатый payload неизменяем.
-- B5 формирует SDK expense/income с viewed=false и категорией либо NULL,
-  соблюдает постоянные подтверждения/удаления и правила полного покрытия B3.
+## B4 → B5 handoff
 
-## Проверки
+- Call `Mirror.refresh(force=True)` before sending, **outside** an open transaction; recheck settings/current target afterward.
+- `category_payments`/`category_evidence` are recomputable evidence; `category_predictions` is a preliminary current-bank-version projection with source, reason, candidates, and mirror generation. It does not authorize incomplete-interval delivery.
+- `predictions.predict(db, bank_id, now, revision=...)` selects the version from a completed interval rather than a newer incomplete one.
+- Unstarted prepared delivery gets needs_rebuild=1 when version/category changes. B4 replaces neither UUID nor payload. Attempts, uncertain, delivered/suppressed are excluded from preparation; started payloads are immutable.
+- B5 builds SDK expense/income with viewed=false and a category or NULL, respecting permanent confirmations/deletions and B3 full-coverage rules.
 
-`scripts/test-docker.sh`: **292 passed**, 57 новых проверок B4, SDK MockTransport
-в Docker без сети. Полное/инкрементальное чтение всех видов, точность/raw,
-soft/hard deletion, мобильные изменения, отсутствие UUID, ошибки/rollback,
-повторы чтений, гонка поколений/токена, свежесть/перезапуск, работа сбора при
-сбое SDK, порог 2/3/5, split/N:M/исключения, viewed=false, направления,
-получатели/описания, ручные правила и неизменяемость начатого payload.
-Переход v3→v4 с приватным backup и rollback проверен на искусственной БД.
-HTTP/auth, продолжение задания и сохранность после пересоздания контейнера
-также прошли. На B4 — ARM64/CPython 3.12.15; позднее B6 проверил также
-AMD64 под эмуляцией: [b6-validation.md](b6-validation.md). Реальные API/БД/
-мобильный UI не проверялись. Реальная миграция остаётся M1, приёмка M3; отправитель реализован в B5.
+## Validation
+
+`scripts/test-docker.sh`: **292 passed**, 57 new B4 checks, SDK MockTransport in Docker
+without networking. Full/incremental reads of every kind, precision/raw, soft/hard
+deletion, mobile edits, absent UUID, errors/rollback, read retries, generation/token
+races, freshness/restart, capture during SDK failure, threshold 2/3/5, split/N:M/
+exclusions, viewed=false, directions, payees/descriptions, manual rules, and immutable
+started payloads. Synthetic v3→v4 private backup/rollback verified. HTTP/auth, job
+resumption, and preservation after container recreation also passed. B4 used
+ARM64/CPython 3.12.15; B6 later checked emulated AMD64:
+[b6-validation.md](b6-validation.md). Real API/database/mobile UI were not tested.
+Actual migration remains M1 and acceptance M3; the sender is implemented in B5.

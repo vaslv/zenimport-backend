@@ -32,7 +32,7 @@ def bank(db, name, *, account='vnd', state='pending', amount=-12345, linked=None
     identifier = ident(name)
     raw = json.dumps({'date': '10/10/2026 19:19:33', 'reference': 'fixture-' + name,
                       'details': {'corresponsiveAccount': 'fixture-beneficiary', 'corresponsiveName': 'Fixture Shop'},
-                      'unknown': {'text': 'не терять', 'number': '9007199254740993.123456789012'}})
+                      'unknown': {'text': 'preserve café', 'number': '9007199254740993.123456789012'}})
     insert(db, 'bank_transactions', id=identifier, bank_account=ident(account), external_id='external-' + name,
            date='2026-10-10', amount_minor=amount, description='Fixture ' + name, raw=raw, state=state, linked_id=linked)
     return identifier

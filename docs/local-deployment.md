@@ -1,30 +1,25 @@
-# Первоначальный локальный запуск — 16 октября 2026
+# Initial local deployment — October 16, 2026
 
-По прямому указанию пользователя старое хранилище не переносилось. Отдельная живая мобильная приёмка отложена пользователем; запуск нового backend с чистой базой разрешён отдельно. Это не миграция M4 по прежнему сценарию.
+At the user's explicit direction, legacy storage was not migrated. The user deferred separate live mobile acceptance and separately authorized startup of the new backend with a clean database. This is not M4 migration under the previous scenario.
 
-Это исторический снимок первоначального запуска. После него сбор и доставка через
-Chrome 0.1.8 были проверены на настоящем VietinBank, исправлены дубли и выполнена
-повторная синхронизация. Актуальный итог находится в последней секции
-[журнала приёмки](refactor/05-progress.md). Новое сопоставление перед созданием
-описано в [правилах доставки](delivery.md); ограничения первоначальной версии
-ниже не описывают текущую реализацию.
+This is a historical snapshot of the initial deployment. Subsequently, Chrome 0.1.8 capture and delivery were verified against actual VietinBank, duplicates were fixed, and synchronization was repeated. The current outcome is in the latest section of the [acceptance log](refactor/05-progress.md). Pre-creation matching is described in [delivery rules](delivery.md); the initial limitations below do not describe the current implementation.
 
-## Состояние на момент первоначального запуска
+## State at initial deployment
 
-- Прежний контейнер zenimport-backend-1 остановлен, restart=no. Новые запросы на порт 18791 не обслуживаются. Старый том не подключён к новому сервису; резервная копия/конвертация для этого переключения не выполнялись.
-- Новый контейнер zenimport-backend-backend-1 работает на http://127.0.0.1:18792, health=healthy. Постоянный том zenimport-backend-data; root filesystem readonly, UID/GID 10001, один worker, доступ только через localhost.
-- .env создан с правами 600, исключён из Git и образа. API_TOKEN сгенерирован заново; прежний действующий ZENMONEY_TOKEN перенесён напрямую в серверную конфигурацию без вывода в чат. SDK 0.6.0.
-- Создана чистая схема v5: до получения зеркала все таблицы банковских операций/доставки/заданий и зеркало были пустыми. Затем read-only запрос получил актуальный ZenMoney: 115 счетов, 29 124 операции, 32 672 сущности всего. Каталог возвращает 60 активных обычных счетов, из них 10 VND; /api/v1/info: api_version=1, zenmoney_state=ready.
-- После получения зеркала bank_accounts, bank_transactions, capture_jobs, deliveries, delivery_attempts по-прежнему пусты. Создания/правки/удаления в ZenMoney не запускались.
+- Legacy container zenimport-backend-1 stopped, restart=no. Port 18791 no longer serves new requests. Its old volume is not connected to the new service; no backup/conversion was performed for this cutover.
+- New container zenimport-backend-backend-1 runs at http://127.0.0.1:18792, health=healthy. Persistent volume zenimport-backend-data; read-only root filesystem, UID/GID 10001, one worker, localhost access only.
+- .env created with mode 600, excluded from Git and the image. API_TOKEN regenerated; the previous valid ZENMONEY_TOKEN transferred directly into server configuration without printing it in chat. SDK 0.6.0.
+- Created clean schema v5: bank transaction/delivery/job tables and mirror were empty before retrieval. A read-only request then fetched current ZenMoney: 115 accounts, 29,124 transactions, 32,672 total entities. The catalog returns 60 active regular accounts, including 10 VND; /api/v1/info: api_version=1, zenmoney_state=ready.
+- After mirror retrieval, bank_accounts, bank_transactions, capture_jobs, deliveries, and delivery_attempts remain empty. No creation/updates/deletions in ZenMoney were initiated.
 
-## Расширение
+## Extension
 
-Адрес: http://127.0.0.1:18792. Токен — API_TOKEN. Приватный файл data/extension-connection.txt содержит только эти две настройки (600), без токена ZenMoney. В новом расширении открыть Настройки, заполнить поля, нажать Подключить, открыть историю нужного банка и выбрать соответствующий счёт ZenMoney и дату начала. Отправку разрешает пользовательская кнопка Синхронизировать.
+Address: http://127.0.0.1:18792. Token: API_TOKEN. Private file data/extension-connection.txt contains only these two settings (600), not the ZenMoney token. In the new extension, open Settings, fill in the fields, click Connect, open the desired bank history, and choose the corresponding ZenMoney account and start date. The user's Synchronize button authorizes delivery.
 
-Чистая база не содержит прежних receipts/связей/исключений и примеров категоризации. Получение зеркала ZenMoney само по себе не восстанавливает банковские идентичности. Исторические операции банка могут добавиться повторно, даже если похожие уже есть в ZenMoney; период первого импорта выбирать осознанно. Подтверждённая история категорий будет накапливаться заново. Все последующие мобильные изменения и удаления известных новому серверу записей сохраняют приоритет.
+A clean database contains no previous receipts/links/exclusions or categorization examples. Fetching the ZenMoney mirror alone does not reconstruct bank identities. Historical bank transactions may be added again even when similar ones already exist in ZenMoney; choose the initial import period deliberately. Confirmed category history will accumulate again. Subsequent mobile changes and deletions of records known to the new server take precedence.
 
-## Исправление, выявленное при подключении
+## Connection-time fix
 
-Реальный Instrument использует shortTitle как код валюты, согласно [официальной документации](https://github.com/zenmoney/ZenPlugins/wiki/ZenMoney-API#instrument). accounts.catalog и evidence категорий раньше искали вымышленное поле code. Исправлены оба места и искусственные фикстуры. 353 проверки в Docker без внешней сети прошли; реальный read-only каталог после пересборки возвращает 60 счетов. Схема БД/API-контракт не менялись.
+The actual Instrument uses shortTitle as the currency code, as specified by the [official documentation](https://github.com/zenmoney/ZenPlugins/wiki/ZenMoney-API#instrument). accounts.catalog and category evidence previously searched for a nonexistent code field. Both locations and synthetic fixtures were fixed. 353 Docker checks passed without external networking; after rebuilding, the real read-only catalog returns 60 accounts. Database schema/API contract are unchanged.
 
-На момент первоначального запуска рабочая мобильная проверка viewed=false/правок/удалений и полный запуск Chrome-коннектора с настоящим банком ещё не были выполнены. Позднее полный сбор и доставка через Chrome 0.1.8 были подтверждены отдельно; это не заменяет отложенную проверку поведения мобильного приложения.
+At initial deployment, production mobile checks of viewed=false/edits/deletions and a complete Chrome connector run against the real bank had not been performed. Complete Chrome 0.1.8 capture and delivery were confirmed later; this does not replace the deferred mobile application behavior checks.

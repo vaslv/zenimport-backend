@@ -1,18 +1,18 @@
-# Живая приёмка и переключение
+# Live acceptance and cutover
 
-## M3 — до рабочего переключения
+## M3 — before production cutover
 
-1. Открыть историю VietinBank. Без отправки проверить выбранный Current account, распознавание строк, фильтры/пагинацию и смену счёта. Список остаётся частичным, пока полнота не доказана; неподдерживаемая валюта не импортируется.
-2. Согласовать отдельный тестовый VND-счёт ZenMoney и одну искусственную операцию. Использовать изолированную БД/профиль расширения. Настоящую банковскую историю в тестовый счёт не отправлять.
-3. После согласования создать одну запись с frozen UUID, viewed=false, категорией NULL. В мобильном приложении проверить «Новые», изменить категорию/тип, повторить синхронизацию; затем удалить эту тестовую запись через мобильное приложение и повторно проверить: правки не откатываются, запись не восстанавливается.
-4. Записать фактические результаты и ограничения, получить приёмку перед M4. Фикстуры не заменяют эти проверки.
+1. Open VietinBank history. Without sending, check the selected Current account, row recognition, filters/pagination, and account switching. The account list remains partial until completeness is proven; unsupported currency is not imported.
+2. Agree on a separate ZenMoney test VND account and one synthetic transaction. Use an isolated database/extension profile. Do not send real bank history into the test account.
+3. After agreement, create one record with a frozen UUID, viewed=false, and NULL category. In the mobile app, check New, change its category/type, and synchronize again; then delete this test record in the mobile app and verify again: edits are not reverted and the record is not restored.
+4. Record actual results and limitations; obtain acceptance before M4. Fixtures do not replace these checks.
 
-## M4 — отдельное рабочее переключение
+## M4 — separate production cutover
 
-1. Остановить старый writer/расширение, убедиться, что нет второго отправителя. Сделать новый согласованный backup рабочей schema 12, а не использовать устаревший снимок репетиции.
-2. Конвертировать в новый явный volume, повторить проверки M1/M2. Оригинал оставить для восстановления. Установить backend API token и SDK token только серверу; расширению — только backend token.
-3. Запустить новый backend, настроить соответствие/период счетов. Первым действием прочитать актуальный ZenMoney и проверить незавершённые UUID. Новая отправка — только после команды «Синхронизировать».
-4. Обновить/подключить Chrome к новому backend, проверить один полный период и мобильный результат. Старый сервер не совместим с новым расширением.
-5. При откате после любых новых отправок сохранить свежую v5 БД с журналом UUID/попыток. Возврат только к старой schema 12 может потерять сведения об отправках и создать дубли, поэтому старый writer нельзя просто включить обратно.
+1. Stop the old writer/extension and ensure there is no second sender. Take a fresh consistent production schema 12 backup instead of reusing the old rehearsal snapshot.
+2. Convert into a new explicit volume and repeat M1/M2 checks. Keep the original for recovery. Configure the backend API token and SDK token only on the server; give the extension only the backend token.
+3. Start the new backend and configure account mappings/periods. First read current ZenMoney and verify unfinished UUIDs. New delivery requires the Synchronize command.
+4. Update/connect Chrome to the new backend and check one complete period and mobile results. The old server is incompatible with the new extension.
+5. When rolling back after any new writes, preserve the fresh v5 database and UUID/attempt journal. Returning only to legacy schema 12 can lose delivery information and create duplicates, so do not simply restart the old writer.
 
-Пока M3/M4 не завершены, рабочее окружение не переключено. Автотесты ничего не отправляют в настоящий ZenMoney.
+Until M3/M4 are complete, production has not been switched. Automated tests send nothing to real ZenMoney.

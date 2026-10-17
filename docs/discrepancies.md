@@ -1,22 +1,22 @@
-# Возможные лишние операции ZenMoney
+# Potential extra ZenMoney transactions
 
-Пользователь 16 октября 2026 вернул одну отдельную страницу расширения: только просмотр возможных лишних записей по текущему банку. Исправление, удаление и разбор выполняются в мобильном ZenMoney. Автокатегоризация и доставка не меняются.
+On October 16, 2026, the user restored one separate extension page: a read-only view of potentially extra records for the current bank. Corrections, deletions, and review happen in mobile ZenMoney. Automatic categorization and delivery are unchanged.
 
-## Контракт
+## Contract
 
-Авторизованный GET `/api/v1/connections/{uuid}/discrepancies` принимает необязательные `from_date`, `to_date` (YYYY-MM-DD), `account_id` и `refresh` (bool). По умолчанию период начинается с минимального import_start включённых счетов и заканчивается текущей датой банка; максимум 3661 день. account_id должен принадлежать включённым счетам данного подключения. Схема ответа — `DiscrepancyReport` в backend/discrepancies.py, публикуется в OpenAPI. Добавление совместимо с API v1, миграция SQLite не нужна.
+Authenticated GET `/api/v1/connections/{uuid}/discrepancies` accepts optional `from_date`, `to_date` (YYYY-MM-DD), `account_id`, and `refresh` (bool). By default, the period starts at the earliest enabled account import_start and ends on the current bank date; maximum 3661 days. account_id must belong to an enabled account in this connection. The response schema is `DiscrepancyReport` in backend/discrepancies.py, exposed in OpenAPI. This addition is compatible with API v1 and requires no SQLite migration.
 
-Ответ: bank/connection_id, границы периода, refreshed_at зеркала, accounts с валютой/именами обоих счетов/checked_days/unchecked_days/status; days (дата + банковский счёт, точные строковые bank_total/zenmoney_total/difference, список операций ZenMoney с id/amount/payee/comment/categories/created). Суммы учитывают только движение по целевому счёту, включая переводы и долги; другая сторона валютного перевода не суммируется.
+Response: bank/connection_id, period bounds, mirror refreshed_at, accounts with currency/both account names/checked_days/unchecked_days/status; days (date + bank account, exact string bank_total/zenmoney_total/difference, ZenMoney transaction list with id/amount/payee/comment/categories/created). Amounts count only movement on the target account, including transfers and debts; the other currency transfer side is not added.
 
-## Как получается список
+## Building the list
 
-1. Только обнаруженные, включённые и поддерживаемые счета данного подключения, с явно выбранной целью ZenMoney. Если одна цель связана с несколькими включёнными банковскими счетами, показывается предупреждение вместо спорного отчёта.
-2. Только дни после import_start внутри подтверждённого coverage банка; дни без полной истории не объявляются сверенными. Пока идёт сбор либо в периоде есть ожидающая/неопределённая доставка, отчёт по счёту приостанавливается.
-3. Используются неизменяемые версии банковских записей из завершённых интервалов; частичные новые наблюдения не подменяют доказанную историю.
-4. Сохранённые receipts/deliveries/группы исключают известные операции ZenMoney. Пользовательские изменения суммы, типа, даты или категории у известного UUID не делают запись лишней. Удаления и hold не включаются в кандидаты.
-5. Для оставшихся записей сначала учитывается баланс всей несвязанной группы дня (возможный split/взаиморасчёт), затем точные суммы, затем единственная комбинация частей одной стороны. Поиск ограничен 16 частями и 20 000 шагами на день. Одинаковые суммы сопоставляются стабильно по created/id; неоднозначные остатки остаются кандидатами. Ни одна такая связь не записывается в БД.
-6. Показываются только оставшиеся записи ZenMoney. Лишние расход/приход, взаимно обнуляющиеся, всё равно видны, если в банке нет несопоставленного остатка. Дни без кандидатов не показываются.
+1. Only discovered, enabled, supported accounts in this connection with an explicitly selected ZenMoney target. A target linked to several enabled bank accounts produces a warning instead of an ambiguous report.
+2. Only days after import_start within confirmed bank coverage; days lacking complete history are not declared reconciled. Reporting for an account pauses during capture or when the period has pending/uncertain delivery.
+3. Immutable bank record versions from completed intervals are used; partial new observations never replace proven history.
+4. Persisted receipts/deliveries/groups exclude known ZenMoney transactions. User changes to amount, type, date, or category on a known UUID do not make it extra. Deletions and holds are excluded from candidates.
+5. For remaining records, first consider the balance of the entire unmatched daily group (possible split/settlement), then exact amounts, then a unique combination of parts on one side. Search is limited to 16 parts and 20,000 steps per day. Equal amounts are matched stably by created/id; ambiguous remainders remain candidates. None of these links is written to the database.
+6. Only remaining ZenMoney records are shown. Extra expenses/income that cancel each other remain visible when the bank has no unmatched remainder. Days without candidates are omitted.
 
-Это **кандидаты для проверки**, а не доказательство, что запись следует удалить: по неоднозначной истории невозможно всегда определить единственную лишнюю запись. Сбалансированная несвязанная группа может скрывать компенсирующие ошибки; выбран консервативный результат. Отчёт не создаёт связи, задания или новые разрешения доставки и не вызывает upsert/delete. Обычное обновление зеркала может подтвердить ранее отправленный UUID по существующему журналу; это не повторная отправка. Он читает зеркало, при refresh=true принудительно обновляет его read-only запросом ZenMoney. Старое зеркало при ошибке не выдаётся за актуальное. История банка обновляется прежней кнопкой синхронизации.
+These are **review candidates**, not proof that a record should be deleted: ambiguous history cannot always identify a unique extra record. A balanced unmatched group can conceal compensating errors; a conservative result was chosen. The report creates no links, jobs, or delivery authorizations and calls neither upsert nor delete. Ordinary mirror refresh can confirm a previously sent UUID through the existing journal; this is not a resend. The report reads the mirror; refresh=true forces a read-only ZenMoney refresh. A stale mirror is never presented as current after an error. Bank history is updated using the existing Synchronize button.
 
-Проверки: тесты tests/test_discrepancies.py и интеграция расширения проверяют область банка/дня, покрытие, известный UUID, split, переводы/долги, лишние компенсирующие записи, удаление в мобильном клиенте, свежесть, авторизацию и отсутствие записей в API ZenMoney при открытии отчёта.
+Validation: tests/test_discrepancies.py and extension integration check bank/day scope, coverage, known UUIDs, splits, transfers/debts, extra compensating records, mobile deletion, freshness, authorization, and absence of ZenMoney API writes when opening the report.

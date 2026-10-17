@@ -1,89 +1,81 @@
-# Backend на SDK 0.6.0 и схема БД 11
+# Backend on SDK 0.6.0 and database schema 11
 
-Выполнено **14 октября 2026**, самостоятельно от проекта библиотеки ZenMoneyAPI.
-Реализация ZenImport: локальный коммит `b3ad95b`.
+Completed **October 14, 2026**, independently of the ZenMoneyAPI library project.
+ZenImport implementation: local commit `b3ad95b`.
 
-## Изменения
+## Changes
 
-- Backend использует напрямую Client.read_diff/upsert и transactions builders из
-  zenmoney_api. Legacy namespace/HTTP-адаптер и старый wheel удалены.
-- Один Client на приложение, повторное использование соединений, закрытие lifespan.
-- Сохранены просмотр/подтверждение, долговечные UUID и intents, независимая сверка
-  после записи, остановка при неизвестном результате и явная подготовка повтора.
-- Суммы/курсы/координаты сохраняются через Decimal; сериализация SQL и HTTP не
-  проходит через float. Fingerprint одинаковых чисел устойчив к конечным нулям.
-- Все поля моделей SDK имеют SQL-проекции или таблицы категорий движений;
-  неизвестные поля/коллекции остаются в полном JSON/исходном архиве.
-- Добавлены исходные валюты операций, bank IDs, координаты и напоминания; полные
-  настройки счетов, категорий, бюджетов и повторяющихся операций.
-- Удалено дублирующее зеркало zen_entities. Matching/проверка очереди читают
-  структурированные таблицы с точным полным JSON.
-- Полная полученная forceFetch-коллекция удаляет отсутствующие записи из текущего
-  зеркала; обычный инкремент не очищает его по отсутствию.
+- Backend directly uses Client.read_diff/upsert and transactions builders from zenmoney_api. Removed the legacy namespace/HTTP adapter and old wheel.
+- One Client per application, connection reuse, lifespan closure.
+- Preserved preview/confirmation, durable UUIDs/intents, independent post-write reconciliation, stopping on unknown outcomes, and explicit retry preparation.
+- Amounts/rates/coordinates are stored with Decimal; SQL/HTTP serialization never passes through float. Numeric fingerprints are stable across trailing zeros.
+- Every SDK model field has an SQL projection or movement-category table; unknown fields/collections remain in full JSON/source archives.
+- Added original transaction currencies, bank IDs, coordinates, reminders, and complete account/category/budget/recurring transaction settings.
+- Removed the duplicate zen_entities mirror. Matching/queue verification reads structured tables with exact complete JSON.
+- A complete received forceFetch collection removes absent records from the current mirror; ordinary incremental responses never clear it based on absence.
 
-API расширения сохранён. Новые пользовательские формы выбора перевода/долга
-не входили в рефакторинг: SDK и хранилище готовы для отдельного следующего этапа.
+The extension API is preserved. New user forms for transfers/debts were outside this
+refactor; SDK/storage are ready for a separate subsequent stage.
 
-## Проверка текущих данных
+## Current data validation
 
-Перед изменениями создан SQLite backup с WAL. Миграция сначала проверена в Docker
-без сети на отдельной копии пользовательской БД:
+Created a SQLite backup including WAL before changes. Migration was first tested
+in Docker without networking on a separate user database copy:
 
-| Данные | До и после миграции |
+| Data | Before and after migration |
 | --- | ---: |
-| Все текущие сущности ZenMoney | 32 608 |
-| Операции ZenMoney, включая deleted | 29 061 |
-| Счета ZenMoney | 114 |
-| Категории | 33 |
-| Банковские операции | 554 |
-| Группы сопоставления | 499 |
-| Задания создания | 66 |
+| All current ZenMoney entities | 32,608 |
+| ZenMoney transactions, including deleted | 29,061 |
+| ZenMoney accounts | 114 |
+| Categories | 33 |
+| Bank transactions | 554 |
+| Matching groups | 499 |
+| Creation jobs | 66 |
 
-Для всех 32 608 сущностей найден исходный архивный объект; случаев без источника —
-0. Восстановлены точные значения и ранее непроецируемые поля. Проверка сравнением
-данных/хешей подтвердила неизменность банковских операций/импортов/привязок, всех
-участников групп, исключений, категорий, правил, ранее отправлявшихся payload,
-идентификаторов/состояний очередей и **всего архива**. Prepared jobs получают только
-недостающие SDK defaults, сохраняя UUID. Integrity/FK checks успешны. Повторная
-инициализация не создаёт новый backup и не меняет данные.
+An original archived object was found for all 32,608 entities; zero lacked a source.
+Exact values and previously unprojected fields were recovered. Data/hash comparison
+confirmed unchanged bank transactions/imports/bindings, every group participant,
+exclusion, category, rule, previously sent payload, queue identifier/state, and
+**the entire archive**. Prepared jobs receive only missing SDK defaults while
+retaining UUIDs. Integrity/FK checks passed. Reinitialization creates no new backup
+and changes no data.
 
-Локальный контейнер затем пересобран и пересоздан; автоматическая миграция реального
-volume завершилась успешно. Выполнено повторное SQL-сравнение с его резервной
-копией: все указанные прикладные данные и архив сохранены. Контейнер healthy,
-SDK 0.6.0, schema 11; /api/state и /api/zenmoney/history отвечают HTTP 200.
-Через обновлённый backend выполнено **реальное чтение** /api/zenmoney/sync →
-ZenMoney: HTTP 200, synced/LIVE. Эта проверка не отправляла финансовых изменений.
+The local container was then rebuilt/recreated; automatic migration of the actual
+volume succeeded. Repeated SQL comparison against its backup confirmed preservation
+of all listed application data and archive contents. Container healthy, SDK 0.6.0,
+schema 11; /api/state and /api/zenmoney/history return HTTP 200. The updated backend
+performed an **actual read** /api/zenmoney/sync → ZenMoney: HTTP 200, synced/LIVE.
+This check sent no financial changes.
 
-## Автоматические проверки
+## Automated checks
 
-Полный `sh scripts/test-docker.sh`:
+Complete `sh scripts/test-docker.sh`:
 
-- 167 backend-тестов, включая миграцию/откат/идемпотентность, exact JSON/Decimal,
-  все поля SDK, массивы категорий, authoritative snapshot, lifecycle и HTTP.
-- 19 тестов банковских парсеров.
-- 70 браузерных сценариев расширения/SPA.
-- Реальный HTTP smoke и сохранность mapping/UUID после пересоздания контейнера.
+- 167 backend tests, including migration/rollback/idempotency, exact JSON/Decimal, all SDK fields, category arrays, authoritative snapshots, lifecycle, and HTTP.
+- 19 bank parser tests.
+- 70 extension/SPA browser scenarios.
+- Real HTTP smoke and preservation of mappings/UUIDs after container recreation.
 
-Тесты не получали живой токен. Сценарии потери ответа, частичной записи и конфликта
-проверялись mock API без повторной записи. Автономная живая матрица SDK описана
-в соседнем проекте ZenMoneyAPI; её результаты не подменяют эти проверки приложения.
+Tests received no live token. Lost response, partial write, and conflict scenarios
+used a mock API without repeated writes. The independent live SDK matrix is in the
+neighboring ZenMoneyAPI project; its results do not replace these application checks.
 
-## Резервные копии и восстановление
+## Backups and restoration
 
-Первая внешняя локальная копия: `data/backups/pre-sdk-2026-10-14.sqlite3` (Git-ignored,
-0600). Автоматическая предмиграционная копия рядом с рабочей БД внутри LIVE volume:
-`/data/zenimport.sqlite3.pre-v11-<UTC>-<suffix>.sqlite3`, также 0600.
+First external local copy: `data/backups/pre-sdk-2026-10-14.sqlite3` (Git-ignored,
+0600). Automatic premigration copy beside the production database in the LIVE volume:
+`/data/zenimport.sqlite3.pre-v11-<UTC>-<suffix>.sqlite3`, also 0600.
 
-Для восстановления остановить backend, вернуть прежний образ/checkout версии
-схемы 10 и восстановить backup как /data/zenimport.sqlite3 в соответствующем volume.
-При закрытой БД удалить только её старые WAL/SHM sidecars. Запускать прежнюю версию
-против схемы 11 нельзя; initialize защищает от более новой версии БД.
-Не восстанавливать копию поверх открытой SQLite и не удалять volume командой down -v.
+To restore, stop the backend, return to the previous schema 10 image/checkout, and
+restore the backup as /data/zenimport.sqlite3 in the corresponding volume. With the
+database closed, remove only its old WAL/SHM sidecars. Do not run the legacy version
+against schema 11; initialize rejects a newer database version. Never restore over
+an open SQLite database or remove the volume with down -v.
 
-Репетиция миграции на отдельной копии выполняется scripts/verify_migration.py
-в Docker без сети. Скрипт выдаёт только количества и результаты проверок;
-не печатает операции, реквизиты или токены.
+Rehearse migration on a separate copy using scripts/verify_migration.py in Docker
+without networking. The script outputs only counts and check results, never
+transactions, account details, or tokens.
 
-Миграция не угадывает потерянную точность, если исходного архива нет: сохраняет
-доступные значения и выставляет needs_full_sync. Архив пока не имеет retention,
-поэтому резервная копия текущего аккаунта занимает около 1.4 GiB.
+Migration does not guess lost precision without an original archive: it preserves
+available values and sets needs_full_sync. The archive currently has no retention;
+a current account backup therefore takes about 1.4 GiB.

@@ -1,178 +1,180 @@
-# Контракт синхронизации v1 — B0
+# Synchronization contract v1 — B0
 
-15 октября 2026. Статус: закреплён для реализации B1–E5. В самостоятельном backend завершены B1–B5:
-health/info, настройки/сбор, зеркало/прогноз и долговечная доставка. Правила: `docs/delivery.md`. Модели: `backend/sync_contracts.py`; примеры:
-`fixtures/sync-v1/`. Схемы: `json_schemas()`, JSON Schema 2020-12.
+October 15, 2026. Status: fixed for B1–E5 implementation. The independent backend
+has completed B1–B5: health/info, settings/capture, mirror/prediction, and durable delivery.
+Rules: `docs/delivery.md`. Models: `backend/sync_contracts.py`; examples:
+`fixtures/sync-v1/`. Schemas: `json_schemas()`, JSON Schema 2020-12.
 
-## Границы и извлечение проектов
+## Boundaries and project extraction
 
-SDK `/Users/vaslv/Projects/Vaslv/ZenMoneyAPI` остаётся универсальным. Backend
-становится самостоятельным `ZenImportBackend`, Chrome — `ZenImportChrome`.
-Коннекторы — модули расширения. Исходный репозиторий сохраняется как история.
-B1/E1 создают локальные копии репозитория без hardlinks и без remotes, фиксируют
-исходный commit, затем удаляют ненужные пути отдельными коммитами. Это сохраняет
-историю без переписывания оригинала; старые версии интерфейса доступны в истории.
-В готовых рабочих деревьях останутся только файлы соответствующего проекта.
-Переименование исходного каталога, push, теги и публикация не требуются.
+SDK `/Users/vaslv/Projects/Vaslv/ZenMoneyAPI` remains general-purpose. The backend
+becomes independent `ZenImportBackend`, Chrome becomes `ZenImportChrome`. Connectors
+are extension modules. The original repository remains as history. B1/E1 create local
+repository copies without hardlinks/remotes, record the source commit, then remove
+unneeded paths in separate commits. This retains history without rewriting the
+original; previous interfaces remain accessible through Git. Final working trees
+contain only their project's files. Renaming the source directory, pushing, tags,
+and publication are not required.
 
-| Обязанность | Владелец |
+| Responsibility | Owner |
 |---|---|
-| HTTP протокол ZenMoney / типы ошибок / точные суммы | SDK |
-| История, привязки, покрытие, предсказания, очередь и удаления | Backend |
-| Popup, банковская сессия, чтение страниц и деталей | Chrome |
-| Список счетов, IANA-пояс, окна, пагинация, парсер | Модуль банка |
+| ZenMoney HTTP protocol / error types / exact amounts | SDK |
+| History, mappings, coverage, predictions, queue, deletions | Backend |
+| Popup, bank session, page/detail capture | Chrome |
+| Account list, IANA zone, windows, pagination, parser | Bank module |
 
-Ни одного финансового редактора, предпросмотра, сверки или элемента UI в банке.
-Банковские пароли/cookies/OTP не покидают сессию браузера. SDK-токен только на сервере.
+No financial editor, preview, reconciliation, or bank UI elements. Bank passwords/
+cookies/OTPs never leave the browser session. The SDK token stays on the server.
 
 ## HTTP
 
-Все маршруты под `/api/v1`, Bearer-токен backend обязателен. `/health` публичный,
-не возвращает финансовые данные/секреты. Версия API в пути, `ServerInfo.api_version=1`.
-Изменение обязательных полей/семантики требует новой основной версии API.
-Новые необязательные поля вводятся согласованно обеими сборками: текущие модели
-запрещают неизвестные поля. `GET info` является проверкой совместимости до чтения банка.
+All routes are under `/api/v1`, requiring the backend Bearer token. `/health` is
+public and exposes no financial data/secrets. The API version is in the path;
+`ServerInfo.api_version=1`. Required field/semantic changes need a new major API
+version. New optional fields are coordinated between both builds: current models
+reject unknown fields. `GET info` checks compatibility before reading the bank.
 
-| Метод и путь | Запрос → ответ | Результат |
+| Method and path | Request → response | Result |
 |---|---|---|
 | GET `/info` | — → ServerInfo | 200 |
 | POST `/connections/discover` | DiscoverConnection → ConnectionView | 200 |
 | GET `/connections/{id}` | — → ConnectionView | 200 |
-| GET `/zenmoney/accounts` | — → AccountCatalog | 200; без записи в ZenMoney |
+| GET `/zenmoney/accounts` | — → AccountCatalog | 200; no ZenMoney writes |
 | PUT `/accounts/{id}/settings` | AccountSettings → AccountView | 200 |
-| POST `/jobs` | StartSync → JobView | 202; повтор возвращает существующее задание |
+| POST `/jobs` | StartSync → JobView | 202; repeats return the existing job |
 | GET `/jobs/{id}` | — → JobView | 200 |
 | POST `/jobs/{id}/lease` | CaptureLeaseRequest → CaptureLease | 200 |
-| PUT `/jobs/{job}/intervals/{interval}/pages/{number}` | CapturePage → PageReceipt | 200 после commit |
+| PUT `/jobs/{job}/intervals/{interval}/pages/{number}` | CapturePage → PageReceipt | 200 after commit |
 | POST `/jobs/{job}/intervals/{interval}/complete` | CaptureComplete → IntervalView | 200 |
 | POST `/jobs/{id}/capture-status` | CaptureStatus → JobView | 200 |
-| POST `/jobs/{id}/stop` | пустой JSON `{}` → JobView | 200; повтор безопасен |
+| POST `/jobs/{id}/stop` | Empty JSON `{}` → JobView | 200; safe to repeat |
 
-Максимум тела 2 000 000 байт, максимум 500 операций в странице. Если банковская
-страница больше, коннектор разбивает её на последовательные транспортные страницы
-с фиксированным итоговым количеством. Схема нормализованной страницы не обещает
-повторять номера банковского UI. Нельзя менять разбиение в пределах одного интервала.
-Даты JSON `YYYY-MM-DD`, время RFC3339 с обязательным смещением. Все даты интервалов
-включительны и интерпретируются в IANA-поясе банка. Сервер сверяет local_date со временем
-в этом поясе, периодом, валютой и масштабом счёта.
+Maximum body 2,000,000 bytes and 500 transactions per page. Larger bank pages are
+split by the connector into sequential transport pages with a fixed total count.
+Normalized page numbering need not match bank UI numbering. Partitioning cannot
+change within an interval. JSON dates are `YYYY-MM-DD`; times are RFC3339 with a
+required offset. Interval dates are inclusive in the bank's IANA zone. The server
+checks local_date against that zone's timestamp, period, account currency, and scale.
 
-`amount` — положительная десятичная строка без экспоненты/знака/разделителей,
-направление отдельно expense/income. До 24 целых и 12 дробных цифр, не более scale
-счёта; избыточные нулевые знаки также нормализует коннектор. Баланс — такая же строка,
-но допускает минус/ноль. Нулевое движение не отправляется как доход/расход: коннектор
-явно отмечает такую неподдерживаемую исходную строку, сбор не заявляет полным без
-выяснения её смысла. В тестах/документации не скрывать подобные строки.
+`amount` is a positive decimal string without exponent/sign/separators; direction
+is separate expense/income. Up to 24 integer and 12 fractional digits, no more than
+the account scale; the connector also normalizes excess trailing zeros. Balance uses
+the same string format but permits negative/zero. Zero movement is not sent as income/
+expense: the connector explicitly flags the unsupported source row and cannot claim
+complete capture until its meaning is resolved. Never hide such rows in tests/docs.
 
-## Контекст, счета, настройки
+## Context, accounts, settings
 
-profile_key — стабильный идентификатор банка либо отдельный выбранный пользователем
-идентификатор подключения. Он не выводится из имени владельца. identity_scope=bank
-разрешён только при доказанной уникальности source_key в банке; иначе profile.
-Канонический ключ: bank + scope + [profile_key при profile] + source_key + currency.
-Доказанное совпадение физического счёта переиспользует существующий UUID/настройки;
-догадка об одинаковом названии не объединяет счета. Неполный список не закрывает счета.
+profile_key is a stable bank-provided identifier or a separate user-chosen connection
+identifier, never inferred from the owner's name. identity_scope=bank requires proven
+source_key uniqueness within the bank; otherwise use profile. Canonical key:
+bank + scope + [profile_key for profile] + source_key + currency. Proven physical
+account identity reuses existing UUID/settings; guessing from equal titles does not
+merge accounts. Partial discovery does not close accounts.
 
-Каждый счёт unconfigured/enabled/ignored. enabled требует import_start и цели;
-цель — действующий обычный счёт ZenMoney той же валюты. При ignored/unconfigured
-активная цель отсутствует, прошлая привязка остаётся в журнале доставок/аудите.
-expected_version=0 для ещё не настроенного счёта; сервер атомарно проверяет текущую
-версию, увеличивает её при изменении и возвращает AccountView. Точный повтор тех же
-настроек без изменения версии безопасен; устаревшее и отличающееся значение → 409.
-Будущее начало истории, неподдерживаемая валюта/счёт, недействующая цель → 422/409.
-Повторно проверять цель перед отправкой. Начатые/неопределённые отправки блокируют
-смену цели; delivered не перепривязываются. Отключение счёта имеет немедленный
-приоритет перед очередным запросом, начатый запрос только завершают/проверяют.
+Every account is unconfigured/enabled/ignored. enabled requires import_start and a
+target: an active regular same-currency ZenMoney account. ignored/unconfigured has
+no active target; prior mappings remain in delivery/audit history. expected_version=0
+for unconfigured accounts; the server checks the current version atomically,
+increments it on changes, and returns AccountView. Exact unchanged-setting repeats
+are safe; stale differing values return 409. Future start dates, unsupported currency/
+account, and invalid targets return 422/409. Revalidate the target before delivery.
+Started/uncertain deliveries block target changes; delivered records are never rebound.
+Disabling takes immediate precedence before the next request; in-flight requests
+are only completed/verified.
 
-Новые unconfigured счета не блокируют уже enabled счета подключения. Если enabled нет, запуск требует настройки либо сообщает, что все счета ignored.
+New unconfigured accounts do not block already enabled connection accounts. Without
+any enabled accounts, startup requires configuration or reports all accounts ignored.
 
-## Задания, полнота, идемпотентность
+## Jobs, completeness, idempotency
 
-StartSync.request_id — UUID команды, сохраняемый браузером до получения результата.
-Ключ хранится на сервере вместе с содержимым запроса. Повтор с тем же телом возвращает
-тот же job; другое тело → 409 idempotency_conflict. Новый request_id при активном
-задании этого подключения присоединяется к нему и запоминает результат; новая дата
-reimport_from, отличающаяся от плана активного job, даёт 409 account_busy, а не теряется.
-Сбор общего счёта другим подключением → 409 account_busy. Ограничения обеспечиваются
-транзакцией/БД, не одним JavaScript-флагом.
+StartSync.request_id is the command UUID persisted by the browser before receiving
+its result. The server stores it with the request body. Identical repeats return the
+same job; different bodies return 409 idempotency_conflict. A new request_id joins
+this connection's active job and records that result; reimport_from differing from
+the active plan returns 409 account_busy rather than being lost. Another connection
+capturing a shared account returns 409 account_busy. Transactions/database constraints,
+not a single JavaScript flag, enforce this.
 
-Для возобновления известного paused job нужна новая команда request_id. Повтор прежнего request_id возвращает его состояние, но сам по себе не возобновляет сбор. При потерянном ответе исходной команды повторяют прежний UUID.
+Resuming a known paused job requires a new command request_id. Repeating the old
+request_id returns its state without resuming capture. If the original command response
+was lost, retry the original UUID.
 
-Конец истории фиксируется по сегодняшней дате банка при создании job. По каждому
-счёту: первый период от import_start; далее max(import_start,last_complete_end−14).
-Сначала закрываются пробелы начального импорта. reimport_from задаёт разовое
-перечитывание независимо от прежнего покрытия; при сбое остаток сохраняется.
-План сохраняет версии настроек, интервалы и источник запроса. Граница последнего
-полного сбора и результат доставки различны. Пользовательский клик также разрешает
-доставить старые пригодные pending операции включённых счетов.
+History ends on the bank's current date frozen at job creation. Per account: initial
+period starts at import_start, then max(import_start,last_complete_end−14). Fill initial
+import gaps first. reimport_from requests one-time rereading regardless of old coverage;
+failures preserve remaining work. Plans persist settings versions, intervals, and
+request source. Last complete capture and delivery outcome are different. A user click
+also authorizes delivery of eligible old pending records for enabled accounts.
 
-Для одного job один сборщик: worker_id постоянный в локальном состоянии расширения,
-lease действует 120 секунд, обновляется до истечения. При захвате после истечения
-epoch увеличивается. Чужой действующий lease → 409 capture_busy. Каждый новый write
-сверяет owner/epoch/срок, настройки и принадлежность интервала job. Без lease можно
-читать прогресс; очередь сервера не зависит от lease браузера. Закрытие popup не
-освобождает lease, остановка/завершение сбора освобождает. Истечение ведёт к paused,
-а не к потере страниц. Повтор уже сохранённой страницы допускает ACK без нового
-lease, если тело идентично ранее принятому (кроме служебных полей worker/epoch).
+One collector per job: worker_id persists in extension local state; leases last
+120 seconds and renew before expiry. Takeover after expiry increments epoch. Another
+valid lease returns 409 capture_busy. Every new write checks owner/epoch/expiry,
+settings, and interval ownership. Progress reads need no lease; the server queue is
+independent of the browser lease. Closing the popup does not release it; capture
+stop/completion does. Expiry pauses rather than loses pages. Identical accepted-page
+repeats may receive ACK without a new lease, excluding worker/epoch service fields.
 
-Ключ страницы (interval_id,page_number). Номер пути равен телу. До ACK сохранить
-страницу, её fingerprint и операции атомарно. Точное повторение не увеличивает
-счётчики; другое содержание того же номера → 409. Изменившиеся totals/context
-прерывают интервал, не помечают его полным. Новый снимок интервала получает новый ID;
-подтверждённые операции/журнал доставки не теряются. details проходит whitelist
-полей коннектора на сервере; произвольные сырые HTTP-ответы/секреты запрещены.
+Page key: (interval_id,page_number). Path and body numbers must agree. Persist page,
+fingerprint, and transactions atomically before ACK. Exact repeats do not increment
+counts; changed content at the same number returns 409. Changed totals/context fail
+the interval without marking it complete. A new interval snapshot gets a new ID;
+confirmed transactions/delivery history survive. The server allowlists connector
+details fields; arbitrary raw HTTP responses/secrets are prohibited.
 
-complete сверяет все страницы 1..total_pages, согласованные totals, количество,
-периоды/счёт/валюту/детали и отсутствие потерянных строк. Отсутствующая/противоречивая
-страница → 409 history_incomplete. Пустой интервал: одна страница, totals=1/0 и [].
-В complete нет клиентского флага «верьте, всё собрано». details_state=unavailable
-допускается только если коннектор доказал отсутствие доступных подробностей.
-Локальная Pydantic-валидация проверяет форму, эти проверки требуют БД/реестра банка.
+complete verifies pages 1..total_pages, consistent totals, counts, periods/account/
+currency/details, and absence of lost rows. Missing/inconsistent pages return 409
+history_incomplete. An empty interval has one page, totals=1/0, and []. No client
+trust-me-complete flag exists. details_state=unavailable is allowed only when the
+connector proves details are unavailable. Local Pydantic validates shape; these
+checks require the database/bank registry.
 
-stop останавливает только сбор. Backend продолжает уже разрешённую доставку полных
-интервалов; отключение счёта отдельно приостанавливает и будущие отправки. При login
-required сбор paused, продолжение после входа и следующего клика. Самостоятельно
-не начинать новое задание по загрузке страницы или таймеру.
+stop halts only capture. The backend continues authorized complete-interval delivery;
+disabling separately pauses future writes too. Login required pauses capture; resume
+after sign-in and the next click. Never independently start a new job on page load
+or a timer.
 
-## Доставка и обучение
+## Delivery and learning
 
-Состояния: pending → prepared (UUID/payload сохранены) → attempting → delivered либо
-uncertain. Crash в attempting означает uncertain; известное удаление → suppressed.
-Доставленное не становится pending при мобильном редактировании или отсутствии в
-частичном diff. При uncertain проверка прежнего UUID через diff, без слепого upsert;
-нет нового UUID или «исправления» полей на старые. Одного HTTP-кода недостаточно
-для решения о безопасном повторе записи. Серверная очередь живёт после закрытия Chrome.
+States: pending → prepared (UUID/payload persisted) → attempting → delivered or
+uncertain. A crash during attempting means uncertain; known deletion means suppressed.
+Delivered never becomes pending after mobile edits or absence from partial diff.
+Uncertain verifies the prior UUID through diff without blind upsert, a new UUID, or
+restoring old field values. An HTTP status alone cannot prove retry safety. The
+server queue survives Chrome closure.
 
-Расход/приход, явное viewed=false, ручная пригодная категория приоритетна, далее
-подтверждённое правило/три независимых примера без противоречий, иначе категория null.
-Собственные viewed=false предсказания не обучают. Категория/тип/удаление в актуальном
-ZenMoney меняют обучающее свидетельство, а не исходную банковскую запись.
+Expense/income, explicit viewed=false; eligible manual categories take precedence,
+then confirmed rules/three independent consistent examples; otherwise category null.
+Our own viewed=false predictions never train. Current ZenMoney category/type/deletion
+changes affect learning evidence, not the original bank record.
 
-## Ошибки и результаты
+## Errors and results
 
-ErrorResponse = `{error:{code,message,retryable,request_id}}`. UUID request_id нужен
-для обезличенной диагностики; message не содержит входное тело/токены/реквизиты.
-401 unauthorized; 404 not_found/unsupported_api_version; 405 method_not_allowed; 500 internal_error; 409 конфликты/lease/неполнота;
-413 payload_too_large; 422 validation_error/unsupported_currency; 502/503 недоступность
-ZenMoney. Статусы неизвестной доставки и истёкшего банковского входа возвращаются
-также в JobView.errors. retryable разрешает повтор чтения/команды по её ключу,
-**не** повтор записи ZenMoney. Никакие ошибки не раскрывают Pydantic input в HTTP.
+ErrorResponse = `{error:{code,message,retryable,request_id}}`. UUID request_id enables
+anonymous diagnostics; message contains no request body/tokens/account details.
+401 unauthorized; 404 not_found/unsupported_api_version; 405 method_not_allowed;
+500 internal_error; 409 conflicts/leases/incompleteness; 413 payload_too_large;
+422 validation_error/unsupported_currency; 502/503 ZenMoney unavailable. Unknown
+delivery and expired bank login statuses also appear in JobView.errors. retryable
+permits retrying reads/commands by key, **not** ZenMoney writes. No error exposes
+Pydantic input over HTTP.
 
-JobView разделяет capture_state и delivery_state, прогресс по счетам и четыре
-счётчика доставки. suppressed — сознательно исключённое/известно удалённое;
-uncertain не является доставленным. Не выдавать полный успех при cancelled/paused/
-failed либо blocked/uncertain. Каталог счетов возвращает время актуализации и только
-пригодные цели; если получение не удалось, не объявлять устаревший каталог свежим.
+JobView separates capture_state/delivery_state, per-account progress, and four delivery
+counts. suppressed means deliberately excluded/known deleted; uncertain is not delivered.
+Never claim full success for cancelled/paused/failed or blocked/uncertain. The account
+catalog returns refresh time and eligible targets only; failed retrieval never makes
+an old catalog fresh.
 
+## Discrepancy page (October 16, 2026)
 
-## Страница расхождений (16 октября 2026)
+Added authenticated read-only GET `/api/v1/connections/{uuid}/discrepancies`;
+parameters/exact semantics: [discrepancies.md](discrepancies.md). This API performs no
+corrections/deletions, link creation, or transaction delivery. The rest of v1 is unchanged.
 
-Добавлен авторизованный read-only GET `/api/v1/connections/{uuid}/discrepancies`; параметры и точная семантика: [discrepancies.md](discrepancies.md). Исправлений/удалений, создания связей и отправки операций этот API не выполняет. Остальной v1 не изменён.
+### Unknown account in a previous match
 
-
-### Неизвестный счёт прежнего сопоставления
-
-`existing_ownership_unknown` в `JobView.errors` означает, что старая связь с
-операцией ZenMoney сохранилась, но доказательство её конкретного счёта
-отсутствует. Задание имеет delivery_state=blocked; затронутые новые записи
-остаются pending без отправки, остальные счета/дни продолжаются. Ошибка
-не означает неизвестного результата нового запроса и не разрешает его повтор.
+`existing_ownership_unknown` in `JobView.errors` means a legacy ZenMoney transaction
+link survives but evidence of its specific account is missing. The job has
+delivery_state=blocked; affected new records remain pending without delivery while
+other accounts/days continue. This is not an unknown outcome of a new request and
+does not authorize retrying one.
