@@ -376,3 +376,16 @@ is the tag above; subsequent documentation commits do not replace that artifact.
 Run links, boundaries and installation: [container-release-0.2.0.md](../container-release-0.2.0.md).
 Independent anonymous native-ARM64 pull additionally verified UID/SDK and all 29
 runtime Python/SQL file hashes against the tested source, without data mounts.
+
+
+## October 17, 2026 — BIDV policy (local 0.2.1)
+
+- Added BIDV VND discovery/capture policy without changing API v1 or schema 6.
+  Bank-specific detail fields remain isolated from VietinBank; equal source account
+  numbers at different banks keep distinct identities. SDK/PyPI dependency is unchanged.
+- Docker ARM64: 516 tests passed; HTTP/authentication, persistence, crash recovery,
+  graceful shutdown and restored delivery checks passed on disposable fixture data.
+  Logs: ignored `.local/bidv-full-tests.log`. No production service/data or ZenMoney
+  account was used. Live BIDV delivery remains a separate acceptance step.
+- Documentation: `docs/bidv.md`. Version metadata is 0.2.1, local/unreleased.
+  No push, tag, publication, or production deployment is authorized by this feature request.
