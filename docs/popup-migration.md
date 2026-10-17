@@ -1,8 +1,8 @@
 # Move a backend through the Chrome popup (0.2.0)
 
 Use backend and extension 0.2.0 or newer, with the same supported storage schema.
-This feature is prepared locally; the published 0.1.0 image and 0.1.9 extension do
-not contain it. Publishing new artifacts requires separate authorization.
+The earlier 0.1.0 image and 0.1.9 extension do not contain this feature. Update
+both backends and the extension before exporting or importing.
 
 ## User flow
 

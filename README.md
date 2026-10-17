@@ -1,9 +1,9 @@
 # ZenImport Backend
 
-Popup export/import for moving servers is prepared in local **0.2.0**:
+Version **0.2.0** adds popup export/import for moving servers:
 [data migration guide](docs/popup-migration.md). It retains the full delivery journal
-and restores only before the destination's first sync. The published 0.1.0 image
-does not include this feature yet.
+and restores only before the destination's first sync. Update both backends and
+the extension to 0.2.0 before using this feature.
 
 An independent Docker service that receives bank history from Chrome and adds new transactions to ZenMoney. Neither extension source nor an SDK checkout is required to build. Docker installs the public `zenmoney-python==0.7.0` wheel from PyPI with a pinned SHA256; no PyPI token is needed.
 
@@ -13,13 +13,13 @@ Plan: [docs/refactor/README.md](docs/refactor/README.md). Status: [docs/refactor
 
 ## Published server image
 
-Backend 0.1.0 is available publicly for Linux AMD64 and ARM64:
+The 0.2.0 release targets Linux AMD64 and ARM64:
 
 ```sh
-docker pull ghcr.io/vaslv/zenimport-backend:0.1.0
+docker pull ghcr.io/vaslv/zenimport-backend:0.2.0
 ```
 
-[Verified digest, native CI results, and installation commands](docs/container-release-0.1.0.md).
+[Release verification and installation commands](docs/container-release-0.2.0.md).
 For deployment, use that immutable digest and keep SQLite in the named volume.
 When moving an existing installation, transfer its consistent database and delivery
 journal before switching the extension; do not run old/new workers together.
