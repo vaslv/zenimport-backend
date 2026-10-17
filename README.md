@@ -13,7 +13,7 @@ Plan: [docs/refactor/README.md](docs/refactor/README.md). Status: [docs/refactor
 
 ## Published server image
 
-The 0.2.0 release targets Linux AMD64 and ARM64:
+Backend 0.2.0 is published for Linux AMD64 and ARM64:
 
 ```sh
 docker pull ghcr.io/vaslv/zenimport-backend:0.2.0

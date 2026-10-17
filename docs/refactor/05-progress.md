@@ -359,3 +359,20 @@ All banks/ZenMoney/data were synthetic, in isolated Docker. No production databa
 container, installed extension, real API, push/tag, or publication was used.
 New AMD64/native remote HTTPS/mobile acceptance is not claimed by these runs.
 Published backend 0.1.0 remains unchanged. Guide: [popup-migration.md](../popup-migration.md).
+
+## Published 0.2.0 — October 17, 2026
+
+With explicit user authorization, pushed backend source/documentation, created
+and pushed Git tag v0.2.0 at 36694047a926cc231ca9e7731458df7f88b7c8ef, and ran GHCR
+publication. Native AMD64/ARM64 CI and the full guarded publication workflow passed:
+508 tests per architecture, lifecycle and image-only deployment, followed by public
+anonymous pull/install checks on both native architectures. No real financial data
+or production deployment was used. Existing 0.1.0 bytes were not overwritten.
+
+Public 0.2.0 immutable digest:
+`sha256:4887d92e74ecee5454a5c84bc15ff586b8879849ce53006f05b56e63eff48d9f`.
+Independently verified anonymous registry manifest SHA256/platforms. Runtime source
+is the tag above; subsequent documentation commits do not replace that artifact.
+Run links, boundaries and installation: [container-release-0.2.0.md](../container-release-0.2.0.md).
+Independent anonymous native-ARM64 pull additionally verified UID/SDK and all 29
+runtime Python/SQL file hashes against the tested source, without data mounts.
