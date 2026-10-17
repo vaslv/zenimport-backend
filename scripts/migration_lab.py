@@ -191,7 +191,7 @@ def _prepare_catalog(api, state, identity, token):
     return journal
 
 
-def remote_action(command, write=False):
+def remote_action(command, write=False, options=None):
     from zenmoney_api import Client
     identity = json.loads(Path(os.environ['LAB_IDENTITY_FILE']).read_text())
     run = os.environ['LAB_RUN_ID']
@@ -200,7 +200,8 @@ def remote_action(command, write=False):
         raise RuntimeError('Explicit ZENMONEY_TEST_TOKEN required')
     validate_source(identity, token, run)
     state = Path(os.environ['LAB_STATE_DIR'])
-    with Client(token) as api:
+    from migration_history import AuditedTransport
+    with Client(token,transport=AuditedTransport(state/'tools-sdk-audit.jsonl')) as api:
         data = api.read_diff()
         validate_identity(data, identity, token, run)
         if command == 'catalog':
@@ -216,10 +217,22 @@ def remote_action(command, write=False):
                 'counts':{k:len(data.get(k, [])) for k in ('account','tag','merchant','transaction')},
                 'currencies_available':all(any(i.get('shortTitle') == c for i in data['instrument']) for c in ('USD','VND'))}))
             return
+        if command in ('history','mutate','verify'):
+            from migration_history import prepare_history, mobile_changes, verify_history, history_lock
+            if command in ('history','mutate') and not write:
+                raise RuntimeError('Controlled financial changes require --write')
+            with history_lock(state):
+                if command=='history':
+                    journal=prepare_history(api,state,identity,token)
+                    print(json.dumps({'stage':'history','verified':True,
+                        'variants':{k:{'seed_rows':len(v['seed']),'bank_rows':len(v['records'])} for k,v in journal['variants'].items()}}))
+                elif command=='mutate':mobile_changes(api,state,identity,token)
+                else:verify_history(api,state,identity,token,options.variant,options.instance,later=options.later,edited=options.edited)
+            return
     if command == 'serve':
         os.environ['ZENMONEY_TOKEN'] = token
-        os.execv(sys.executable, [sys.executable, '-m', 'uvicorn', 'backend.app:create_app',
-            '--factory', '--host', '0.0.0.0', '--port', '8000', '--workers', '1', '--no-access-log'])
+        os.execv(sys.executable, [sys.executable, '-m', 'uvicorn', 'migration_history:create_lab_app',
+            '--app-dir','/app/scripts','--factory', '--host', '0.0.0.0', '--port', '8000', '--workers', '1', '--no-access-log'])
 
 
 def main():
@@ -231,6 +244,13 @@ def main():
     init.add_argument('--ports', type=int, nargs=2, default=[18892, 18893])
     sub.add_parser('inspect')
     catalog = sub.add_parser('catalog'); catalog.add_argument('--write', action='store_true')
+    for command in ('history','mutate'):
+        action=sub.add_parser(command);action.add_argument('--write',action='store_true')
+    verify=sub.add_parser('verify')
+    verify.add_argument('--variant',choices=('migrated','empty'),required=True)
+    verify.add_argument('--instance',choices=('a','b'),required=True)
+    verify.add_argument('--later',action='store_true')
+    verify.add_argument('--edited',action='store_true')
     sub.add_parser('serve')
     args = parser.parse_args()
     try:
@@ -238,7 +258,7 @@ def main():
             state = initialize(args.root, args.token_file, args.identity_file, args.main_env, args.ports)
             print('Private lab configuration: '+str(state/'lab.env'))
         else:
-            remote_action(args.command, getattr(args, 'write', False))
+            remote_action(args.command, getattr(args, 'write', False),args)
     except Exception:
         # No SDK response, credential, path or personal identity in error output.
         parser.exit(1, 'Lab action failed; inspect the private state before retrying. No automatic write retry.\n')

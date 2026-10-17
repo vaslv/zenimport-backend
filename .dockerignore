@@ -25,3 +25,5 @@
 
 !scripts/
 !scripts/migration_lab.py
+!scripts/migration_history.py
+!scripts/migration_replay.py
