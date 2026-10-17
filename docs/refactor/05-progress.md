@@ -259,3 +259,17 @@ Docker on Linux/ARM64: **492 tests passed**, plus HTTP/auth, persistent recreati
   capacity; no network with attached containers or production volume was removed.
 - PyPI upload credentials remain outside this backend. Source push, Git tags, and
   registry publication are separate actions; this checkpoint is local only.
+
+
+## 2026-10-17 — Manual container publication pipeline
+
+- Prepared a manual GitHub Container Registry workflow for backend 0.1.0,
+  with reusable two-platform CI, short-lived `GITHUB_TOKEN`/packages-write access,
+  fixed-version and source-SHA image tags, and no automatic publication on push.
+- Guarded existing version images against overwrite, recorded the registry digest,
+  checked both platform manifests, and added post-publication image-only smoke
+  checks. These steps are prepared, not claimed as executed on GitHub yet.
+- Updated public deployment/publication instructions and recorded the actual local
+  evidence in [pypi-container-validation.md](../pypi-container-validation.md).
+- actionlint passed; source/history secret scans and focused manual review passed.
+  No source push, Git tag, registry publication, or production restart occurred.

@@ -1,34 +1,77 @@
-# Publication sequence for the three projects
+# Backend image publication
 
-1. https://github.com/vaslv/zenmoney-python: independent **zenmoney-python 0.7.0** package, import `zenmoney_api`, MIT. Prepared wheel/sdist/SHA256SUMS and CI belong to the SDK. Publish its commits and first verified GitHub Release first.
-2. https://github.com/vaslv/zenimport-backend: backend 0.1.0, MIT. Depends on the separate SDK package pinned by exact version/digest; includes Compose deployment from a prebuilt image without an SDK checkout. A local wheel is used before SDK release.
-3. https://github.com/vaslv/zenimport-chrome: MV3 0.1.9, MIT, with PRIVACY.md, reproducible ZIP, and CI. Users enter connection settings in the popup.
+The SDK is published independently as
+[zenmoney-python 0.7.0](https://pypi.org/project/zenmoney-python/0.7.0/) and at
+[GitHub Release v0.7.0](https://github.com/vaslv/zenmoney-python/releases/tag/v0.7.0).
+The backend downloads this public PyPI package by exact version/SHA256;
+see [SDK dependency](sdk-dependency.md). No SDK checkout or upload token is needed.
 
-## Already prepared locally
+Backend source: https://github.com/vaslv/zenimport-backend, version 0.1.0, MIT.
+Prepared registry target: `ghcr.io/vaslv/zenimport-backend`.
+The Chrome project is independent and is not published by this workflow.
 
-- Origin remotes point to the created repositories; initial MIT licenses and GitHub history are preserved by ordinary local merges, without force/rewrite.
-- SDK/Chrome/backend CI runs checks; workflows do not push, create tags, automatically publish to PyPI/GHCR/Chrome Web Store, or run live financial tests.
-- The backend SDK pin agrees across pyproject, wheel, SHA256, and requirements-sdk.lock.txt. pip verifies the digest and never searches an unpublished index.
-- Docker runtime contains only the service/SDK/minimal configuration helper; .env, financial history, SQLite, tests, browser, and live runner are excluded.
-- Image-only compose.server.yaml keeps SQLite in an explicitly named persistent volume and exposes HTTP only on loopback. HTTPS setup is documented separately.
-
-## After separate publication permission
-
-Follow `ZenMoneyAPI/docs/publication.md` for the SDK. At preparation time, GitHub contains only the initial license; local preparation itself sends nothing there. After SDK release, download its wheel/manifest and update the cache with `scripts/update_sdk.py --wheel ... --sha256 ...`, then rerun backend checks. The pyproject version and digest must match the published package; ordinary backend builds never access a neighboring SDK project.
-
-Check that origin/main is unchanged, then separately obtain permission to push backend commits without force and wait for successful CI. Git tag creation/pushing require separate approval. The image version must correspond to the chosen service tag/commit.
-
-GHCR publication requires GitHub Packages access, repository `ghcr.io/vaslv/zenimport-backend`, and separate permission for registry push. Prefer short-lived CI credentials/protected environments; never store registry tokens in code/Dockerfile/build args. After authorization, a multiplatform image can be built from the verified commit:
+## Local verification before publication
 
 ```sh
-# Only after separate registry push permission and GHCR login setup:
-docker buildx build --platform linux/amd64,linux/arm64 --target final   --build-arg VCS_REF=VERIFIED_COMMIT   --build-arg SOURCE_URL=https://github.com/vaslv/zenimport-backend   --tag ghcr.io/vaslv/zenimport-backend:0.1.0 --push .
+./scripts/test-platforms.sh
+./scripts/test-server-image.sh linux/arm64
+./scripts/test-server-image.sh linux/amd64
 ```
 
-This example has not been executed. Publishing creates the multiplatform registry manifest; both executable images are validated locally and separately. After pushing, verify manifest/digest and install **by digest**, not latest. Configure public GHCR package visibility for open downloads. A public GitHub repository does not itself make its container package public. On the server, verify HTTPS, restoration of a consistent database, and one repeated synchronization.
+These checks use unique disposable databases, synthetic tokens, and fake ZenMoney
+responses. They do not read production `.env`, invoke a bank, or send real
+financial transactions. ARM64 is native on the development Mac; AMD64 is emulated.
+No claim is made that a remote server has been configured by these checks.
 
-For Chrome, after separate push/tag/Release approval, attach only the verified ZIP, its SHA256, and privacy description. Store publication is not separately planned.
+Review the complete source diff, clean Git state, lock/hash, workflow syntax,
+secret scan, and deployment instructions. Commit locally. Publishing source
+commits and creating Git tags each require separate explicit user permission.
+A Git tag is not required by the image workflow.
 
-## Limitations
+## Manual GHCR workflow
 
-CI files were checked locally but had not yet run on GitHub: push was not authorized. Local build readiness does not mean the SDK/image is published or an external server configured. This stage uses no live production transactions. Secrets, .local, .env, server databases, and private evidence are excluded from Git, Docker context, Python archives, and the extension ZIP.
+`.github/workflows/ci.yml` runs checks on pushes/PRs or manual/reusable invocation;
+it has `contents: read` only and never publishes anything.
+`.github/workflows/publish-image.yml` publishes **only when manually dispatched**.
+Pushing source commits alone does not publish an image.
+
+After explicit source-push and image-publication authorization:
+
+1. Push the reviewed backend commits without force and check the source revision.
+2. In GitHub Actions, select **Publish backend image**, **Run workflow**, branch
+   **main**. The source must already be committed to that branch.
+3. The reusable verification job tests Linux ARM64/AMD64 and image-only deployment.
+4. Only after both pass, the publication job uses the short-lived `GITHUB_TOKEN`
+   with `contents: read` and `packages: write`, authenticating through stdin.
+   No personal access token or PyPI token is required. Credentials are never
+   passed to the Docker build. Registry login is removed in an always-run step.
+5. The workflow refuses to replace an existing version image, builds both
+   architectures, and pushes tags `0.1.0` and `sha-<full-source-commit>`. No `latest`
+   tag or Git tag is created. The OCI source/revision labels identify the source.
+6. It checks the registry manifest for both architectures, then pulls the published
+   digest and reruns image-only HTTP/auth/persistence checks on both platforms.
+   If a post-publication check fails, the image may already exist: do not deploy
+   it just because the tag exists. Investigate the failed run; do not overwrite
+   that version. The version guard also makes repeated dispatches fail safely.
+7. The workflow summary prints `ghcr.io/vaslv/zenimport-backend@sha256:...`.
+   Use that exact immutable reference on the server, not a moving tag.
+
+The first GHCR package is private by default even when the repository is public.
+In the package settings, change its visibility to **Public** to permit anonymous
+server pulls. Then verify the digest/manifest without registry credentials.
+The repository source label links the image package to its GitHub repository.
+If organization policies restrict `GITHUB_TOKEN` package creation, resolve those
+permissions before retrying; never put personal credentials into the Dockerfile.
+
+## Server deployment and moving data
+
+Follow [server-deployment.md](server-deployment.md) and [operations.md](operations.md):
+choose the verified digest, preserve the named SQLite volume, generate a private
+server `.env`, add the ZenMoney token only on the server, and configure HTTPS.
+Do not run old and new delivery workers against the same ZenMoney account together.
+When moving an existing installation, transfer a consistent database snapshot and
+delivery journal. A fresh mirror alone cannot preserve deletions or arbitrary edits
+that only the original journal knew about. See [migration-lab.md](migration-lab.md).
+
+Preparation is not publication. A successful registry run, public anonymous pull,
+and a server-specific HTTPS check must be reported separately with actual evidence.

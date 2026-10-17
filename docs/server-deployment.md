@@ -23,13 +23,13 @@ cd zenimport-backend
 ```
 
 This command builds only the native architecture, never pushes, and prints the local
-image name. The image includes installed zenmoney-python 0.7.0 and dependencies;
+image name. The build downloads zenmoney-python 0.7.0 from public PyPI with SHA256 verification.
+The image includes the installed SDK and dependencies;
 an SDK checkout is unnecessary. Version/revision/source are recorded in OCI labels.
 
-The second method uses a prebuilt image from a future GHCR release. Obtain the exact
-published `ghcr.io/vaslv/zenimport-backend@sha256:...` from the release report. The image
-is not yet published. The server needs only compose.server.yaml and init-server.sh
-from the same verified release (or the entire checkout); no local build:
+The second method uses a prebuilt GHCR image. After a successful publication, obtain the exact
+published `ghcr.io/vaslv/zenimport-backend@sha256:...` from the release report. A prepared workflow is not a published image; use only a digest from a successful run. The server needs only compose.server.yaml and scripts/init-server.sh
+from the same verified commit (or the entire checkout); no local build:
 
 ```sh
 export ZENIMPORT_IMAGE=ghcr.io/vaslv/zenimport-backend@sha256:VERIFIED_DIGEST
@@ -114,3 +114,12 @@ read production .env. Image-only checks have no ZenMoney token; they verify mode
 600/no-overwrite bootstrap, SDK, HTTP/auth, UID/read-only root, loopback binding,
 OCI revision, and database preservation on recreation. They remove only their own
 test environment. Build the actual production image separately.
+
+## Verify a published image
+
+The manual `Publish backend image` workflow tests both architectures before publishing,
+then pulls the exact published digest and verifies HTTP/auth, configuration, and
+persistence again with disposable databases. The run summary prints the immutable
+image reference to use above. No personal PyPI/GHCR upload token is required on a
+server when the GHCR package is public. Package visibility must be set explicitly
+in GitHub package settings after its first publication.
