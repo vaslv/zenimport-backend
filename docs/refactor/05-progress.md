@@ -481,3 +481,11 @@ release or remote publication.
 - Synthetic data only; no production containers, bank sessions or ZenMoney writes.
   Non-fatal upstream Starlette/httpx deprecation warnings remain. Local logs are
   excluded under .local/release-0.2.1/. Push, tags and publication were not run.
+
+## 2026-10-19 — Publish backend 0.2.1
+
+Authorized main/tag pushes and GHCR publication completed. Source 463f12c and
+v0.2.1 identify the released runtime. Source CI 39260257528, tag CI 39260558371
+and publication workflow 39260287161 passed, including native AMD64/ARM64 image
+acceptance. Public digest and independent local ARM64 verification are recorded in
+container-release-0.2.1.md. Production deployment/data were not changed.

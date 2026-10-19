@@ -1,9 +1,8 @@
 # ZenImport Backend
 
-Prepared release **0.2.1** adds the [BIDV capture policy](docs/bidv.md) and
+Release **0.2.1** adds the [BIDV capture policy](docs/bidv.md) and
 [named bank connections](docs/bank-connections.md), paired with Chrome 0.2.1+. It also repairs corroborated legacy transfer links and
-reports unmatched records from both sources independently of delivery. It is not
-yet published; the latest published image remains 0.2.0.
+reports unmatched records from both sources independently of delivery. It is published for Linux AMD64 and ARM64.
 [Release notes and upgrade procedure](docs/container-release-0.2.1.md).
 
 Version **0.2.0** adds popup export/import for moving servers:
@@ -19,13 +18,13 @@ Plan: [docs/refactor/README.md](docs/refactor/README.md). Status: [docs/refactor
 
 ## Published server image
 
-Backend 0.2.0 is published for Linux AMD64 and ARM64:
+Backend 0.2.1 is published for Linux AMD64 and ARM64:
 
 ```sh
-docker pull ghcr.io/vaslv/zenimport-backend:0.2.0
+docker pull ghcr.io/vaslv/zenimport-backend:0.2.1
 ```
 
-[Release verification and installation commands](docs/container-release-0.2.0.md).
+[Release verification and installation commands](docs/container-release-0.2.1.md).
 For deployment, use that immutable digest and keep SQLite in the named volume.
 When moving an existing installation, transfer its consistent database and delivery
 journal before switching the extension; do not run old/new workers together.

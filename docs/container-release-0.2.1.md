@@ -1,9 +1,16 @@
 # Backend 0.2.1 — release preparation
 
-Status: prepared locally, not published. No Git tag, remote release or registry
-manifest is created by this preparation. The latest published image remains 0.2.0.
-The planned image is `ghcr.io/vaslv/zenimport-backend:0.2.1` for Linux AMD64/ARM64.
-No immutable registry digest is available until publication succeeds.
+Published on October 19, 2026 for Linux AMD64 and ARM64.
+
+- Image: `ghcr.io/vaslv/zenimport-backend:0.2.1`
+- Immutable reference: `ghcr.io/vaslv/zenimport-backend@sha256:f76f2e3a8dc1b79041f694f16764b673510279e0c77d8ec2529155dd3a532c79`
+- Source/tag v0.2.1: `463f12ca1504d5768cd50ef676c627987b6cf383`
+- [Source CI](https://github.com/vaslv/zenimport-backend/actions/runs/39260257528)
+- [Publication and native immutable-image checks](https://github.com/vaslv/zenimport-backend/actions/runs/39260287161)
+
+All jobs passed. Anonymous registry access verified the manifest digest and both
+architectures. A separate local ARM64 pull verified image-only bootstrap, HTTP,
+SDK, UID, persistent volume and source revision on a disposable database.
 
 ## Changes
 
@@ -18,7 +25,7 @@ place when later connections expose additional transfer sides.
 
 1. Finish or stop browser capture. Save a consistent database backup and private
    server configuration; do not copy a running SQLite file without its WAL.
-2. After a separately authorized publication, verify successful native CI and
+2. For this published release, verify successful native CI and
    published-image acceptance on both architectures. Record the published digest
    and use that immutable reference in `ZENIMPORT_IMAGE`.
 3. Stop the old backend, retain the same `DATA_VOLUME` and credentials, and replace

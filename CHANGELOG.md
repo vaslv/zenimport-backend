@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.1 — prepared, unpublished
+## 0.2.1 — 2026-10-19
 
 - Accept BIDV VND payment-account history with isolated capture validation.
 - Support named connections for multiple logins at the same bank; keep physical
