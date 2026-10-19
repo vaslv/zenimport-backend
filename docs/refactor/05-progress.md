@@ -449,3 +449,21 @@ repeated full captures, mobile deletion, conflicting evidence and the equal-valu
 already-claimed transfer regression. Existing ownership/rebinding tests still pass.
 Read-only live dry run identifies exactly the three user-confirmed legacy sides;
 no production recovery or remote transaction write was performed by that dry run.
+
+## 2026-10-19 — Validate live transfer recovery
+
+The full isolated Docker suite finished successfully: 543 tests, HTTP/persistence,
+crash recovery, graceful shutdown and snapshot restoration. Created a private
+SQLite backup in the local data volume before updating the runtime; backup and
+post-update integrity checks returned ok.
+
+The normal worker recovered all three user-confirmed legacy transfer targets and
+adopted their opposite bank legs, without direct edits to receipts. Each UUID now
+has two distinct target claims and both bank records are delivered. Latest three
+BIDV jobs are complete/complete, unresolved ownership errors are zero, and the
+fresh discrepancy report has zero differences across 185 covered days. Delivery
+attempts remained 1050, active mirrored transaction count remained 27383, and the
+set of remote transaction IDs gained no entries. Live verification reused the
+completed bank captures and refreshed ZenMoney; repeated full bank capture and
+mobile-deletion safety were verified on synthetic Docker fixtures. No push, tags,
+release or remote publication.
