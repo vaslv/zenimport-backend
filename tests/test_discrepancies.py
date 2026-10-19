@@ -84,11 +84,11 @@ def test_unknown_other_accounts_other_days_deleted_and_hold_are_not_extra(h):
     assert report(h).json()['days'] == []
 
 
-def test_report_waits_for_delivery_and_rejects_foreign_account_and_invalid_period(h):
+def test_report_works_before_delivery_and_rejects_foreign_account_and_invalid_period(h):
     h.capture()
     extra(h)
     result=report(h).json()
-    assert result['days'] == [] and result['accounts'][0]['status'] == 'sync_in_progress'
+    assert result['days'] == [] and result['accounts'][0]['status'] == 'ready'
     assert report(h,account_id=str(uuid4())).status_code == 404
     assert report(h,from_date='2026-10-16',to_date=DAY).status_code == 422
     assert report(h,from_date='not-a-date').status_code == 422
@@ -118,7 +118,7 @@ def test_report_does_not_change_financial_journal_and_never_sends_a_write(h):
 def test_exact_amounts_split_and_net_settlement_are_read_only_matches():
     dec=lambda values:[Decimal(v) for v in values]
     assert discrepancies.consume_matches(dec(['-100']),{'a':Decimal('-40'),'b':Decimal('-60')}) == set()
-    assert discrepancies.consume_matches(dec(['-961440','1000000']),{'a':Decimal('38560')}) == set()
+    assert discrepancies.unmatched_sides(dec(['-961440','1000000']),{'a':Decimal('38560')}) == ({0,1},{'a'})
     assert discrepancies.consume_matches([],{'a':Decimal('-100'),'b':Decimal('100')}) == {'a','b'}
     assert len(discrepancies.consume_matches(dec(['-100']),{'a':Decimal('-100'),'b':Decimal('-100')})) == 1
 
@@ -134,3 +134,41 @@ def test_combinations_are_bounded_and_never_commit_links():
     banks=[Decimal('-3')]
     zens={str(i):Decimal('-1') for i in range(17)}
     assert discrepancies.consume_matches(banks,zens) == set(zens)
+
+
+@pytest.mark.parametrize('state', ['pending', 'prepared', 'uncertain'])
+def test_delivery_state_does_not_hide_missing_bank_operations(h, state):
+    h.capture()
+    with storage.transaction(h.path) as db:
+        db.execute("UPDATE bank_processing SET state=?", (state,))
+    h.app.state.mirror.refresh(force=True)
+    result = report(h).json()
+    assert result['accounts'][0]['status'] == 'ready'
+    day = result['days'][0]
+    assert len(day['bank_operations']) == 1
+    assert day['bank_operations'][0]['amount'] == '-100'
+    assert day['operations'] == []
+    assert not h.remote.writes
+
+
+def test_mobile_amount_edit_shows_both_sides_despite_persisted_receipt(h):
+    h.capture(); h.worker.run_once()
+    identifier = next(iter(h.remote.transactions))
+    h.remote.transactions[identifier]['outcome'] = 125
+    h.app.state.mirror.refresh(force=True)
+    day = report(h).json()['days'][0]
+    assert [op['amount'] for op in day['bank_operations']] == ['-100']
+    assert [op['amount'] for op in day['operations']] == ['-125']
+    h.remote.transactions[identifier]['outcome'] = 100
+    assert report(h, refresh='true').json()['days'] == []
+    assert len(h.remote.writes) == 1
+
+
+def test_deleted_remote_operation_is_visible_on_bank_side(h):
+    h.capture(); h.worker.run_once()
+    identifier = next(iter(h.remote.transactions))
+    del h.remote.transactions[identifier]
+    h.remote.deletions.append({'object': 'transaction', 'id': identifier})
+    day = report(h, refresh='true').json()['days'][0]
+    assert len(day['bank_operations']) == 1 and day['operations'] == []
+    assert len(h.remote.writes) == 1

@@ -416,3 +416,20 @@ runtime Python/SQL file hashes against the tested source, without data mounts.
   Real two-login acceptance is not claimed. SDK dependency is unchanged.
 - Local source remains 0.2.1/unreleased. No production data, container, bank
   session, installed extension, push, Git tag or published image was changed.
+
+## 2026-10-19 — Decouple discrepancy reporting from delivery
+
+Reports now compare completed bank coverage with the current ZenMoney mirror
+regardless of capture/delivery job state. Added bank_operations alongside the
+existing ZenMoney operations list. Historical identities only break ties after
+current account, date and signed amount validation; they cannot hide edited
+amounts or dates. Removed daily-net balancing as evidence of a match, retaining
+bounded unique same-direction split detection. No migration or delivery-policy
+change; the report still never sends financial writes or creates links.
+
+Validation: all 532 backend tests passed in isolated Docker, followed by HTTP,
+persistence, kill/recovery, graceful-stop and snapshot-restore checks. Regression
+coverage includes pending/prepared/uncertain delivery, missing bank counterparts,
+changed linked amounts, mobile correction refresh and deleted remote records.
+Two extension/browser integration tests also passed. Local runtime image rebuilt
+and service updated; no push, tags or publication.

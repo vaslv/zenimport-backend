@@ -34,6 +34,7 @@ class DifferenceDay(WireModel):
     zenmoney_total: str
     difference: str
     operations: list[ExtraOperation]
+    bank_operations: list[ExtraOperation]
 
 
 class DiscrepancyReport(WireModel):
@@ -46,20 +47,30 @@ class DiscrepancyReport(WireModel):
     days: list[DifferenceDay]
 
 
-def consume_matches(banks, zens):
-    """No persisted links: equal amounts first, then only unique small split combinations."""
-    if banks and sum(banks, Decimal(0)) == sum(zens.values(), Decimal(0)):
-        return set()  # A balanced unlinked group can be a split or net settlement.
+def unmatched_sides(banks, zens, preferred=None):
+    """Compare current movements; a balanced daily total alone proves no match."""
     remaining = dict(zens)
     unmatched = []
-    for amount in banks:
+    preferred = preferred or {}
+    # Historical identity is only a tie-breaker after current date/account/amount
+    # validation, never a reason to suppress a changed transaction.
+    matched = set()
+    for index, amount in enumerate(banks):
+        found = next((key for key, value in remaining.items() if value == amount and key in preferred.get(index, ())), None)
+        if found is not None:
+            del remaining[found]
+            matched.add(index)
+    for index, amount in enumerate(banks):
+        if index in matched:
+            continue
         found = next((key for key, value in remaining.items() if value == amount), None)
         if found is None:
-            unmatched.append(amount)
+            unmatched.append((index, amount))
         else:
             del remaining[found]
     budget = 20000
-    for amount in unmatched:
+    missing = {index for index, _ in unmatched}
+    for index, amount in unmatched:
         choices = [(key, value) for key, value in remaining.items() if value * amount > 0 and abs(value) < abs(amount)]
         # Conservative limit: never spend unbounded CPU or invent a match.
         if len(choices) > 16:
@@ -84,9 +95,14 @@ def consume_matches(banks, zens):
             visit(index+1, total, ids)
         visit(0, Decimal(0), [])
         if len(solutions) == 1 and not exhausted:
+            missing.remove(index)
             for key in solutions[0]:
                 del remaining[key]
-    return set(remaining)
+    return missing, set(remaining)
+
+
+def consume_matches(banks, zens):
+    return unmatched_sides(banks, zens)[1]
 
 
 def movement(tx, target):
@@ -123,15 +139,9 @@ def build(db, identifier, now, *, from_date=None, to_date=None, account_id=None)
                     'zenmoney_title': remote_account.get('title', ''), 'status': 'ready', 'checked_days': 0, 'unchecked_days': 0}
             result['accounts'].append(info)
             shared = db.execute("SELECT 1 FROM bank_accounts WHERE id<>? AND selection='enabled' AND zenmoney_account_id=?", (account['id'], target)).fetchone()
-            working = db.execute("""SELECT 1 FROM job_accounts a JOIN capture_jobs j ON j.id=a.job_id
-                WHERE a.account_id=? AND j.capture_state IN ('planned','collecting') UNION ALL
-                SELECT 1 FROM bank_transactions b JOIN bank_processing p ON p.bank_id=b.id
-                WHERE b.account_id=? AND b.local_date BETWEEN ? AND ? AND p.state IN ('pending','prepared','uncertain') LIMIT 1""", (account['id'], account['id'], start.isoformat(), end.isoformat())).fetchone()
             instrument = instruments.get(str(remote_account.get('instrument')), {})
             if shared:
                 info['status'] = 'shared_target'
-            elif working:
-                info['status'] = 'sync_in_progress'
             elif not remote_account or instrument.get('shortTitle') != account['currency']:
                 info['status'] = 'account_unavailable'
             if info['status'] != 'ready':
@@ -155,7 +165,6 @@ def build(db, identifier, now, *, from_date=None, to_date=None, account_id=None)
                 UNION SELECT b.bank_id,z.zen_id FROM link_bank_members b JOIN link_zen_members z ON z.group_id=b.group_id'''):
                 edges[bank].add(zen)
             remote = {key: tx for key, tx in transactions.items() if target in (tx.get('incomeAccount'), tx.get('outcomeAccount')) and not tx.get('hold')}
-            known = {zen for bank in bank_rows for zen in edges[bank['id']] if zen in remote}
             days = defaultdict(lambda: {'banks': [], 'zens': {}, 'bank_total': Decimal(0), 'zenmoney_total': Decimal(0)})
             for bank in bank_rows:
                 if bank['local_date'] not in eligible_days:
@@ -163,8 +172,7 @@ def build(db, identifier, now, *, from_date=None, to_date=None, account_id=None)
                 amount = Decimal(bank['amount']) * (1 if bank['direction'] == 'income' else -1)
                 bucket = days[bank['local_date']]
                 bucket['bank_total'] += amount
-                if not any(zen in remote for zen in edges[bank['id']]):
-                    bucket['banks'].append(amount)
+                bucket['banks'].append((bank, amount))
             for key, tx in sorted(remote.items(), key=lambda item: (item[1].get('created') or 0, item[0])):
                 if tx.get('date') not in eligible_days:
                     continue
@@ -179,15 +187,19 @@ def build(db, identifier, now, *, from_date=None, to_date=None, account_id=None)
                     continue
                 bucket = days[tx['date']]
                 bucket['zenmoney_total'] += amount
-                if key not in known:
-                    bucket['zens'][key] = amount
+                bucket['zens'][key] = amount
             for day, bucket in days.items():
-                extras = consume_matches(bucket['banks'], bucket['zens'])
-                if not extras:
+                missing, extras = unmatched_sides([amount for _, amount in bucket['banks']], bucket['zens'],
+                    {index: edges[bank['id']] for index, (bank, _) in enumerate(bucket['banks'])})
+                if not extras and not missing:
                     continue
                 result['days'].append({'date': day, 'account_id': account['id'],
                     'bank_total': str(bucket['bank_total']), 'zenmoney_total': str(bucket['zenmoney_total']),
                     'difference': str(bucket['zenmoney_total']-bucket['bank_total']),
+                    'bank_operations': [{'id': bucket['banks'][index][0]['id'],
+                        'amount': str(bucket['banks'][index][1]), 'payee': '',
+                        'comment': bucket['banks'][index][0].get('description') or '',
+                        'categories': [], 'created': None} for index in sorted(missing)],
                     'operations': [{'id': key, 'amount': str(bucket['zens'][key]), 'payee': remote[key].get('payee') or '',
                         'comment': remote[key].get('comment') or '', 'categories': [tags.get(t, {}).get('title', '') for t in remote[key].get('tag') or []],
                         'created': remote[key].get('created')} for key in sorted(extras, key=lambda k: (-(remote[k].get('created') or 0), k))]})
