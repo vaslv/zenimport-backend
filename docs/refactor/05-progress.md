@@ -467,3 +467,17 @@ set of remote transaction IDs gained no entries. Live verification reused the
 completed bank captures and refreshed ZenMoney; repeated full bank capture and
 mobile-deletion safety were verified on synthetic Docker fixtures. No push, tags,
 release or remote publication.
+
+## 2026-10-19 — Prepare backend 0.2.1 for publication
+
+- Kept the unpublished version 0.2.1 consistent across package/runtime/OCI metadata.
+- Added CHANGELOG and a release/upgrade/rollback runbook. No published digest is
+  claimed; 0.2.0 remains the latest published image.
+- Reviewed the v0.2.0 delta for storage, matching, capture, migration and contract
+  risks; no further backend defects identified.
+- Docker ARM64 and emulated AMD64: 543 tests on each, plus HTTP/auth, persistence,
+  SIGKILL recovery, graceful shutdown and snapshot restore passed. Image-only
+  bootstrap/runtime/volume/OCI checks also passed on both architectures.
+- Synthetic data only; no production containers, bank sessions or ZenMoney writes.
+  Non-fatal upstream Starlette/httpx deprecation warnings remain. Local logs are
+  excluded under .local/release-0.2.1/. Push, tags and publication were not run.

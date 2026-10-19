@@ -1,7 +1,10 @@
 # ZenImport Backend
 
-Local development **0.2.1** adds the [BIDV capture policy](docs/bidv.md) and
-[named bank connections](docs/bank-connections.md), paired with Chrome 0.2.1+. It is not yet published; the latest published image remains 0.2.0.
+Prepared release **0.2.1** adds the [BIDV capture policy](docs/bidv.md) and
+[named bank connections](docs/bank-connections.md), paired with Chrome 0.2.1+. It also repairs corroborated legacy transfer links and
+reports unmatched records from both sources independently of delivery. It is not
+yet published; the latest published image remains 0.2.0.
+[Release notes and upgrade procedure](docs/container-release-0.2.1.md).
 
 Version **0.2.0** adds popup export/import for moving servers:
 [data migration guide](docs/popup-migration.md). It retains the full delivery journal
