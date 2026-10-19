@@ -181,9 +181,74 @@ def group_matches(db, candidates, singles):
             and all(zen_owners[z] == 1 for z in g.zens)]
 
 
+def recover_transfer_ownership(db, candidates, now):
+    """Corroborate legacy single links with a newly captured opposite bank leg.
+
+    A mutable current mapping alone is not proof. Require the original capture
+    authorization, unchanged financial movement/target, and an unambiguous opposite
+    movement from another physical account. Do not infer splits or settlements.
+    """
+    if not candidates:
+        return
+    exact, unknown = ownership.claims(db)
+    remote = predictions.entities(db, 'transaction')
+    accounts = predictions.entities(db, 'account')
+    source = db.execute('SELECT source_hash FROM zen_mirror_state WHERE id=1').fetchone()[0]
+    bindings = defaultdict(set)
+    for identifier, target in db.execute("SELECT id,zenmoney_account_id FROM bank_accounts WHERE selection='enabled'"):
+        bindings[target].add(identifier)
+    excluded = {r[0] for r in db.execute('SELECT zen_id FROM zen_exclusions')}
+    proposals = []
+    for zen in sorted(unknown):
+        tx = remote.get(zen)
+        if not tx or tx.get('hold') or zen in excluded:
+            continue
+        sides = {tx.get('incomeAccount'), tx.get('outcomeAccount')}
+        if None in sides or len(sides) != 2 or not tx.get('income') or not tx.get('outcome'):
+            continue
+        owners = list(db.execute('SELECT bank_id FROM (' + ownership.KNOWN + ') WHERE zen_id=?', (zen,)))
+        # Multi-bank historical groups need their own durable evidence.
+        if len(owners) != 1:
+            continue
+        old = owners[0][0]
+        proof = db.execute('SELECT * FROM delivery_authorizations WHERE bank_id=?', (old,)).fetchone()
+        if not proof or proof['source_hash'] != source or proof['target_id'] not in sides:
+            continue
+        bank = predictions.bank_record(db, old, proof['revision'])
+        mapping = db.execute('SELECT zenmoney_account_id FROM bank_accounts WHERE id=?', (bank['account_id'],)).fetchone()
+        current = predictions.bank_record(db, old)
+        target = proof['target_id']
+        if (current['local_date'] != bank['local_date'] or signed(current) != signed(bank)
+                or mapping[0] != target or bindings[target] != {bank['account_id']}):
+            continue
+        instrument = accounts.get(target, {}).get('instrument')
+        if instrument is None or bank['local_date'] != tx.get('date') or movement(tx, target, instrument) != signed(bank):
+            continue
+        other = next(iter(sides - {target}))
+        if (zen, other) in exact or len(bindings[other]) != 1:
+            continue
+        peers = [(b, a) for b, a in candidates if b['account_id'] != bank['account_id'] and a['id'] == other
+            and b['local_date'] == tx.get('date') and movement(tx, other, a['instrument']) == signed(b)]
+        if len(peers) != 1:
+            continue
+        peer, account = peers[0]
+        # A second equal remote transfer would make the new evidence ambiguous.
+        alternatives = [t for t in remote.values() if not t.get('hold') and t['id'] not in excluded
+            and (t['id'], other) not in exact and t.get('date') == peer['local_date']
+            and other in (t.get('incomeAccount'), t.get('outcomeAccount'))
+            and movement(t, other, account['instrument']) == signed(peer)]
+        if len(alternatives) == 1:
+            proposals.append((old, zen, target, peer['id']))
+    counts = Counter(peer for _, _, _, peer in proposals)
+    for old, zen, target, peer in proposals:
+        if counts[peer] == 1:
+            ownership.remember(db, old, zen, target, 'corroborated_transfer', now)
+
+
 def reconcile(db, candidates, now):
     """Persist one plan in the caller's intent transaction, without remote writes."""
     ownership.backfill(db)
+    recover_transfer_ownership(db, candidates, now)
     singles = matches(db, candidates)
     groups = group_matches(db, candidates, singles)
     recognized = set(singles) | {b for g in groups for b in g.banks}

@@ -433,3 +433,19 @@ coverage includes pending/prepared/uncertain delivery, missing bank counterparts
 changed linked amounts, mobile correction refresh and deleted remote records.
 Two extension/browser integration tests also passed. Local runtime image rebuilt
 and service updated; no push, tags or publication.
+
+## 2026-10-19 — Recover independently captured transfer sides
+
+Added conservative legacy transfer ownership recovery before ordinary matching.
+A completed, authorized opposite bank capture corroborates the old movement and
+its historical target; mutable mappings alone never establish ownership. Recovery
+is revisited as new banks/accounts arrive. Each side retains its own target and
+currency, including FX. Already claimed equal-amount transfers are excluded from
+alternatives; genuine duplicates and changed mappings remain guarded.
+
+Validation: 543 isolated Docker tests passed, including late second-bank discovery,
+both transfer directions, FX, external unsynchronized counterpart accounts,
+repeated full captures, mobile deletion, conflicting evidence and the equal-value
+already-claimed transfer regression. Existing ownership/rebinding tests still pass.
+Read-only live dry run identifies exactly the three user-confirmed legacy sides;
+no production recovery or remote transaction write was performed by that dry run.

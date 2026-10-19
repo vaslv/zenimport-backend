@@ -270,3 +270,28 @@ records for affected accounts/days remain pending, with existing_ownership_unkno
 Other accounts/days continue. This restriction concerns unknown ownership history;
 ordinary ambiguous day/amount matches retain prior policy. Restoring a proven target
 clears the block on the next cycle; no manual history deletion/UUID reset is needed.
+
+## Corroborating legacy transfer sides when another bank arrives
+
+A known transaction is owned per `(ZenMoney UUID, target account)`, not globally.
+The ordinary matcher can adopt the other side when another bank/account is added,
+without changing the remote transaction. A counterparty account does not have to
+be connected: the available side is sufficient for ordinary matching.
+
+Some migrated receipts lack the target of their retained UUID. Before matching,
+recovery now checks a current, non-held two-account transfer against the original
+bank capture authorization and a newly authorized opposite bank movement. The
+original source, mapped target, date and signed amount must still agree; harmless
+description-only revisions do not invalidate this evidence. Both physical bank
+accounts must have unique target bindings. There must be one opposite candidate
+and one available remote movement; already claimed remote sides do not compete.
+Currencies and amounts are validated independently on each leg, including FX.
+Historical multi-bank groups, changed mappings, conflicting amounts/dates and
+ambiguous alternatives remain unresolved. No target is inferred from the current
+mapping alone, and existing immutable ownership is never rewritten.
+
+Recovery stores the old side as `corroborated_transfer`; ordinary reconciliation
+then adopts the new side in the same transaction. It runs when fresh authorized
+history arrives, not just at migration time. It creates no remote UUID and sends
+no financial writes. Repeated captures and mobile deletion retain the normal
+create-once and never-restore policies. No schema migration is required.
