@@ -53,6 +53,7 @@ COPY scripts/update_sdk.py ./scripts/update_sdk.py
 COPY scripts/build_portable_contract.py ./scripts/build_portable_contract.py
 COPY scripts/storage_check_vectors.py scripts/portable_format_interop.py ./scripts/
 COPY scripts/graph_value_vectors.py ./scripts/
+COPY scripts/bank_record_vectors.py ./scripts/
 COPY fixtures/sync-v1 ./fixtures/sync-v1
 COPY fixtures/legacy-v12 ./fixtures/legacy-v12
 COPY fixtures/business ./fixtures/business

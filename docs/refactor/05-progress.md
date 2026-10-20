@@ -574,3 +574,12 @@ The same current fixture now tests a raw numeric amount of 1.0000000000000000000
 with matching exact mirror TEXT and category position zero. Python accepts that
 graph and rejects changing only the position. Focused Docker module: 14 passed
 in 0.88s. Chrome's mirror proof is read-only; no API or production state changed.
+
+### Shared bank wire and historical clock observations (L4)
+
+Added actual Python model observations for 111 BankRecord inputs, five aware
+microsecond timestamp pairs and 302 historical Vietnam clock projections. The
+reference generator is pinned and recomputed in Docker, including observations
+around every discovered offset change from 1800 through 1979. Browser helpers
+match these outcomes; they are not yet a complete financial graph proof.
+Focused Docker reference/financial suite: 15 passed in 0.94s. No live requests.

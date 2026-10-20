@@ -4,6 +4,7 @@
     "application.json": "c59957d0df9785b847e149d01faa8a4a49c7949676e53d69e5f82840bbb9f9fb",
     "archive-value-vectors.json": "6ef93a60a9910fd3d3417068b3aa69a9654d34b8b4de9e5b8e48e19f3f3b00f9",
     "arithmetic-vectors.json": "f6a0e50c9a21ff51dd16f91796e68e1a10894375f20dfaf159324158e7bb6ed8",
+    "bank-record-vectors.json": "e53c0ac347254322967d295163e0d7632887389e151234566bac0e891f9d0a37",
     "baseline.json": "106e52419f893d3ae9cd3fc584383ba8b333916a27db251b2404000cc9c296b0",
     "http-routes-v1.json": "8a4678bf069b6593589586d0bfde2f9337c1d10c59015968a9e934efb658143b",
     "portable-financial-v2.json": "914c785735c65fb272b131b48075906677ef36fb7fcc908ecdc390fd90ba72c2",
