@@ -567,3 +567,10 @@ missing/mismatched attempt, missing/wrong authorization, wrong payload identity,
 active delivery and lost/contradictory terminal evidence. Focused Docker module:
 13 tests passed in 0.71s. Browser validation remains read-only and incomplete;
 these tests do not grant sending or migration authority.
+
+### Exact shared mirror projection case (L4)
+
+The same current fixture now tests a raw numeric amount of 1.00000000000000000001
+with matching exact mirror TEXT and category position zero. Python accepts that
+graph and rejects changing only the position. Focused Docker module: 14 passed
+in 0.88s. Chrome's mirror proof is read-only; no API or production state changed.
