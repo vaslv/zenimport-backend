@@ -350,7 +350,11 @@ def _capture_proofs(db):
                 JOIN bank_versions v ON v.bank_id=r.bank_id AND v.revision=r.revision
                 JOIN bank_aliases a ON a.bank_id=r.bank_id AND a.account_id=? AND a.external_id=?
                 WHERE r.interval_id=? AND r.page_number=?''', (interval['account_id'], record.external_id, interval['id'], page['page_number'])).fetchone()
-            require(proof is not None and proof['bank_id'] not in witnessed and proof['raw_json'] == record.model_dump_json(), 'invalid_captured_revision')
+            # Stored page canonicalization sorts dictionary keys; revision JSON
+            # retains original wire ordering. Compare validated record values,
+            # while preserving both original byte strings as immutable evidence.
+            require(proof is not None and proof['bank_id'] not in witnessed and
+                BankRecord.model_validate_json(proof['raw_json']) == record, 'invalid_captured_revision')
             witnessed.add(proof['bank_id'])
         require(len(witnessed) == db.execute('SELECT count(*) FROM captured_records WHERE interval_id=? AND page_number=?', (interval['id'], page['page_number'])).fetchone()[0], 'invalid_captured_revision')
     for interval in db.execute('SELECT * FROM capture_intervals'):

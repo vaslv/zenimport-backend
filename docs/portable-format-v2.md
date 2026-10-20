@@ -1,10 +1,11 @@
-# Portable format-2 primitives (L3 in progress)
+# Portable format-2 primitives
 
-`backend/portable_codec.py` implements format serialization, not database restore
-or write authority. It has no HTTP route and is not a replacement for the current
-format-1 migration API. The participant protocol, complete financial graph and
-owner validation, metadata/legacy secret screening, runtime normalization and
-staged installation are required before exposing portable import/export.
+`backend/portable_codec.py` implements format serialization, not financial write
+authority. L3 adds the protected participant protocol, private financial graph,
+owner validation, metadata/legacy screening and atomic installation in companion
+modules. See [portable-api-v2.md](portable-api-v2.md) for authenticated endpoints.
+Format validity by itself never authorizes installation or another API write;
+format-1 compatibility remains a separate supported backend path.
 
 The checked runtime definition is copied from the canonical Chrome contract into
 `backend/portable_contract.json`; tests compare every part. Runtime builds do not
@@ -155,3 +156,11 @@ checks on both ARM64 and AMD64 before the final provenance-chain addition; 70
 Chrome unit/contract cases; 30 current-extension integration cases. Independent
 Python/TypeScript pure contracts remain identical (eight scenarios, 500 arithmetic
 and 6,354 Unicode vectors). No live API call or production change was performed.
+
+L4 cross-runtime review found and fixed a valid-history rejection: canonical page
+JSON sorts nested detail keys, while immutable bank-revision JSON preserves the
+original wire order. Capture proofs now compare validated BankRecord values,
+including exact monetary text and all detail values, without rewriting either
+audit byte string. The desired-behavior regression failed before the correction;
+self-consistent page rehashes with changed descriptions/details remain rejected.
+The complete isolated Docker suite passed 718 tests after this correction.

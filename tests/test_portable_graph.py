@@ -1,6 +1,7 @@
 """Private graph validation, with no live token or installed-dataset mutation."""
 from copy import deepcopy
 from contextlib import closing
+from hashlib import sha256
 import json
 import sqlite3
 from pathlib import Path
@@ -69,6 +70,33 @@ def test_format_valid_golden_is_never_mistaken_for_a_valid_financial_graph(tmp_p
     data = codec.read_archive(archive, tmp_path/'stage')
     with pytest.raises(codec.PortableError): graph.validate_stage(data)
     assert not list(data.root.glob('.graph-validation-*'))
+
+
+def test_capture_proofs_accept_original_detail_key_order_without_rewriting_audit_bytes(source,tmp_path):
+    job,*_=source.capture(count=1,changes={'details':{'remark':'Fixture','currency':'VND'}})
+    assert source.client.post('/api/v1/jobs/'+job['id']+'/stop',json={}).status_code==200
+    lineage,rows,_=snapshot(source)
+    original=deepcopy(rows['bank_versions'])
+    # Page canonicalization sorts detail keys; bank revision JSON preserves the
+    # original wire dictionary order. Both describe exactly the same record.
+    assert any('"details":{"remark":"Fixture","currency":"VND"}' in row[offset('bank_versions','raw_json')] for row in original)
+    data=stage(tmp_path,lineage,rows)
+    graph.validate_stage(data,expected_owners=['1'])
+    assert list(data.rows('bank_versions'))==original
+
+
+@pytest.mark.parametrize('field',['description','details'])
+def test_capture_proof_value_changes_remain_invalid_after_rehashing_the_page(source,tmp_path,field):
+    lineage,rows,_=snapshot(source)
+    page=rows['capture_pages'][0]
+    payload=json.loads(page[offset('capture_pages','payload_json')])
+    payload['records'][0][field]='Changed description' if field=='description' else {'remark':'Changed detail'}
+    raw=graph.capture_canonical(payload)
+    page[offset('capture_pages','payload_json')]=raw
+    page[offset('capture_pages','digest')]=sha256(raw.encode()).hexdigest()
+    data=stage(tmp_path,lineage,rows)
+    with pytest.raises(codec.PortableError,match='invalid_captured_revision'):
+        graph.validate_stage(data,expected_owners=['1'])
 
 
 @pytest.mark.parametrize('kind', ['foreign_key', 'missing_processing', 'missing_revision', 'missing_alias', 'bad_raw_amount',
