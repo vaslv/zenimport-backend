@@ -4,7 +4,6 @@ Never called by HTTP routes, capture jobs or the delivery worker. No retries of
 financial writes: an interrupted journal can only be verified by reading.
 """
 import argparse
-from decimal import Decimal, localcontext
 from hashlib import sha256
 import os
 from pathlib import Path
@@ -17,6 +16,7 @@ from zenmoney_api.protocol import decode_json, encode_json
 from . import existing, ownership, predictions, storage
 from .config import Settings
 from .delivery import writer_lock
+from .financial_math import exact_sum
 from .mirror import Mirror
 from .snapshot import copy_snapshot
 
@@ -90,11 +90,9 @@ def check_rows(db, groups):
         target = accounts.get(account['zenmoney_account_id'])
         if target is None or any(z['date'] != banks[0]['local_date'] or z['user'] != target['user'] for z in snapshots):
             raise ValueError('Reviewed target or date differs')
-        with localcontext() as precision:
-            precision.prec = 80
-            values = [existing.movement(z, target['id'], target['instrument']) for z in group['keeps']]
-            if None in values or sum(values, Decimal(0)) != sum((existing.signed(b) for b in banks), Decimal(0)):
-                raise ValueError('Retained group does not equal signed bank movements')
+        values = [existing.movement(z, target['id'], target['instrument']) for z in group['keeps']]
+        if None in values or exact_sum(values) != exact_sum(existing.signed(b) for b in banks):
+            raise ValueError('Retained group does not equal signed bank movements')
         for row in group['removals']:
             delivery = db.execute('SELECT * FROM deliveries WHERE bank_id=?', (row['bank_id'],)).fetchone()
             if not delivery or delivery['zen_id'] != row['snapshot']['id'] or delivery['state'] != 'delivered':

@@ -489,3 +489,20 @@ v0.2.1 identify the released runtime. Source CI 39260257528, tag CI 39260558371
 and publication workflow 39260287161 passed, including native AMD64/ARM64 image
 acceptance. Public digest and independent local ARM64 verification are recorded in
 container-release-0.2.1.md. Production deployment/data were not changed.
+
+## 2026-10-20 — Exact movement arithmetic found by local-mode L2 contracts
+
+A synthetic common fixture proved that the former fixed 80-digit context could
+round a remote amount into a false same-day/amount match. Added a bounded exact
+sum/context helper, preserved both transfer sides, and used it in subset matching,
+report totals/differences and reviewed duplicate-plan arithmetic. Sign checks no
+longer multiply large decimals merely to compare their direction. Inputs outside
+the resource span fail explicitly rather than rounding. No production records
+were inspected or modified, and no deployment occurred.
+
+Regression checks passed with an ambient precision of two digits and a 91-digit
+fractional difference. Focused Docker tests: 85 passed. Final Docker unit suite:
+553 passed, including the in-progress shared-contract adapter. Full Docker service
+checks also passed authentication, SIGKILL recovery, graceful shutdown and restored
+snapshot delivery. A subsequent sign-only refinement passed all 553 tests again.
+This source-domain correction is committed separately from the L2 fixture harness.

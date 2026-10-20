@@ -6,6 +6,7 @@ from decimal import Decimal, localcontext
 from . import accounts, capture, predictions
 from .capture_policy import fail, get, today
 from .sync_contracts import WireModel, WireDate, WireTime
+from .financial_math import exact_context, exact_sum
 
 
 class ReportAccount(WireModel):
@@ -48,6 +49,11 @@ class DiscrepancyReport(WireModel):
 
 
 def unmatched_sides(banks, zens, preferred=None):
+    with exact_context([*banks, *zens.values()]):
+        return _unmatched_sides(banks, zens, preferred)
+
+
+def _unmatched_sides(banks, zens, preferred=None):
     """Compare current movements; a balanced daily total alone proves no match."""
     remaining = dict(zens)
     unmatched = []
@@ -71,7 +77,8 @@ def unmatched_sides(banks, zens, preferred=None):
     budget = 20000
     missing = {index for index, _ in unmatched}
     for index, amount in unmatched:
-        choices = [(key, value) for key, value in remaining.items() if value * amount > 0 and abs(value) < abs(amount)]
+        choices = [(key, value) for key, value in remaining.items()
+                   if value != 0 and (value > 0) == (amount > 0) and abs(value) < abs(amount)]
         # Conservative limit: never spend unbounded CPU or invent a match.
         if len(choices) > 16:
             continue
@@ -109,7 +116,7 @@ def movement(tx, target):
     # Transfers and debts are compared by their leg on this particular account.
     inc = Decimal(tx.get('income') or 0) if tx.get('incomeAccount') == target else Decimal(0)
     out = Decimal(tx.get('outcome') or 0) if tx.get('outcomeAccount') == target else Decimal(0)
-    return inc-out
+    return exact_sum([inc, out.copy_negate()])
 
 
 def build(db, identifier, now, *, from_date=None, to_date=None, account_id=None):
@@ -171,7 +178,6 @@ def build(db, identifier, now, *, from_date=None, to_date=None, account_id=None)
                     continue
                 amount = Decimal(bank['amount']) * (1 if bank['direction'] == 'income' else -1)
                 bucket = days[bank['local_date']]
-                bucket['bank_total'] += amount
                 bucket['banks'].append((bank, amount))
             for key, tx in sorted(remote.items(), key=lambda item: (item[1].get('created') or 0, item[0])):
                 if tx.get('date') not in eligible_days:
@@ -186,16 +192,17 @@ def build(db, identifier, now, *, from_date=None, to_date=None, account_id=None)
                     info['status'] = 'unsupported_movement'
                     continue
                 bucket = days[tx['date']]
-                bucket['zenmoney_total'] += amount
                 bucket['zens'][key] = amount
             for day, bucket in days.items():
+                bucket['bank_total'] = exact_sum(amount for _, amount in bucket['banks'])
+                bucket['zenmoney_total'] = exact_sum(bucket['zens'].values())
                 missing, extras = unmatched_sides([amount for _, amount in bucket['banks']], bucket['zens'],
                     {index: edges[bank['id']] for index, (bank, _) in enumerate(bucket['banks'])})
                 if not extras and not missing:
                     continue
                 result['days'].append({'date': day, 'account_id': account['id'],
                     'bank_total': str(bucket['bank_total']), 'zenmoney_total': str(bucket['zenmoney_total']),
-                    'difference': str(bucket['zenmoney_total']-bucket['bank_total']),
+                    'difference': str(exact_sum([bucket['zenmoney_total'], bucket['bank_total'].copy_negate()])),
                     'bank_operations': [{'id': bucket['banks'][index][0]['id'],
                         'amount': str(bucket['banks'][index][1]), 'payee': '',
                         'comment': bucket['banks'][index][0].get('description') or '',

@@ -2,11 +2,12 @@
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal, localcontext
+from decimal import Decimal
 import re
 from uuid import uuid4
 
 from . import ownership, predictions
+from .financial_math import exact_context, exact_sum
 
 
 def reference(bank):
@@ -37,16 +38,14 @@ def pool(db):
 
 def movement(tx, target, instrument):
     """Signed movement in the selected account, independent of operation type."""
-    with localcontext() as precision:
-        precision.prec = 80
-        value = Decimal(0)
-        for side, sign in [('income', 1), ('outcome', -1)]:
-            amount = Decimal(tx.get(side) or 0)
-            if tx.get(side+'Account') == target and amount:
-                if tx.get(side+'Instrument') != instrument:
-                    return None
-                value += sign*amount
-        return value
+    values = []
+    for side in ['income', 'outcome']:
+        amount = Decimal(tx.get(side) or 0)
+        if tx.get(side+'Account') == target and amount:
+            if tx.get(side+'Instrument') != instrument:
+                return None
+            values.append(amount if side == 'income' else amount.copy_negate())
+    return exact_sum(values)
 
 
 def matches(db, candidates):
@@ -117,7 +116,7 @@ def unique_subset(items, target, budget):
     if not target or not 2 <= len(items) <= 16:
         return None
     found, exhausted = [], False
-    same_sign = all(value*target > 0 for _, value in items)
+    same_sign = all(value != 0 and (value > 0) == (target > 0) for _, value in items)
     def visit(index, total, keys):
         nonlocal exhausted
         if budget[0] <= 0:
@@ -135,8 +134,7 @@ def unique_subset(items, target, budget):
         key, value = items[index]
         visit(index+1, total+value, keys+[key])
         visit(index+1, total, keys)
-    with localcontext() as precision:
-        precision.prec = 80
+    with exact_context([target, *(value for _, value in items)]):
         visit(0, Decimal(0), [])
     return found[0] if len(found) == 1 and not exhausted else None
 
