@@ -50,6 +50,8 @@ def rewrite(tmp_path, source, change, *, name='changed.zip', metadata=True):
 
 
 def test_runtime_definition_exactly_matches_the_pinned_logical_contract():
+    from scripts.build_portable_contract import build
+    assert codec.CONTRACT_BYTES == build()
     source = Path(__file__).resolve().parents[1]/'fixtures/business/v1'
     for key, filename in [('schema', 'sqlite-v7.json'), ('policy', 'portable-policy.json'), ('manifest', 'portable-v2.schema.json'), ('format', 'portable-format-v2.json'), ('validation', 'portable-validation-v2.json')]:
         assert codec.CONTRACT[key] == json.loads((source/filename).read_text())

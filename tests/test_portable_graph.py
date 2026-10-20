@@ -73,7 +73,8 @@ def test_format_valid_golden_is_never_mistaken_for_a_valid_financial_graph(tmp_p
 
 @pytest.mark.parametrize('kind', ['foreign_key', 'missing_processing', 'missing_revision', 'missing_alias', 'bad_raw_amount',
     'missing_attempt', 'attempt_payload', 'terminal_state', 'unknown_metadata', 'metadata_token', 'secret_raw',
-    'nested_secret', 'bad_page_digest', 'bad_coverage', 'bad_frontier', 'missing_capture_proof', 'mirror_amount', 'missing_mirror_context', 'missing_mirror_projection'])
+    'nested_secret', 'bad_page_digest', 'bad_coverage', 'bad_frontier', 'missing_capture_proof', 'mirror_amount', 'missing_mirror_context', 'missing_mirror_projection',
+    'fake_legacy_identity','fake_legacy_version','revision_projection','revision_gap'])
 def test_self_consistent_archive_hashes_cannot_hide_broken_financial_facts(source, tmp_path, kind):
     lineage, rows, _ = snapshot(source)
     rows = deepcopy(rows)
@@ -101,6 +102,14 @@ def test_self_consistent_archive_hashes_cannot_hide_broken_financial_facts(sourc
     elif kind == 'missing_mirror_context': rows['zen_mirror_state'].clear()
     elif kind == 'missing_mirror_projection':
         rows['zen_tags'].clear(); rows['zen_movements'].clear()
+    elif kind == 'fake_legacy_identity': rows['bank_transactions'][0][offset('bank_transactions','identity_version')]='legacy-v12'
+    elif kind == 'fake_legacy_version': rows['bank_versions'][0][offset('bank_versions','parser_version')]='legacy-v12'
+    elif kind == 'revision_projection': rows['bank_versions'][0][offset('bank_versions','data_json')]='{}'
+    elif kind == 'revision_gap':
+        extra=deepcopy(rows['bank_versions'][0]);extra[offset('bank_versions','revision')]=3
+        rows['bank_versions'].append(extra)
+        rows['bank_versions'].sort(key=lambda row:(row[0].encode(),row[1]))
+        bank=next(row for row in rows['bank_transactions'] if row[0]==extra[0]);bank[offset('bank_transactions','revision')]=3
     data = stage(tmp_path, lineage, rows)
     with pytest.raises(codec.PortableError): graph.validate_stage(data)
     assert not list(data.root.glob('.graph-validation-*'))
@@ -154,6 +163,8 @@ def test_classified_legacy_audit_is_preserved_as_data_without_executing_its_sql(
     # This positive case covers only the explicitly classified stock schema.
     with closing(sqlite3.connect(legacy)) as db:
         db.execute('DROP TABLE extra_unknown')
+        db.execute('INSERT INTO zen_transaction_tags SELECT (SELECT id FROM zen_transaction LIMIT 1),(SELECT id FROM zen_tag LIMIT 1),0')
+        db.execute('UPDATE zen_transaction SET run_id=NULL WHERE id=(SELECT id FROM zen_transaction LIMIT 1)')
         db.commit()
     destination = tmp_path/'converted.sqlite3'
     convert(legacy, destination)
@@ -178,6 +189,23 @@ def test_classified_legacy_audit_is_preserved_as_data_without_executing_its_sql(
     modified['zen_movements'][0][offset('zen_movements','outcome')] = '999'
     with pytest.raises(codec.PortableError, match='invalid_legacy_projection'):
         graph.validate_stage(stage(tmp_path, lineage, modified))
+    modified=deepcopy(rows)
+    modified['zen_tags'][0][offset('zen_tags','position')]=10
+    with pytest.raises(codec.PortableError,match='invalid_legacy_tags'):
+        graph.validate_stage(stage(tmp_path,lineage,modified))
+
+
+def test_current_mirror_tags_match_raw_order_and_exact_positions(source,tmp_path):
+    lineage,rows,_=snapshot(source)
+    movement=rows['zen_movements'][0]
+    entity=next(row for row in rows['zen_entities'] if row[:2]==movement[:2])
+    raw=json.loads(entity[offset('zen_entities','data')]);raw['tag']=['category-a']
+    entity[offset('zen_entities','data')]=json.dumps(raw)
+    rows['zen_tags']=[[*movement[:2],'category-a',0]]
+    graph.validate_stage(stage(tmp_path,lineage,rows))
+    rows['zen_tags'][0][offset('zen_tags','position')]=10
+    with pytest.raises(codec.PortableError,match='invalid_mirror_tags'):
+        graph.validate_stage(stage(tmp_path,lineage,rows))
 
 
 def test_unclassified_legacy_objects_are_rejected_instead_of_being_executed(tmp_path):

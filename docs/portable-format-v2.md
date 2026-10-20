@@ -107,3 +107,51 @@ runtime table and remains exportable through its logical financial alias.
 The public ordinary API remains version 1; portable HTTP capabilities/commands,
 background staging/installation and full interop acceptance are still pending.
 Do not advertise format-2 or standalone mode as available yet.
+
+## Server transfer service (L3.4)
+
+The development server now has authenticated protocol-2 routes documented in
+[portable-api-v2.md](portable-api-v2.md). Snapshot, validation and activation are
+durable background tasks; HTTP requests do not wait for a complete database scan.
+A source publishes a seal only after its validated bytes/chunks are durable. A
+receiver checks graph/owner again before arming and activation. Each task kind has
+one permanent request binding; retries retain its identity. Restart recovers
+running work from committed receipts even if the coordinator already advanced.
+Only the installation's own inactive private scratch is removed under its writer
+lock. Scratch files and a task's displayed status never grant activation rights.
+
+The installer temporarily removes only packaged financial triggers inside the
+same activation SQL transaction, replaces eligible pre-sync setup data, copies the
+checked logical rows and reinstalls the exact trusted triggers. Runtime authority
+triggers remain installed. Any failure rolls back schema, financial data, target
+identity and the decision receipt together. Source schema audit and legacy hold
+metadata retain their audit meaning; they are not target executable authority.
+Current mirror context/readiness and predictions are explicitly invalidated, and
+attempted payloads/authorizations/receipts remain untouched. The active target
+cannot send until explicit Sync performs the required current full mirror read.
+
+Review strengthened graph checks for contiguous raw bank revisions, separate
+historical data/raw projections, archive-backed legacy bank evidence and exact
+mirror category positions. Missing old run IDs do not erase valid legacy evidence;
+old projections are accepted only through the archived source proof. A late
+mirror response also checks the persisted hold in its SQL commit, independently
+of a shared in-process Python lock. Unknown send outcomes are recovered under the
+exclusive file lock as uncertain before source holding, without another API write.
+
+The runtime contract bundle has a reproducible byte generator and check, avoiding
+incidental serializer-format changes in its informational revision fingerprint.
+The JSON HTTP contract is pinned and shared; receipt null fields must survive the
+HTTP serializer because they participate in the receipt hash.
+
+Import provenance is financial audit rather than activation authority:
+`service_meta.portable_imports` is a bounded list (at most 10,000 records) of exact
+archive UUID/SHA256, dataset digest, export-session UUID and destination acceptance
+time as a decimal string. Archive IDs are unique. Every import preserves the
+previous list and appends its own identity; no prior digest is overwritten. A
+second migration/re-export test compares all original attempted-send rows exactly.
+
+L3 final evidence: 702 backend Docker tests; 701-test full container lifecycle
+checks on both ARM64 and AMD64 before the final provenance-chain addition; 70
+Chrome unit/contract cases; 30 current-extension integration cases. Independent
+Python/TypeScript pure contracts remain identical (eight scenarios, 500 arithmetic
+and 6,354 Unicode vectors). No live API call or production change was performed.

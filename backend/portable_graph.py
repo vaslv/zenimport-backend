@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import sqlite3
 from tempfile import TemporaryDirectory
+from uuid import UUID
 
 from pydantic import ValidationError
 from zenmoney_api import ResponseError
@@ -90,6 +91,18 @@ def metadata_value(key, value, dataset_id):
             require(ids(data), 'invalid_metadata')
         elif kind == 'catalog_ids_audit':
             require(type(data) is dict and set(data) == {'account', 'tag', 'instrument'} and all(ids(items) for items in data.values()), 'invalid_metadata')
+        elif kind == 'portable_import_history':
+            require(type(data) is list and len(data)<=10000,'invalid_import_provenance')
+            seen=set()
+            for item in data:
+                require(type(item) is dict and set(item)=={'archive_id','archive_sha256','dataset_digest','export_session_id','accepted_at'},'invalid_import_provenance')
+                for field in ('archive_id','export_session_id'):
+                    require(type(item[field]) is str and str(UUID(item[field]))==item[field],'invalid_import_provenance')
+                for field in ('archive_sha256','dataset_digest'):
+                    require(type(item[field]) is str and re.fullmatch('[0-9a-f]{64}',item[field]),'invalid_import_provenance')
+                stamp=item['accepted_at']
+                require(type(stamp) is str and len(stamp)<=19 and re.fullmatch(r'0|[1-9][0-9]*',stamp) and int(stamp)<2**63,'invalid_import_provenance')
+                require(item['archive_id'] not in seen,'invalid_import_provenance');seen.add(item['archive_id'])
         else:
             raise PortableError('unclassified_metadata')
 
@@ -113,6 +126,15 @@ def source_tables(db, dataset_id):
         actual = [row[1] for row in db.execute('PRAGMA table_info(' + quote(source) + ')')]
         require(actual == [column['name'] for column in CONTRACT['schema']['tables'][policy['source']]['columns']], 'unclassified_source_column')
         names = policy['columns']
+        if name == 'dataset_metadata':
+            values = []
+            for key,value in db.execute('SELECT key,value FROM service_meta'):
+                key = RULES.get('physical_metadata_aliases',{}).get(key,key)
+                metadata_value(key,value,dataset_id)
+                values.append([key,value])
+            require(len({row[0] for row in values}) == len(values),'duplicate_metadata_alias')
+            yield from sorted(values,key=lambda row:row[0].encode('utf-8'))
+            return
         keys = [column for column in sorted(definition, key=lambda column: column['pk']) if column['pk']]
         order = [quote(column['name']) + (' COLLATE PORTABLE_UTF8' if not utf8 and column['type'] == 'TEXT' else '') for column in keys]
         query = 'SELECT ' + ','.join(map(quote, names)) + ' FROM ' + quote(source) + ' ORDER BY ' + ','.join(order)
@@ -168,7 +190,10 @@ def _metadata_and_legacy(db, manifest):
     # A converted legacy projection can legitimately differ from today's API
     # shape (including string money). Compare it with its archived source facts,
     # rather than weakening validation for current SDK responses.
-    db.execute('CREATE TEMP TABLE legacy_movement_proofs (kind TEXT,id TEXT,data TEXT,projection TEXT,PRIMARY KEY(kind,id,data,projection))')
+    db.execute('CREATE TEMP TABLE legacy_movement_proofs (source_digest TEXT,kind TEXT,id TEXT,data TEXT,projection TEXT,PRIMARY KEY(source_digest,kind,id,data,projection))')
+    db.execute('CREATE INDEX temp.legacy_movement_lookup ON legacy_movement_proofs(kind,id,data,projection)')
+    db.execute('CREATE TEMP TABLE legacy_tag_proofs (source_digest TEXT,kind TEXT,entity_id TEXT,tag_id TEXT,position INTEGER,PRIMARY KEY(source_digest,kind,entity_id,tag_id))')
+    db.execute('CREATE TEMP TABLE legacy_bank_proofs (id TEXT,data TEXT,PRIMARY KEY(id,data))')
     for key, value in db.execute('SELECT key,value FROM service_meta'):
         metadata_value(key, value, manifest['dataset_id'])
     require(db.execute("SELECT value FROM service_meta WHERE key='instance_id'").fetchone() is not None, 'lineage_mismatch')
@@ -184,7 +209,19 @@ def _metadata_and_legacy(db, manifest):
         require(reference is not None, 'unclassified_legacy_object')
         values = inspect_json(row['values_json'])
         require(type(values) is list and len(values) == len(reference['columns']), 'invalid_legacy_row')
-        if row['table_name'] in ('zen_transaction', 'zen_reminder', 'zen_reminder_marker'):
+        if row['table_name'] == 'bank_transactions':
+            original = {}
+            for name,cell in zip(reference['columns'],values):
+                require(type(cell) is list and len(cell)==2 and cell[0] in ('null','text','integer'),'invalid_legacy_row')
+                tag,value=cell
+                require(value is None if tag=='null' else type(value) is str,'invalid_legacy_row')
+                if tag=='integer':
+                    require(re.fullmatch(r'0|-?[1-9][0-9]*',value),'invalid_legacy_row')
+                    value=int(value)
+                original[name]=value
+            db.execute('INSERT OR IGNORE INTO legacy_bank_proofs VALUES (?,?)',(original['id'],json.dumps(original)))
+        if row['table_name'] in ('zen_transaction', 'zen_reminder', 'zen_reminder_marker',
+                                'zen_transaction_tags','zen_reminder_tags','zen_reminder_marker_tags'):
             fields = dict(zip(reference['columns'], values))
             def archived(name):
                 tag, value = fields[name]
@@ -197,13 +234,18 @@ def _metadata_and_legacy(db, manifest):
                     require(re.fullmatch(r'0|-?[1-9][0-9]*', value), 'invalid_legacy_row')
                     return int(value)
                 return value
-            kind = {'zen_transaction':'transaction','zen_reminder':'reminder','zen_reminder_marker':'reminderMarker'}[row['table_name']]
+            source_table=row['table_name'].removesuffix('_tags')
+            kind = {'zen_transaction':'transaction','zen_reminder':'reminder','zen_reminder_marker':'reminderMarker'}[source_table]
+            if row['table_name'].endswith('_tags'):
+                db.execute('INSERT INTO legacy_tag_proofs VALUES (?,?,?,?,?)',
+                    (row['source_digest'],kind,archived('transaction_id' if kind=='transaction' else 'owner_id'),archived('tag_id'),archived('position')))
+                continue
             names = ['date' if kind != 'reminder' else 'start_date', 'income_account', 'outcome_account',
                 'income_instrument', 'outcome_instrument', 'income', 'outcome']
             projection = [archived(name) for name in names]
             projection.extend(archived(name) if kind == 'transaction' else None for name in ('viewed','hold'))
-            db.execute('INSERT OR IGNORE INTO legacy_movement_proofs VALUES (?,?,?,?)',
-                (kind, archived('id'), archived('data'), json.dumps(projection)))
+            db.execute('INSERT OR IGNORE INTO legacy_movement_proofs VALUES (?,?,?,?,?)',
+                (row['source_digest'],kind, archived('id'), archived('data'), json.dumps(projection)))
         # Legacy cells are retained as inert tagged data, including opaque
         # financial blobs. They never become executable SQL or runtime settings.
         if row['table_name'] == 'meta':
@@ -221,20 +263,42 @@ def _metadata_and_legacy(db, manifest):
 def _records(db):
     require(not db.execute('SELECT 1 FROM bank_transactions b LEFT JOIN bank_processing p ON p.bank_id=b.id WHERE p.bank_id IS NULL LIMIT 1').fetchone(), 'missing_processing_state')
     require(not db.execute('SELECT 1 FROM bank_transactions b LEFT JOIN bank_versions v ON v.bank_id=b.id AND v.revision=b.revision WHERE v.bank_id IS NULL OR v.raw_json<>b.raw_json LIMIT 1').fetchone(), 'invalid_current_revision')
+    require(not db.execute('''SELECT 1 FROM bank_transactions b JOIN bank_versions v ON v.bank_id=b.id
+        GROUP BY b.id HAVING min(v.revision)<>1 OR max(v.revision)<>b.revision OR count(*)<>b.revision LIMIT 1''').fetchone(),'incomplete_revision_history')
     require(not db.execute('''SELECT 1 FROM bank_transactions b WHERE NOT EXISTS
         (SELECT 1 FROM bank_aliases a WHERE a.bank_id=b.id AND a.account_id=b.account_id AND a.external_id=b.external_id) LIMIT 1''').fetchone(), 'missing_bank_alias')
-    for bank in db.execute('SELECT b.*,a.scale,a.currency AS account_currency FROM bank_transactions b JOIN bank_accounts a ON a.id=b.account_id'):
+    for bank in db.execute('SELECT b.*,a.scale,a.bank AS account_bank,a.currency AS account_currency FROM bank_transactions b JOIN bank_accounts a ON a.id=b.account_id'):
         require(bank['currency'] == bank['account_currency'] and len(bank['amount'].partition('.')[2]) <= bank['scale'], 'invalid_bank_currency')
         calendar_day(bank['local_date'])
-        if bank['identity_version'] != 'legacy-v12':
+        if bank['identity_version'] == 'legacy-v12':
+            from .migrate_legacy import money,occurred
+            version=db.execute('SELECT * FROM bank_versions WHERE bank_id=? AND revision=?',(bank['id'],bank['revision'])).fetchone()
+            require(version['parser_version']=='legacy-v12','invalid_legacy_proof')
+            original=_legacy_bank_version(db,bank,version)
+            raw=inspect_json(original['raw'])
+            require(type(raw) is dict and type(original.get('amount_minor')) is int and original['amount_minor']!=0,'invalid_legacy_proof')
+            details=raw.get('details') or {}
+            require(type(details) is dict,'invalid_legacy_proof')
+            expected=[original['bank_account'],original['external_id'],original['date'],original['description'],
+                original['raw'],money(original['amount_minor'],bank['scale']),'income' if original['amount_minor']>0 else 'expense',
+                raw.get('reference_kind','bank'),occurred(raw,bank['account_bank'],original['date']),
+                details.get('corresponsiveAccount'),details.get('corresponsiveName')]
+            actual=[bank[key] for key in ('account_id','external_id','local_date','description','raw_json','amount','direction','identity_kind','occurred_at','beneficiary_account','beneficiary_name')]
+            require(actual==expected,'invalid_legacy_bank_projection')
+        else:
             record = BankRecord.model_validate_json(bank['raw_json'])
             for field in ('identity_kind', 'identity_version', 'direction', 'amount', 'currency', 'description', 'beneficiary_account', 'beneficiary_name'):
                 require(getattr(record, field) == bank[field], 'bank_raw_mismatch')
             require(record.local_date.isoformat() == bank['local_date'] and record.occurred_at == datetime.fromisoformat(bank['occurred_at']), 'bank_raw_mismatch')
             require(db.execute('SELECT 1 FROM bank_aliases WHERE bank_id=? AND account_id=? AND external_id=?', (bank['id'], bank['account_id'], record.external_id)).fetchone(), 'missing_bank_alias')
-    for version in db.execute('''SELECT v.*,b.account_id FROM bank_versions v JOIN bank_transactions b ON b.id=v.bank_id'''):
+    for version in db.execute('''SELECT v.*,b.account_id,a.bank AS account_bank,a.currency AS account_currency FROM bank_versions v
+        JOIN bank_transactions b ON b.id=v.bank_id JOIN bank_accounts a ON a.id=b.account_id'''):
         require(version['observed_at'] >= 0, 'invalid_revision_time')
-        if version['parser_version'] != 'legacy-v12':
+        if version['parser_version'] == 'legacy-v12':
+            original=_legacy_bank_version(db,dict(version)|{'id':version['bank_id']},version)
+            require(original['raw']==version['raw_json'],'invalid_legacy_proof')
+        else:
+            require(version['data_json']==version['raw_json'],'invalid_revision_projection')
             record = BankRecord.model_validate_json(version['raw_json'])
             require(db.execute('SELECT 1 FROM bank_aliases WHERE bank_id=? AND account_id=? AND external_id=?', (version['bank_id'], version['account_id'], record.external_id)).fetchone(), 'missing_bank_alias')
     for account in db.execute('SELECT * FROM bank_accounts'):
@@ -243,6 +307,14 @@ def _records(db):
                 calendar_day(account[field])
         end = capture.frontier(db, account['id'], date.fromisoformat(account['import_start'])) if account['import_start'] else None
         require(account['last_complete_end'] == (end.isoformat() if end else None), 'invalid_coverage_frontier')
+
+
+def _legacy_bank_version(db,bank,version):
+    original=inspect_json(version['data_json'])
+    require(type(original) is dict and original.get('id')==bank['id'] and original.get('bank_account')==bank['account_id'],'invalid_legacy_proof')
+    candidates=db.execute('SELECT data FROM legacy_bank_proofs WHERE id=?',(bank['id'],))
+    require(any(original==dict(json.loads(row[0]),bank=bank['account_bank'],currency=bank['account_currency']) for row in candidates),'invalid_legacy_proof')
+    return original
 
 
 def _capture_proofs(db):
@@ -319,9 +391,17 @@ def _mirror_projections(db):
         data = inspect_json(row['data'])
         require(entity_key(row['kind'], data) == row['id'], 'invalid_entity_identity')
         actual = [row[field] for field in ('date', 'income_account', 'outcome_account', 'income_instrument', 'outcome_instrument', 'income', 'outcome', 'viewed', 'hold')]
-        if row['run_id'] is not None and row['run_id'].startswith('legacy:'):
-            require(db.execute('SELECT 1 FROM legacy_movement_proofs WHERE kind=? AND id=? AND data=? AND projection=?',
-                (row['kind'], row['id'], row['data'], json.dumps(actual))).fetchone(), 'invalid_legacy_projection')
+        proofs=list(db.execute('SELECT source_digest FROM legacy_movement_proofs WHERE kind=? AND id=? AND data=? AND projection=?',
+            (row['kind'], row['id'], row['data'], json.dumps(actual))))
+        legacy = row['run_id'] is not None and row['run_id'].startswith('legacy:')
+        if row['run_id'] is None:
+            legacy = bool(db.execute('SELECT 1 FROM legacy_movement_proofs WHERE kind=? AND id=? AND data=?',
+                (row['kind'],row['id'],row['data'])).fetchone())
+        if proofs or legacy:
+            require(proofs,'invalid_legacy_projection')
+            tags=[tuple(tag) for tag in db.execute('SELECT tag_id,position FROM zen_tags WHERE kind=? AND entity_id=? ORDER BY position,tag_id',(row['kind'],row['id']))]
+            require(any(tags==[tuple(tag) for tag in db.execute('SELECT tag_id,position FROM legacy_tag_proofs WHERE source_digest=? AND kind=? AND entity_id=? ORDER BY position,tag_id',
+                (proof[0],row['kind'],row['id']))] for proof in proofs),'invalid_legacy_tags')
             continue
         expected = [data.get('startDate' if row['kind'] == 'reminder' else 'date')]
         if expected[0] is not None:
@@ -331,8 +411,8 @@ def _mirror_projections(db):
         expected.extend(mirror.amount(data.get(field)) for field in ('income', 'outcome'))
         expected.extend(mirror.flag(data.get(field)) if row['kind'] == 'transaction' else None for field in ('viewed', 'hold'))
         require(expected == actual, 'invalid_mirror_projection')
-        tags = [tag[0] for tag in db.execute('SELECT tag_id FROM zen_tags WHERE kind=? AND entity_id=? ORDER BY position', (row['kind'], row['id']))]
-        require(tags == (data.get('tag') or []), 'invalid_mirror_tags')
+        tags = [tuple(tag) for tag in db.execute('SELECT tag_id,position FROM zen_tags WHERE kind=? AND entity_id=? ORDER BY position', (row['kind'], row['id']))]
+        require(tags == [(tag,i) for i,tag in enumerate(data.get('tag') or [])], 'invalid_mirror_tags')
     for row in db.execute('SELECT * FROM zen_tombstones'):
         data = inspect_json(row['data'])
         require(type(data) is dict, 'invalid_tombstone')

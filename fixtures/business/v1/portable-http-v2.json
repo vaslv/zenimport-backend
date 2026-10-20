@@ -1,0 +1,1448 @@
+{
+  "contract_version": 1,
+  "protocol_version": "2",
+  "ordinary_api_version": 1,
+  "prefix": "/api/v1/migration/portable",
+  "integer_wire_policy": "canonical decimal strings; URL chunk indexes are integers",
+  "peer_receipts": "integrity only; coordinator verifies authenticated participant status",
+  "receipt_nulls": "all receipt keys, including nulls, are preserved in HTTP replies and hash preimages",
+  "routes": [
+    [
+      "GET",
+      "/capabilities"
+    ],
+    [
+      "GET",
+      "/switches/{switch}"
+    ],
+    [
+      "POST",
+      "/commands/{command}"
+    ],
+    [
+      "PUT",
+      "/switches/{switch}/chunks/{number}"
+    ],
+    [
+      "GET",
+      "/switches/{switch}/chunks/{number}"
+    ],
+    [
+      "POST",
+      "/finalize"
+    ],
+    [
+      "POST",
+      "/work/{task}/retry"
+    ]
+  ],
+  "commands": {
+    "source_start": {
+      "required": [
+        "expected_epoch",
+        "peer_id",
+        "request_id",
+        "switch_id"
+      ],
+      "additional_properties": false
+    },
+    "destination_start": {
+      "required": [
+        "expected_epoch",
+        "peer_receipt",
+        "request_id",
+        "switch_id"
+      ],
+      "additional_properties": false
+    },
+    "destination_arm": {
+      "required": [
+        "expected_epoch",
+        "request_id",
+        "switch_id"
+      ],
+      "additional_properties": false
+    },
+    "source_handoff": {
+      "required": [
+        "expected_epoch",
+        "peer_receipt",
+        "request_id",
+        "switch_id"
+      ],
+      "additional_properties": false
+    },
+    "source_cancel": {
+      "required": [
+        "expected_epoch",
+        "request_id",
+        "switch_id"
+      ],
+      "additional_properties": false
+    },
+    "destination_discard": {
+      "required": [
+        "expected_epoch",
+        "peer_receipt",
+        "request_id",
+        "switch_id"
+      ],
+      "additional_properties": false
+    },
+    "source_resume": {
+      "required": [
+        "expected_epoch",
+        "peer_receipt",
+        "request_id",
+        "switch_id"
+      ],
+      "additional_properties": false
+    },
+    "destination_activate": {
+      "required": [
+        "expected_epoch",
+        "peer_receipt",
+        "request_id",
+        "switch_id"
+      ],
+      "additional_properties": false
+    }
+  },
+  "schemas": {
+    "Receipt": {
+      "additionalProperties": false,
+      "properties": {
+        "receipt_version": {
+          "const": "1",
+          "title": "Receipt Version",
+          "type": "string"
+        },
+        "request_id": {
+          "format": "uuid",
+          "title": "Request Id",
+          "type": "string"
+        },
+        "command": {
+          "enum": [
+            "source_start",
+            "source_seal",
+            "destination_start",
+            "destination_arm",
+            "source_handoff",
+            "source_cancel",
+            "destination_discard",
+            "source_resume",
+            "destination_activate"
+          ],
+          "title": "Command",
+          "type": "string"
+        },
+        "installation_id": {
+          "format": "uuid",
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "participant_epoch": {
+          "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+          "title": "Participant Epoch",
+          "type": "string"
+        },
+        "switch_id": {
+          "format": "uuid",
+          "title": "Switch Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "source",
+            "destination"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "peer_id": {
+          "format": "uuid",
+          "title": "Peer Id",
+          "type": "string"
+        },
+        "peer_epoch": {
+          "anyOf": [
+            {
+              "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Peer Epoch"
+        },
+        "dataset_id": {
+          "format": "uuid",
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "export_hold",
+            "import_hold",
+            "armed",
+            "cancel_pending",
+            "handed_off",
+            "activated",
+            "discarded",
+            "resumed"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "dataset_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dataset Digest"
+        },
+        "archive_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Archive Sha256"
+        },
+        "archive_size": {
+          "anyOf": [
+            {
+              "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Archive Size"
+        },
+        "receipt_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_version",
+        "request_id",
+        "command",
+        "installation_id",
+        "participant_epoch",
+        "switch_id",
+        "role",
+        "peer_id",
+        "peer_epoch",
+        "dataset_id",
+        "state",
+        "dataset_digest",
+        "archive_sha256",
+        "archive_size",
+        "receipt_sha256"
+      ],
+      "title": "Receipt",
+      "type": "object"
+    },
+    "Task": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "switch_id": {
+          "format": "uuid",
+          "title": "Switch Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "snapshot",
+            "validate",
+            "activate"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "queued",
+            "running",
+            "blocked",
+            "complete"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "unauthorized",
+                "unsupported_api_version",
+                "validation_error",
+                "payload_too_large",
+                "bank_login_required",
+                "unsupported_bank",
+                "unsupported_currency",
+                "account_unconfigured",
+                "account_disabled",
+                "settings_conflict",
+                "account_busy",
+                "capture_busy",
+                "lease_expired",
+                "idempotency_conflict",
+                "history_incomplete",
+                "capture_context_changed",
+                "zenmoney_unavailable",
+                "zenmoney_account_unavailable",
+                "delivery_uncertain",
+                "existing_ownership_unknown",
+                "not_found",
+                "method_not_allowed",
+                "internal_error",
+                "migration_busy",
+                "migration_paused",
+                "migration_not_empty",
+                "migration_invalid",
+                "migration_wrong_account",
+                "migration_incomplete"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Error Code"
+        }
+      },
+      "required": [
+        "id",
+        "switch_id",
+        "kind",
+        "state",
+        "error_code"
+      ],
+      "title": "Task",
+      "type": "object"
+    },
+    "Operation": {
+      "additionalProperties": false,
+      "properties": {
+        "switch_id": {
+          "format": "uuid",
+          "title": "Switch Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "source",
+            "destination"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "peer_id": {
+          "format": "uuid",
+          "title": "Peer Id",
+          "type": "string"
+        },
+        "dataset_id": {
+          "format": "uuid",
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "export_hold",
+            "import_hold",
+            "armed",
+            "cancel_pending",
+            "handed_off",
+            "activated",
+            "discarded",
+            "resumed"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "dataset_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dataset Digest"
+        },
+        "archive_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Archive Sha256"
+        },
+        "archive_size": {
+          "anyOf": [
+            {
+              "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Archive Size"
+        },
+        "peer_epoch": {
+          "anyOf": [
+            {
+              "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Peer Epoch"
+        },
+        "validated": {
+          "title": "Validated",
+          "type": "boolean"
+        },
+        "created_at": {
+          "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+          "title": "Created At",
+          "type": "string"
+        },
+        "updated_at": {
+          "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "switch_id",
+        "role",
+        "peer_id",
+        "dataset_id",
+        "state",
+        "dataset_digest",
+        "archive_sha256",
+        "archive_size",
+        "peer_epoch",
+        "validated",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "Operation",
+      "type": "object"
+    },
+    "ParticipantStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "format": "uuid",
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "participant_epoch": {
+          "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+          "title": "Participant Epoch",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "active",
+            "export_hold",
+            "import_hold",
+            "armed",
+            "cancel_pending",
+            "handed_off"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "operation_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Operation Id"
+        },
+        "awaiting_sync": {
+          "title": "Awaiting Sync",
+          "type": "boolean"
+        },
+        "legacy_hold": {
+          "anyOf": [
+            {
+              "enum": [
+                "exported",
+                "imported"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Legacy Hold"
+        }
+      },
+      "required": [
+        "installation_id",
+        "participant_epoch",
+        "state",
+        "operation_id",
+        "awaiting_sync",
+        "legacy_hold"
+      ],
+      "title": "ParticipantStatus",
+      "type": "object"
+    },
+    "Capabilities": {
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "format": "uuid",
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "participant_epoch": {
+          "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+          "title": "Participant Epoch",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "active",
+            "export_hold",
+            "import_hold",
+            "armed",
+            "cancel_pending",
+            "handed_off"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "operation_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Operation Id"
+        },
+        "awaiting_sync": {
+          "title": "Awaiting Sync",
+          "type": "boolean"
+        },
+        "legacy_hold": {
+          "anyOf": [
+            {
+              "enum": [
+                "exported",
+                "imported"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Legacy Hold"
+        },
+        "protocol_version": {
+          "const": "2",
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "archive_version": {
+          "const": "2",
+          "title": "Archive Version",
+          "type": "string"
+        },
+        "financial_schema_version": {
+          "const": "1",
+          "title": "Financial Schema Version",
+          "type": "string"
+        },
+        "chunk_bytes": {
+          "const": "262144",
+          "title": "Chunk Bytes",
+          "type": "string"
+        },
+        "max_archive_bytes": {
+          "const": "67108864",
+          "title": "Max Archive Bytes",
+          "type": "string"
+        },
+        "can_import": {
+          "title": "Can Import",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "installation_id",
+        "participant_epoch",
+        "state",
+        "operation_id",
+        "awaiting_sync",
+        "legacy_hold",
+        "protocol_version",
+        "archive_version",
+        "financial_schema_version",
+        "chunk_bytes",
+        "max_archive_bytes",
+        "can_import"
+      ],
+      "title": "Capabilities",
+      "type": "object"
+    },
+    "Status": {
+      "$defs": {
+        "Operation": {
+          "additionalProperties": false,
+          "properties": {
+            "switch_id": {
+              "format": "uuid",
+              "title": "Switch Id",
+              "type": "string"
+            },
+            "role": {
+              "enum": [
+                "source",
+                "destination"
+              ],
+              "title": "Role",
+              "type": "string"
+            },
+            "peer_id": {
+              "format": "uuid",
+              "title": "Peer Id",
+              "type": "string"
+            },
+            "dataset_id": {
+              "format": "uuid",
+              "title": "Dataset Id",
+              "type": "string"
+            },
+            "state": {
+              "enum": [
+                "export_hold",
+                "import_hold",
+                "armed",
+                "cancel_pending",
+                "handed_off",
+                "activated",
+                "discarded",
+                "resumed"
+              ],
+              "title": "State",
+              "type": "string"
+            },
+            "dataset_digest": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dataset Digest"
+            },
+            "archive_sha256": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Archive Sha256"
+            },
+            "archive_size": {
+              "anyOf": [
+                {
+                  "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Archive Size"
+            },
+            "peer_epoch": {
+              "anyOf": [
+                {
+                  "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Peer Epoch"
+            },
+            "validated": {
+              "title": "Validated",
+              "type": "boolean"
+            },
+            "created_at": {
+              "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+              "title": "Created At",
+              "type": "string"
+            },
+            "updated_at": {
+              "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+              "title": "Updated At",
+              "type": "string"
+            }
+          },
+          "required": [
+            "switch_id",
+            "role",
+            "peer_id",
+            "dataset_id",
+            "state",
+            "dataset_digest",
+            "archive_sha256",
+            "archive_size",
+            "peer_epoch",
+            "validated",
+            "created_at",
+            "updated_at"
+          ],
+          "title": "Operation",
+          "type": "object"
+        },
+        "Receipt": {
+          "additionalProperties": false,
+          "properties": {
+            "receipt_version": {
+              "const": "1",
+              "title": "Receipt Version",
+              "type": "string"
+            },
+            "request_id": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            },
+            "command": {
+              "enum": [
+                "source_start",
+                "source_seal",
+                "destination_start",
+                "destination_arm",
+                "source_handoff",
+                "source_cancel",
+                "destination_discard",
+                "source_resume",
+                "destination_activate"
+              ],
+              "title": "Command",
+              "type": "string"
+            },
+            "installation_id": {
+              "format": "uuid",
+              "title": "Installation Id",
+              "type": "string"
+            },
+            "participant_epoch": {
+              "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+              "title": "Participant Epoch",
+              "type": "string"
+            },
+            "switch_id": {
+              "format": "uuid",
+              "title": "Switch Id",
+              "type": "string"
+            },
+            "role": {
+              "enum": [
+                "source",
+                "destination"
+              ],
+              "title": "Role",
+              "type": "string"
+            },
+            "peer_id": {
+              "format": "uuid",
+              "title": "Peer Id",
+              "type": "string"
+            },
+            "peer_epoch": {
+              "anyOf": [
+                {
+                  "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Peer Epoch"
+            },
+            "dataset_id": {
+              "format": "uuid",
+              "title": "Dataset Id",
+              "type": "string"
+            },
+            "state": {
+              "enum": [
+                "export_hold",
+                "import_hold",
+                "armed",
+                "cancel_pending",
+                "handed_off",
+                "activated",
+                "discarded",
+                "resumed"
+              ],
+              "title": "State",
+              "type": "string"
+            },
+            "dataset_digest": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dataset Digest"
+            },
+            "archive_sha256": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Archive Sha256"
+            },
+            "archive_size": {
+              "anyOf": [
+                {
+                  "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Archive Size"
+            },
+            "receipt_sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Receipt Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "receipt_version",
+            "request_id",
+            "command",
+            "installation_id",
+            "participant_epoch",
+            "switch_id",
+            "role",
+            "peer_id",
+            "peer_epoch",
+            "dataset_id",
+            "state",
+            "dataset_digest",
+            "archive_sha256",
+            "archive_size",
+            "receipt_sha256"
+          ],
+          "title": "Receipt",
+          "type": "object"
+        },
+        "Task": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            },
+            "switch_id": {
+              "format": "uuid",
+              "title": "Switch Id",
+              "type": "string"
+            },
+            "kind": {
+              "enum": [
+                "snapshot",
+                "validate",
+                "activate"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "running",
+                "blocked",
+                "complete"
+              ],
+              "title": "State",
+              "type": "string"
+            },
+            "error_code": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "unauthorized",
+                    "unsupported_api_version",
+                    "validation_error",
+                    "payload_too_large",
+                    "bank_login_required",
+                    "unsupported_bank",
+                    "unsupported_currency",
+                    "account_unconfigured",
+                    "account_disabled",
+                    "settings_conflict",
+                    "account_busy",
+                    "capture_busy",
+                    "lease_expired",
+                    "idempotency_conflict",
+                    "history_incomplete",
+                    "capture_context_changed",
+                    "zenmoney_unavailable",
+                    "zenmoney_account_unavailable",
+                    "delivery_uncertain",
+                    "existing_ownership_unknown",
+                    "not_found",
+                    "method_not_allowed",
+                    "internal_error",
+                    "migration_busy",
+                    "migration_paused",
+                    "migration_not_empty",
+                    "migration_invalid",
+                    "migration_wrong_account",
+                    "migration_incomplete"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error Code"
+            }
+          },
+          "required": [
+            "id",
+            "switch_id",
+            "kind",
+            "state",
+            "error_code"
+          ],
+          "title": "Task",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "format": "uuid",
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "participant_epoch": {
+          "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+          "title": "Participant Epoch",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "active",
+            "export_hold",
+            "import_hold",
+            "armed",
+            "cancel_pending",
+            "handed_off"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "operation_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Operation Id"
+        },
+        "awaiting_sync": {
+          "title": "Awaiting Sync",
+          "type": "boolean"
+        },
+        "legacy_hold": {
+          "anyOf": [
+            {
+              "enum": [
+                "exported",
+                "imported"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Legacy Hold"
+        },
+        "operation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Operation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "receipts": {
+          "items": {
+            "$ref": "#/$defs/Receipt"
+          },
+          "title": "Receipts",
+          "type": "array"
+        },
+        "work": {
+          "items": {
+            "$ref": "#/$defs/Task"
+          },
+          "title": "Work",
+          "type": "array"
+        }
+      },
+      "required": [
+        "installation_id",
+        "participant_epoch",
+        "state",
+        "operation_id",
+        "awaiting_sync",
+        "legacy_hold",
+        "operation",
+        "receipts",
+        "work"
+      ],
+      "title": "Status",
+      "type": "object"
+    },
+    "CommandResult": {
+      "$defs": {
+        "Receipt": {
+          "additionalProperties": false,
+          "properties": {
+            "receipt_version": {
+              "const": "1",
+              "title": "Receipt Version",
+              "type": "string"
+            },
+            "request_id": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            },
+            "command": {
+              "enum": [
+                "source_start",
+                "source_seal",
+                "destination_start",
+                "destination_arm",
+                "source_handoff",
+                "source_cancel",
+                "destination_discard",
+                "source_resume",
+                "destination_activate"
+              ],
+              "title": "Command",
+              "type": "string"
+            },
+            "installation_id": {
+              "format": "uuid",
+              "title": "Installation Id",
+              "type": "string"
+            },
+            "participant_epoch": {
+              "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+              "title": "Participant Epoch",
+              "type": "string"
+            },
+            "switch_id": {
+              "format": "uuid",
+              "title": "Switch Id",
+              "type": "string"
+            },
+            "role": {
+              "enum": [
+                "source",
+                "destination"
+              ],
+              "title": "Role",
+              "type": "string"
+            },
+            "peer_id": {
+              "format": "uuid",
+              "title": "Peer Id",
+              "type": "string"
+            },
+            "peer_epoch": {
+              "anyOf": [
+                {
+                  "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Peer Epoch"
+            },
+            "dataset_id": {
+              "format": "uuid",
+              "title": "Dataset Id",
+              "type": "string"
+            },
+            "state": {
+              "enum": [
+                "export_hold",
+                "import_hold",
+                "armed",
+                "cancel_pending",
+                "handed_off",
+                "activated",
+                "discarded",
+                "resumed"
+              ],
+              "title": "State",
+              "type": "string"
+            },
+            "dataset_digest": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dataset Digest"
+            },
+            "archive_sha256": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Archive Sha256"
+            },
+            "archive_size": {
+              "anyOf": [
+                {
+                  "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Archive Size"
+            },
+            "receipt_sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Receipt Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "receipt_version",
+            "request_id",
+            "command",
+            "installation_id",
+            "participant_epoch",
+            "switch_id",
+            "role",
+            "peer_id",
+            "peer_epoch",
+            "dataset_id",
+            "state",
+            "dataset_digest",
+            "archive_sha256",
+            "archive_size",
+            "receipt_sha256"
+          ],
+          "title": "Receipt",
+          "type": "object"
+        },
+        "Task": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            },
+            "switch_id": {
+              "format": "uuid",
+              "title": "Switch Id",
+              "type": "string"
+            },
+            "kind": {
+              "enum": [
+                "snapshot",
+                "validate",
+                "activate"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "running",
+                "blocked",
+                "complete"
+              ],
+              "title": "State",
+              "type": "string"
+            },
+            "error_code": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "unauthorized",
+                    "unsupported_api_version",
+                    "validation_error",
+                    "payload_too_large",
+                    "bank_login_required",
+                    "unsupported_bank",
+                    "unsupported_currency",
+                    "account_unconfigured",
+                    "account_disabled",
+                    "settings_conflict",
+                    "account_busy",
+                    "capture_busy",
+                    "lease_expired",
+                    "idempotency_conflict",
+                    "history_incomplete",
+                    "capture_context_changed",
+                    "zenmoney_unavailable",
+                    "zenmoney_account_unavailable",
+                    "delivery_uncertain",
+                    "existing_ownership_unknown",
+                    "not_found",
+                    "method_not_allowed",
+                    "internal_error",
+                    "migration_busy",
+                    "migration_paused",
+                    "migration_not_empty",
+                    "migration_invalid",
+                    "migration_wrong_account",
+                    "migration_incomplete"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error Code"
+            }
+          },
+          "required": [
+            "id",
+            "switch_id",
+            "kind",
+            "state",
+            "error_code"
+          ],
+          "title": "Task",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "receipt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Receipt"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "work": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Task"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "CommandResult",
+      "type": "object"
+    },
+    "ChunkRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_epoch": {
+          "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+          "title": "Expected Epoch",
+          "type": "string"
+        },
+        "data": {
+          "maxLength": 349528,
+          "minLength": 4,
+          "title": "Data",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "expected_epoch",
+        "data",
+        "sha256"
+      ],
+      "title": "ChunkRequest",
+      "type": "object"
+    },
+    "ChunkReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "switch_id": {
+          "format": "uuid",
+          "title": "Switch Id",
+          "type": "string"
+        },
+        "number": {
+          "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+          "title": "Number",
+          "type": "string"
+        },
+        "bytes": {
+          "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+          "title": "Bytes",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "switch_id",
+        "number",
+        "bytes",
+        "sha256"
+      ],
+      "title": "ChunkReceipt",
+      "type": "object"
+    },
+    "FinalizeRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "request_id": {
+          "format": "uuid",
+          "title": "Request Id",
+          "type": "string"
+        },
+        "switch_id": {
+          "format": "uuid",
+          "title": "Switch Id",
+          "type": "string"
+        },
+        "expected_epoch": {
+          "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+          "title": "Expected Epoch",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "switch_id",
+        "expected_epoch"
+      ],
+      "title": "FinalizeRequest",
+      "type": "object"
+    },
+    "Empty": {
+      "additionalProperties": false,
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    }
+  }
+}

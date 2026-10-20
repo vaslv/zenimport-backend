@@ -101,6 +101,8 @@ def reconcile_known(db, now):
 
 
 def apply_diff(db, diff, *, expected_generation, source_hash, requested_cursor, full, now, origin='read'):
+    if participant.blocked(db):
+        raise SyncError('migration_paused')
     state = db.execute('SELECT * FROM zen_mirror_state WHERE id=1').fetchone()
     if state['generation'] != expected_generation or state['source_hash'] != source_hash:
         return False
@@ -175,6 +177,8 @@ class Mirror:
 
     def failed(self, generation):
         with storage.transaction(self.path) as db:
+            if participant.blocked(db):
+                return
             state = db.execute('SELECT * FROM zen_mirror_state WHERE id=1').fetchone()
             if state['generation'] == generation and state['source_hash'] == self.source_hash:
                 db.execute("UPDATE zen_mirror_state SET ready=0,error_code='zenmoney_unavailable' WHERE id=1")
@@ -221,6 +225,8 @@ class Mirror:
                 except (TransportError, HTTPError, ResponseError, ValueError, sqlite3.Error):
                     self.failed(state['generation'])
                     raise SyncError('zenmoney_unavailable', 503, retryable=True) from None
+                except SyncError:
+                    raise
                 except Exception:
                     # An unexpected projection fault also revokes freshness;
                     # keep the original fault for the generic redacted handler.

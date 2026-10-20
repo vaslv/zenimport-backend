@@ -28,7 +28,8 @@ FIELDS = {
 
 def require(condition, code='migration_invalid'):
     if not condition:
-        raise SyncError(code, 409 if code != 'migration_invalid' else 422)
+        status={'migration_invalid':422,'not_found':404,'zenmoney_unavailable':503}.get(code,409)
+        raise SyncError(code,status,retryable=code=='zenmoney_unavailable')
 
 
 def canonical(value):
@@ -98,7 +99,9 @@ def status(db, switch_id=None):
     if switch_id is not None:
         operation = db.execute('SELECT * FROM migration_operations WHERE switch_id=?', (uuid(switch_id),)).fetchone()
         value['operation'] = dict(operation) if operation else None
+        value['receipts'] = []
         if operation:
+            value['operation']['validated'] = bool(operation['validated'])
             value['operation']['archive_size'] = str(operation['archive_size']) if operation['archive_size'] is not None else None
             value['operation']['peer_epoch'] = str(operation['peer_epoch']) if operation['peer_epoch'] is not None else None
             for field in ('created_at', 'updated_at'): value['operation'][field] = str(operation[field])
@@ -147,7 +150,7 @@ def verify_receipt(value, *, command, current, operation=None):
 def _eligible(db, current, *, state='active'):
     from .migration import started, meta
     require(current['state'] == state and not current['ever_activated'] and not current['awaiting_sync'], 'migration_not_empty')
-    require(not started(db) and not meta(db, 'migration_import_sha256'), 'migration_not_empty')
+    require(not started(db) and not meta(db, 'migration_import_sha256') and not meta(db,'migration_hold'), 'migration_not_empty')
 
 
 def _insert(db, request, role, peer_id, dataset_id, state, now, *, peer=None):
@@ -176,6 +179,8 @@ def put_chunk(db, switch_id, *, expected_epoch, number, data, sha256_digest):
     require(control['participant_epoch'] == integer(expected_epoch) and control['operation_id'] == switch_id, 'migration_paused')
     require(operation is not None and operation['state'] in ('export_hold','import_hold') and not operation['validated'], 'migration_paused')
     require(operation['role'] != 'source' or operation['dataset_digest'] is None, 'migration_paused')
+    if operation['role'] == 'destination':
+        require(number*262144 < operation['archive_size'] and len(data) == min(262144,operation['archive_size']-number*262144))
     previous = db.execute('SELECT data,sha256 FROM migration_chunks WHERE switch_id=? AND number=?', (switch_id,number)).fetchone()
     if previous:
         require(previous['data'] == data and previous['sha256'] == sha256_digest)

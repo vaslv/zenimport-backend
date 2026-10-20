@@ -56,3 +56,15 @@ CREATE TRIGGER migration_chunk_immutable BEFORE UPDATE ON migration_chunks
 -- Original runtime migration audit, distinct from the destination's own schema.
 CREATE TABLE portable_schema_audit (
  version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL, backup_path TEXT CHECK(backup_path IS NULL));
+CREATE TABLE migration_work (
+ id TEXT PRIMARY KEY, switch_id TEXT NOT NULL REFERENCES migration_operations(switch_id),
+ kind TEXT NOT NULL CHECK(kind IN ('snapshot','validate','activate')),
+ request_json TEXT NOT NULL CHECK(json_valid(request_json)), request_digest TEXT NOT NULL CHECK(length(request_digest)=64),
+ state TEXT NOT NULL CHECK(state IN ('queued','running','blocked','complete')), error_code TEXT,
+ created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL CHECK(updated_at>=created_at), UNIQUE(switch_id,kind));
+CREATE TRIGGER migration_work_binding BEFORE UPDATE ON migration_work
+ WHEN NEW.id<>OLD.id OR NEW.switch_id<>OLD.switch_id OR NEW.kind<>OLD.kind OR NEW.request_json<>OLD.request_json
+   OR NEW.request_digest<>OLD.request_digest OR NEW.created_at<>OLD.created_at OR (OLD.state='complete' AND NEW.state<>'complete')
+ BEGIN SELECT RAISE(ABORT,'Migration work identity and completed outcome are permanent'); END;
+CREATE TRIGGER migration_work_preserved BEFORE DELETE ON migration_work
+ BEGIN SELECT RAISE(ABORT,'Migration work outcome is permanent'); END;

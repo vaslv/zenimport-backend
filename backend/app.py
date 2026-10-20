@@ -20,6 +20,8 @@ from .sync_contracts import ServerInfo
 from .mirror import Mirror
 from .delivery import DeliveryWorker
 from .migration import Migration, MigrationGate
+from .portable_service import PortableMigration
+from .portable_api import router as portable_router
 
 
 def create_app(settings: Settings | None = None, *, clock=None, client_factory=Client, start_worker=True):
@@ -36,11 +38,14 @@ def create_app(settings: Settings | None = None, *, clock=None, client_factory=C
             app.state.migration_gate = MigrationGate(settings.database_path)
             app.state.migration = Migration(settings.database_path, app.state.migration_gate, app.state.mirror, clock)
             app.state.delivery = DeliveryWorker(settings.database_path, app.state.mirror, clock, gate=app.state.migration_gate)
+            app.state.portable = PortableMigration(settings.database_path,app.state.migration_gate,app.state.mirror,clock)
             if start_worker:
+                app.state.portable.start()
                 app.state.delivery.start()
             try:
                 yield
             finally:
+                await asyncio.to_thread(app.state.portable.stop)
                 await asyncio.to_thread(app.state.delivery.stop)
         finally:
             if client is not None:
@@ -50,6 +55,7 @@ def create_app(settings: Settings | None = None, *, clock=None, client_factory=C
                   docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(ApiBoundary, token=settings.api_token, migration_gate=lambda: app.state.migration_gate)
     app.include_router(router(settings.database_path, clock, lambda: app.state.mirror, lambda: app.state.delivery.wake()))
+    app.include_router(portable_router(lambda:app.state.portable))
 
     @app.get('/api/v1/migration/status')
     def migration_status():
