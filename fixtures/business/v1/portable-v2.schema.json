@@ -133,8 +133,9 @@
         "additionalProperties": false,
         "properties": {
           "bytes": {
-            "pattern": "^(0|[1-9][0-9]*)$",
-            "type": "string"
+            "maximum": 268435456,
+            "minimum": 0,
+            "type": "integer"
           },
           "columns": {
             "items": {
@@ -154,8 +155,9 @@
             "type": "string"
           },
           "rows": {
-            "pattern": "^(0|[1-9][0-9]*)$",
-            "type": "string"
+            "maximum": 268435456,
+            "minimum": 0,
+            "type": "integer"
           },
           "sha256": {
             "pattern": "^[0-9a-f]{64}$",

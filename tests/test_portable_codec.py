@@ -95,6 +95,17 @@ def test_dataset_digest_excludes_producer_time_and_session_but_binds_financial_b
     assert codec.dataset_digest(modified) != first['dataset_digest']
 
 
+@pytest.mark.parametrize('field', ['rows','bytes'])
+@pytest.mark.parametrize('value', ['0',True,-1,0.5,268435457,9007199254740992])
+def test_manifest_counters_agree_with_the_bounded_json_integer_schema(tmp_path,field,value):
+    _,manifest=make(tmp_path)
+    definition=codec.CONTRACT['manifest']['properties']['tables']['items']['properties'][field]
+    assert definition == dict(type='integer',minimum=0,maximum=268435456)
+    manifest['tables'][0][field]=value
+    with pytest.raises(codec.PortableError,match='invalid_tables'):
+        codec.validate_manifest(manifest)
+
+
 @pytest.mark.parametrize('value', [None, '', 'café', '9007199254740993', 9007199254740993, b'\0\xff'])
 def test_scalar_tags_are_lossless_and_do_not_guess_text_types(value):
     assert codec.unscalar(codec.scalar(value)) == value
