@@ -2,9 +2,11 @@
 from copy import deepcopy
 from datetime import datetime,timedelta
 import json
+from hashlib import sha256
 from zoneinfo import ZoneInfo
 
-from backend.sync_contracts import BankRecord
+from backend.sync_contracts import BankRecord,CapturePage,MAX_BODY_BYTES
+from backend.capture_policy import canonical
 from backend.migrate_legacy import occurred
 
 
@@ -77,7 +79,15 @@ def generate():
                     value=day.replace(hour=hour);raw={'date':value.strftime('%d/%m/%Y %H:%M:%S')};local=value.date().isoformat()
                     legacy.append(dict(raw=raw,bank='vietinbank',local_date=local,expected=occurred(raw,'vietinbank',local)))
         previous=current;cursor+=timedelta(days=1)
-    return dict(contract_version=1,reference='Actual BankRecord model, aware datetime equality and legacy occurred projection',records=records,timestamp_pairs=pairs,legacy_timestamps=legacy)
+    wide=dict(count=100,description='😀',repeat=2000,record_base=base)
+    request=dict(worker_id='00000000-0000-4000-8000-000000000000',lease_epoch=1,page_number=1,total_pages=1,total_records=wide['count'],
+        records=[dict(base,external_id='wide-'+str(i),description=wide['description']*wide['repeat']) for i in range(wide['count'])])
+    wire=json.dumps(request,ensure_ascii=False,separators=(',',':')).encode()
+    stored=canonical(CapturePage.model_validate(request).model_dump(mode='json',exclude={'worker_id','lease_epoch'})).encode()
+    assert len(wire)<MAX_BODY_BYTES<len(stored)
+    wide.update(wire_bytes=len(wire),stored_bytes=len(stored),stored_sha256=sha256(stored).hexdigest())
+    return dict(contract_version=1,reference='Actual BankRecord model, aware datetime equality and legacy occurred projection',
+        records=records,timestamp_pairs=pairs,legacy_timestamps=legacy,wide_capture=wide)
 
 
 if __name__=='__main__':print(json.dumps(generate(),ensure_ascii=False,separators=(',',':')))

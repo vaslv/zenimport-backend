@@ -1,5 +1,6 @@
 """Cross-runtime fixture comes from isolated real capture/delivery code paths."""
 from copy import deepcopy
+from hashlib import sha256
 import json
 from pathlib import Path
 from uuid import uuid4
@@ -91,3 +92,21 @@ def test_shared_current_bank_time_accepts_equivalent_offset_but_rejects_a_differ
     graph.validate_stage(stage(tmp_path,rows))
     rows['bank_transactions'][0][index]=datetime.fromisoformat(original).replace(microsecond=1).isoformat()
     with pytest.raises(codec.PortableError,match='bank_raw_mismatch'):graph.validate_stage(stage(tmp_path,rows))
+
+
+def test_shared_capture_accepts_equivalent_record_dict_and_time_but_rejects_value_changes(tmp_path):
+    from datetime import datetime,timezone
+    rows=decoded();offset=lambda table,column:codec.TABLES[table]['columns'].index(column)
+    page=rows['capture_pages'][0];payload=json.loads(page[offset('capture_pages','payload_json')]);record=payload['records'][0]
+    record['details']={'remark':'Fixture','currency':'VND'}
+    bank=next(row for row in rows['bank_transactions'] if row[offset('bank_transactions','external_id')]==record['external_id'])
+    original=dict(record,occurred_at=datetime.fromisoformat(record['occurred_at']).astimezone(timezone.utc).isoformat().replace('+00:00','Z'))
+    raw=json.dumps(original,ensure_ascii=False,separators=(',',':'));bank[offset('bank_transactions','raw_json')]=raw
+    for version in rows['bank_versions']:
+        if version[0]==bank[0]:
+            version[offset('bank_versions','raw_json')]=raw;version[offset('bank_versions','data_json')]=raw
+    def rehash():
+        raw=graph.capture_canonical(payload);page[offset('capture_pages','payload_json')]=raw;page[offset('capture_pages','digest')]=sha256(raw.encode()).hexdigest()
+    rehash();graph.validate_stage(stage(tmp_path,rows))
+    record['description']='Substituted description';rehash()
+    with pytest.raises(codec.PortableError,match='invalid_captured_revision'):graph.validate_stage(stage(tmp_path,rows))

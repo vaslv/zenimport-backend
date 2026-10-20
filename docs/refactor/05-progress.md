@@ -635,3 +635,13 @@ requiring 1–10,000 pages. The graph now enforces those same bounds. Genuine
 empty history still uses one confirmed empty page. Focused offline Docker
 resource/graph/fixture checks: 72 passed in 5.15s; the zero-page case failed before
 the correction. Ordinary capture behavior and production data were unchanged.
+
+### Complete archived-capture browser parity checkpoint
+
+Added the compact actual-Python Unicode capture recipe: an 828,022-byte UTF-8
+request expands to 2,434,555 stored ASCII bytes with a pinned SHA256. The ordinary
+HTTP limit is unchanged. Independently verified dictionary-order/offset equality
+and rejection of changed captured values on the shared fixture. Focused offline
+Docker graph/resource/model/fixture checks: 74 passed in 5.28s. Chrome now has a
+complete read-only facts validator; protected native activation/lifecycle and the
+remaining L4 interop/performance/review gates are still required.
