@@ -81,3 +81,13 @@ def test_shared_exact_mirror_amount_and_category_positions_match_original_data(t
     graph.validate_stage(stage(tmp_path,rows))
     rows['zen_tags'][0][-1]=10
     with pytest.raises(codec.PortableError,match='invalid_mirror_tags'):graph.validate_stage(stage(tmp_path,rows))
+
+
+def test_shared_current_bank_time_accepts_equivalent_offset_but_rejects_a_different_microsecond(tmp_path):
+    from datetime import datetime,timezone
+    rows=decoded();index=codec.TABLES['bank_transactions']['columns'].index('occurred_at')
+    original=rows['bank_transactions'][0][index]
+    rows['bank_transactions'][0][index]=datetime.fromisoformat(original).astimezone(timezone.utc).isoformat()
+    graph.validate_stage(stage(tmp_path,rows))
+    rows['bank_transactions'][0][index]=datetime.fromisoformat(original).replace(microsecond=1).isoformat()
+    with pytest.raises(codec.PortableError,match='bank_raw_mismatch'):graph.validate_stage(stage(tmp_path,rows))

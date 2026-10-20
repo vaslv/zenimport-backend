@@ -583,3 +583,11 @@ reference generator is pinned and recomputed in Docker, including observations
 around every discovered offset change from 1800 through 1979. Browser helpers
 match these outcomes; they are not yet a complete financial graph proof.
 Focused Docker reference/financial suite: 15 passed in 0.94s. No live requests.
+
+### Shared raw bank timestamp proof (L4)
+
+Verified that an equivalent stored UTC timestamp remains valid without rewriting
+the original raw bank record, while a one-microsecond mismatch is rejected.
+Focused Docker financial fixture/graph suite: 67 passed in 3.78s. Browser raw bank
+proof remains inactive and read-only; complete capture proof and lifecycle gates
+are still outstanding. No production data or API calls were involved.
