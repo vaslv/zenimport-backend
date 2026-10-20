@@ -1,0 +1,125 @@
+{
+  "contract_version": 1,
+  "rules": [
+    {
+      "acceptance": "C03",
+      "id": "identity",
+      "reference_test": "test_connections.py",
+      "repository_method": "accounts.discover",
+      "rule": "canonical account identity never uses display name",
+      "status": "required_reference_behavior"
+    },
+    {
+      "acceptance": "B01",
+      "id": "money",
+      "reference_test": "test_sync_contracts.py",
+      "repository_method": "records.save",
+      "rule": "positive exact decimal, 24 integer/12 fraction digits, account scale stricter",
+      "status": "required_reference_behavior"
+    },
+    {
+      "acceptance": "C08",
+      "id": "time",
+      "reference_test": "test_capture_jobs.py",
+      "repository_method": "capture.validate",
+      "rule": "calendar day in bank IANA timezone, explicit offset timestamp",
+      "status": "required_reference_behavior"
+    },
+    {
+      "acceptance": "C08",
+      "id": "period",
+      "reference_test": "test_capture_jobs.py",
+      "repository_method": "capture.plan",
+      "rule": "initial untouched popup preserves import_start; explicit override then rolling overlap/gaps",
+      "status": "required_reference_behavior"
+    },
+    {
+      "acceptance": "D02",
+      "id": "page",
+      "reference_test": "test_capture_pages.py",
+      "repository_method": "capture.page",
+      "rule": "same page replay is idempotent; differing replay rejects; commit before ACK",
+      "status": "required_reference_behavior"
+    },
+    {
+      "acceptance": "D03",
+      "id": "lease",
+      "reference_test": "test_capture_jobs.py",
+      "repository_method": "capture.claim",
+      "rule": "120-second persisted lease and monotonically increasing takeover epoch",
+      "status": "required_reference_behavior"
+    },
+    {
+      "acceptance": "D08",
+      "id": "mirror",
+      "reference_test": "test_mirror.py",
+      "repository_method": "mirror.apply",
+      "rule": "raw/projections/tombstones/cursor atomic with expected generation/source",
+      "status": "required_reference_behavior"
+    },
+    {
+      "acceptance": "D07",
+      "id": "deletion",
+      "reference_test": "test_mirror.py",
+      "repository_method": "processing.reconcile",
+      "rule": "explicit deletion permanently suppresses known identity; full absence alone is not deletion",
+      "status": "required_reference_behavior"
+    },
+    {
+      "acceptance": "E02",
+      "id": "matching",
+      "reference_test": "test_existing.py",
+      "repository_method": "matching.reconcile",
+      "rule": "target/day/signed amount/instrument across types and multiplicity",
+      "status": "required_reference_behavior"
+    },
+    {
+      "acceptance": "E05",
+      "id": "transfer",
+      "reference_test": "test_transfer_recovery.py",
+      "repository_method": "matching.recoverOwnership",
+      "rule": "actual account-side receipt; corroborate late opposite-bank evidence",
+      "status": "required_reference_behavior"
+    },
+    {
+      "acceptance": "E08",
+      "id": "groups",
+      "reference_test": "test_existing_groups.py",
+      "repository_method": "matching.groups",
+      "rule": "unique split/settlement only, maximum16 parts and20000 visits",
+      "status": "required_reference_behavior"
+    },
+    {
+      "acceptance": "E14",
+      "id": "prediction",
+      "reference_test": "test_predictions.py",
+      "repository_method": "prediction.prepare",
+      "rule": "three independent consistent reviewed payments; no self-learning/conflict",
+      "status": "required_reference_behavior"
+    },
+    {
+      "acceptance": "F04",
+      "id": "outbox",
+      "reference_test": "test_delivery.py",
+      "repository_method": "delivery.claim",
+      "rule": "immutable stable UUID/payload/auth intent before network, verify uncertain original",
+      "status": "required_reference_behavior"
+    },
+    {
+      "acceptance": "H03",
+      "id": "report",
+      "reference_test": "test_discrepancies.py",
+      "repository_method": "reports.build",
+      "rule": "both unmatched sides over complete bank coverage despite blocked delivery",
+      "status": "required_reference_behavior"
+    },
+    {
+      "acceptance": "G21",
+      "id": "migration",
+      "reference_test": "test_migration.py",
+      "repository_method": "migration.transition",
+      "rule": "format2 protected handoff, no generic resume/start bypass, restore distinct",
+      "status": "required_format2_improvement"
+    }
+  ]
+}

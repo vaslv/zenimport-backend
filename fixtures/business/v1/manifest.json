@@ -1,0 +1,30 @@
+{
+  "contract_version": 1,
+  "files": {
+    "application.json": "c59957d0df9785b847e149d01faa8a4a49c7949676e53d69e5f82840bbb9f9fb",
+    "arithmetic-vectors.json": "f6a0e50c9a21ff51dd16f91796e68e1a10894375f20dfaf159324158e7bb6ed8",
+    "baseline.json": "106e52419f893d3ae9cd3fc584383ba8b333916a27db251b2404000cc9c296b0",
+    "http-routes-v1.json": "8a4678bf069b6593589586d0bfde2f9337c1d10c59015968a9e934efb658143b",
+    "portable-policy.json": "cd3962827b80ca1824feb14d5d4ca54271bd94881d3cbcd0b2739ea8c3448eb0",
+    "portable-v2.schema.json": "c179bef03c0591a8b9f026ef44934731269426d704123815ef64b672e64514b2",
+    "rules.json": "c443990d3cc7ccd73c12c30c6bef106bc2b4c6cb7c7dab626492542ed974234b",
+    "scenario.schema.json": "97563447faaa471c6fb7ad55750afa4c3c5f7398c988e586571cbb369d14dd4d",
+    "scenarios/calendar-boundaries.json": "7bf2937eab8d1033fb2d8da1a0386cca2f1f8667d43373509899e8714eace0c7",
+    "scenarios/delivery-retain-uncertain-uuid.json": "4989bbee75ade3cb1b48b80490516ef1ab6a4c6271921d64494240810fdadc78",
+    "scenarios/identity-canonical.json": "1d0716d5e814f2c388ce8d31323f28f23fcdf91d9dd4996ef3d982af27a45450",
+    "scenarios/lossless-wire-digests.json": "1ba3f19b0c06727d953bc1cd6394fffd737f5b040eccce026c90091b2db4b17d",
+    "scenarios/matching-multiplicity-all-types.json": "619537534b09f578e8e171eb46c99691a7865db2319113d4a54f49d1a58fa7cf",
+    "scenarios/migration-owner-mismatch.json": "26f1b63a107833be16e7ac8f26cb261b8ddea2fcfcc02b824dc212cd445fc2f1",
+    "scenarios/mirror-delete-is-final.json": "88b7c96d7a1499e251503581bd8f43f1cbfe21ec740b457aa17c430c2605886f",
+    "scenarios/money-boundaries.json": "76eb5a245b579a4db62190d509d660eb071a9b3ed2c7e948c91e43da834a987e",
+    "scenarios/money-cancellation.json": "cfa3f2212fe20bdb6b4e1e811c77becb813b248a8c47eebd4bdbec0ba85b55a1",
+    "scenarios/money-compare.json": "2286fcce2709054fe7f6efcacd97736239e267d049bb4d47e00f667b32412ecf",
+    "scenarios/money-large.json": "2e5009091e2eddc75645cf160c1bf3bcccb6b947034666228a2818df46dd43fb",
+    "scenarios/movement-both-transfer-sides.json": "6725b1eb53fe27adc4c83c9ac95e4cf5ff7c6e12dd3453a2acbd53726a297562",
+    "sqlite-v7.json": "23ec0d42d2be96b81407991730684bcb1fa95f23f64207630991e72d5736b7d5",
+    "storage-cases.json": "9dedb87ac04493d910a6e76eefe2c2c7971a6430e34314cbededb3338d85ccb9",
+    "unicode15.json": "edd824a306bde912bf896f706d44bc4a004202786f8b12c4f1b9e7bc4f7f9da7",
+    "wire-examples-v1.json": "d6319a38bad15ded1f8c783cc40ae7261ee4a445bf8b7543b78a28dca8c18140",
+    "wire-v1.json": "ecb8530bedb19bef497149050677882383308ddc20691e50ee104eadf66c2dec"
+  }
+}

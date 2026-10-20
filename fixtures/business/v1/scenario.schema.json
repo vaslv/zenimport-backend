@@ -1,0 +1,145 @@
+{
+  "$id": "https://zenimport.invalid/contracts/business-scenario-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "clock": {
+      "pattern": "^(0|[1-9][0-9]*)$",
+      "type": "string"
+    },
+    "commands": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "fault": {
+            "enum": [
+              "none",
+              "before_commit",
+              "after_commit",
+              "before_dispatch",
+              "after_remote_commit"
+            ]
+          },
+          "input": {
+            "type": "object"
+          },
+          "operation": {
+            "enum": [
+              "money.sum",
+              "money.compare",
+              "capture.plan",
+              "capture.page",
+              "mirror.apply",
+              "matching.reconcile",
+              "prediction.prepare",
+              "report.build",
+              "delivery.advance",
+              "migration.import",
+              "money.subtract",
+              "money.sign",
+              "money.bank",
+              "money.wire",
+              "movement.signed",
+              "identity.normalize",
+              "identity.recipient",
+              "dates.calendar",
+              "dates.localDay",
+              "dates.months",
+              "wire.canonical",
+              "wire.digest",
+              "wire.roundtrip"
+            ]
+          }
+        },
+        "required": [
+          "operation",
+          "input"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "contract_version": {
+      "const": 1
+    },
+    "expected": {
+      "additionalProperties": false,
+      "properties": {
+        "external_writes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "payload": {
+                "type": "string"
+              },
+              "uuid": {
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "uuid",
+              "payload"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "results": {
+          "type": "array"
+        },
+        "state_assertions": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "results",
+        "external_writes",
+        "state_assertions"
+      ],
+      "type": "object"
+    },
+    "id": {
+      "pattern": "^[a-z0-9._-]+$",
+      "type": "string"
+    },
+    "implemented_by_stage": {
+      "enum": [
+        "L2",
+        "L3",
+        "L4",
+        "L6",
+        "L7",
+        "L8",
+        "L9",
+        "L10"
+      ]
+    },
+    "initial_state": {
+      "type": "object"
+    },
+    "uuids": {
+      "items": {
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "id",
+    "contract_version",
+    "implemented_by_stage",
+    "clock",
+    "uuids",
+    "initial_state",
+    "commands",
+    "expected"
+  ],
+  "type": "object"
+}

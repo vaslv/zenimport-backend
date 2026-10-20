@@ -1,0 +1,55 @@
+{
+  "id": "matching-multiplicity-all-types",
+  "contract_version": 1,
+  "implemented_by_stage": "L8",
+  "clock": "1792458000",
+  "uuids": [],
+  "initial_state": {},
+  "commands": [
+    {
+      "operation": "matching.reconcile",
+      "input": {
+        "bank": [
+          {
+            "id": "b1",
+            "day": "2026-10-19",
+            "amount": "-100"
+          },
+          {
+            "id": "b2",
+            "day": "2026-10-19",
+            "amount": "-100"
+          }
+        ],
+        "zen": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "day": "2026-10-19",
+            "amount": "-100",
+            "type": "transfer",
+            "target": "a"
+          }
+        ]
+      }
+    }
+  ],
+  "expected": {
+    "results": [
+      {
+        "matched": [
+          {
+            "bank_id": "b1",
+            "zen_id": "00000000-0000-4000-8000-000000000001",
+            "target": "a"
+          }
+        ],
+        "unmatched_bank": [
+          "b2"
+        ],
+        "unmatched_zen": []
+      }
+    ],
+    "external_writes": [],
+    "state_assertions": []
+  }
+}

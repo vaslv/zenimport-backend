@@ -1,0 +1,57 @@
+{
+  "id": "lossless-wire-digests",
+  "contract_version": 1,
+  "implemented_by_stage": "L2",
+  "clock": "1792458000",
+  "uuids": [],
+  "initial_state": {},
+  "commands": [
+    {
+      "operation": "wire.canonical",
+      "input": {
+        "value": {
+          "😀": "large",
+          "": "private",
+          "z": [
+            "0.000000000001",
+            null,
+            true,
+            9007199254740991
+          ],
+          "a": "café\n"
+        }
+      }
+    },
+    {
+      "operation": "wire.digest",
+      "input": {
+        "value": {
+          "😀": "large",
+          "": "private",
+          "z": [
+            "0.000000000001",
+            null,
+            true,
+            9007199254740991
+          ],
+          "a": "café\n"
+        }
+      }
+    },
+    {
+      "operation": "wire.roundtrip",
+      "input": {
+        "value": "{\"id\":9007199254740993,\"amount\":1.00000000000000000001,\"deleted\":false}"
+      }
+    }
+  ],
+  "expected": {
+    "results": [
+      "{\"a\":\"caf\\u00e9\\n\",\"z\":[\"0.000000000001\",null,true,9007199254740991],\"\\ue000\":\"private\",\"\\ud83d\\ude00\":\"large\"}",
+      "01b4414623f159bef8bc5327bae8330abb36f63bd20fce2fc06aea01bfac5b2b",
+      "{\"id\":9007199254740993,\"amount\":1.00000000000000000001,\"deleted\":false}"
+    ],
+    "external_writes": [],
+    "state_assertions": []
+  }
+}

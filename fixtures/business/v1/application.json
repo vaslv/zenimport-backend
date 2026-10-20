@@ -1,0 +1,33 @@
+{
+  "contract_version": 1,
+  "boundary": "plain-json-dto",
+  "context": {"required": ["operation_id", "dataset_id", "generation", "mode_epoch", "credential_epoch"], "integer_encoding": "canonical decimal string", "note": "Readiness/setup operations may resolve context before a financial dataset exists"},
+  "errors": {"fields": ["code", "retryable", "operation_id"], "credentials": "never returned", "source": "wire-v1.json/ErrorResponse plus mode/migration errors frozen at L3"},
+  "operations": [
+    {"name":"runtime.status","input":"empty","output":"RuntimeStatus","effect":"read","fields":["mode","readiness","storage_identity","pending_switch","last_sync"]},
+    {"name":"runtime.capabilities","input":"empty","output":"CapabilitiesStatus","effect":"read","fields":["api_version","archive_versions","financial_schema_range","limits","protected_handoff"]},
+    {"name":"credentials.configure","input":"privileged token candidate","output":"redacted identity/readiness","effect":"credential-write","rule":"verify owner before adopting; never content-script callable"},
+    {"name":"credentials.remove","input":"expected credential epoch","output":"redacted readiness","effect":"credential-write","rule":"fence new sends before deleting secret; retain journal/sentinel"},
+    {"name":"connections.discover","input":"DiscoverConnection","output":"ConnectionView","effect":"financial-local-write"},
+    {"name":"connections.list","input":"bank","output":"ConnectionCatalog","effect":"read"},
+    {"name":"connections.get","input":"connection_id","output":"ConnectionView","effect":"read"},
+    {"name":"connections.rename","input":"connection_id + ConnectionLabel","output":"ConnectionView","effect":"financial-local-write"},
+    {"name":"accounts.unlink","input":"connection_id/account_id","output":"ConnectionView","effect":"financial-local-write","rule":"remove discovery membership; preserve canonical history"},
+    {"name":"accounts.catalog","input":"empty","output":"AccountCatalog","effect":"remote-read"},
+    {"name":"accounts.configure","input":"account_id + AccountSettings","output":"AccountView","effect":"financial-local-write","rule":"optimistic expected_version, immutable historical bindings"},
+    {"name":"capture.start","input":"StartSync","output":"JobView","effect":"capture-write","rule":"persist request before bank read; unknown ACK repeats original request_id"},
+    {"name":"capture.get","input":"job_id","output":"JobView","effect":"status-write","rule":"can persist lease expiration; does not dispatch a remote financial write"},
+    {"name":"capture.lease","input":"job_id + CaptureLeaseRequest","output":"CaptureLease","effect":"capture-write"},
+    {"name":"capture.page","input":"job_id/interval_id/number + CapturePage","output":"PageReceipt","effect":"capture-write","rule":"ACK only after page and revisions commit"},
+    {"name":"capture.complete","input":"job_id/interval_id + CaptureComplete","output":"IntervalView","effect":"capture-write","rule":"authorize only complete validated revisions"},
+    {"name":"capture.pause","input":"job_id + CaptureStatus","output":"JobView","effect":"capture-write"},
+    {"name":"capture.stop","input":"job_id","output":"JobView","effect":"capture-write","rule":"stop capture without erasing already authorized delivery"},
+    {"name":"mirror.refresh","input":"force/expected generation","output":"MirrorStatus","effect":"remote-read","rule":"raw response, cursor and projections publish atomically"},
+    {"name":"delivery.status","input":"job or dataset context","output":"DeliveryStatus","effect":"read"},
+    {"name":"delivery.advance","input":"authorized durable work context","output":"DeliveryStatus","effect":"remote-financial-write","rule":"sole new-transaction dispatch boundary, immutable intent before I/O"},
+    {"name":"reports.discrepancies","input":"connection_id/from_date/to_date/account_id/refresh","output":"DiscrepancyReport","effect":"remote-read","rule":"both unmatched sides; no upsert/delete; independent of blocked delivery"},
+    {"name":"migration.status","input":"operation_id","output":"MigrationStatus","effect":"read","rule":"durable receipt; not authenticated by operation ID alone"},
+    {"name":"migration.transition","input":"switch_id/participant/expected_epoch/digest/command","output":"MigrationReceipt","effect":"migration-write","rule":"L3 defines full participant DTOs; no v1 hold bypass or automatic synchronization"}
+  ],
+  "schema_policy":"Named existing wire models resolve in wire-v1.json; new runtime/migration DTOs are proposed operation boundaries, not implemented API models"
+}

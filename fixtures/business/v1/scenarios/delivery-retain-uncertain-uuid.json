@@ -1,0 +1,49 @@
+{
+  "id": "delivery-retain-uncertain-uuid",
+  "contract_version": 1,
+  "implemented_by_stage": "L9",
+  "clock": "1792458000",
+  "uuids": [
+    "00000000-0000-4000-8000-000000000001"
+  ],
+  "initial_state": {
+    "bank_id": "b1",
+    "amount": "100",
+    "target": "a"
+  },
+  "commands": [
+    {
+      "operation": "delivery.advance",
+      "input": {
+        "bank_id": "b1",
+        "observed": "remote_commit_response_lost"
+      }
+    },
+    {
+      "operation": "delivery.advance",
+      "input": {
+        "bank_id": "b1",
+        "observed": "uuid_exists_with_mobile_edit"
+      }
+    }
+  ],
+  "expected": {
+    "results": [
+      {
+        "state": "uncertain",
+        "uuid": "00000000-0000-4000-8000-000000000001"
+      },
+      {
+        "state": "delivered",
+        "uuid": "00000000-0000-4000-8000-000000000001"
+      }
+    ],
+    "external_writes": [
+      {
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "payload": "{\"id\":\"00000000-0000-4000-8000-000000000001\",\"outcome\":100,\"viewed\":false}"
+      }
+    ],
+    "state_assertions": []
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "id": "identity-canonical",
+  "contract_version": 1,
+  "implemented_by_stage": "L2",
+  "clock": "1792458000",
+  "uuids": [],
+  "initial_state": {},
+  "commands": [
+    {
+      "operation": "identity.normalize",
+      "input": {
+        "value": " STRAẞE Σσς ＡＢＣ ﬀ İ Å "
+      }
+    },
+    {
+      "operation": "identity.normalize",
+      "input": {
+        "value": "\u001cAB﻿"
+      }
+    },
+    {
+      "operation": "identity.recipient",
+      "input": {
+        "row": {
+          "beneficiary_account": " ００１２３ ",
+          "beneficiary_name": "Other",
+          "description": "a merchant"
+        }
+      }
+    },
+    {
+      "operation": "identity.recipient",
+      "input": {
+        "row": {
+          "description": "short"
+        }
+      }
+    },
+    {
+      "operation": "identity.recipient",
+      "input": {
+        "row": {
+          "description": "😀😀😀😀😀😀"
+        }
+      }
+    },
+    {
+      "operation": "identity.normalize",
+      "input": {
+        "value": "͸"
+      }
+    }
+  ],
+  "expected": {
+    "results": [
+      "strasse σσσ abc ff i̇ å",
+      "a b﻿",
+      "account:00123",
+      null,
+      "description:😀😀😀😀😀😀",
+      {
+        "error": "unsupported_unicode"
+      }
+    ],
+    "external_writes": [],
+    "state_assertions": []
+  }
+}

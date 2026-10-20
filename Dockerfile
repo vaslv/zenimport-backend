@@ -52,6 +52,7 @@ COPY scripts/migration_lab.py scripts/migration_history.py scripts/migration_rep
 COPY scripts/update_sdk.py ./scripts/update_sdk.py
 COPY fixtures/sync-v1 ./fixtures/sync-v1
 COPY fixtures/legacy-v12 ./fixtures/legacy-v12
+COPY fixtures/business ./fixtures/business
 USER 10001:10001
 CMD ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider"]
 

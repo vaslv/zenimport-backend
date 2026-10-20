@@ -1,0 +1,26 @@
+{
+  "clock": "1792458000",
+  "commands": [
+    {
+      "input": {
+        "values": [
+          "123456789012345678901234.123456789012",
+          "0.000000000001"
+        ]
+      },
+      "operation": "money.sum"
+    }
+  ],
+  "contract_version": 1,
+  "expected": {
+    "external_writes": [],
+    "results": [
+      "123456789012345678901234.123456789013"
+    ],
+    "state_assertions": []
+  },
+  "id": "money-large",
+  "implemented_by_stage": "L2",
+  "initial_state": {},
+  "uuids": []
+}

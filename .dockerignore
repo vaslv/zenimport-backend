@@ -12,11 +12,13 @@
 !docker/*.py
 !tests/
 !tests/*.py
+!tests/contracts/**
 !fixtures/
 !fixtures/sync-v1/
 !fixtures/sync-v1/*.json
 !fixtures/legacy-v12/
 !fixtures/legacy-v12/*.sql
+!fixtures/business/**
 **/__pycache__
 **/*.pyc
 **/.env

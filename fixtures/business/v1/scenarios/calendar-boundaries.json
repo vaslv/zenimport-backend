@@ -1,0 +1,77 @@
+{
+  "id": "calendar-boundaries",
+  "contract_version": 1,
+  "implemented_by_stage": "L2",
+  "clock": "1792458000",
+  "uuids": [],
+  "initial_state": {},
+  "commands": [
+    {
+      "operation": "dates.localDay",
+      "input": {
+        "value": "2026-10-19T23:59:59.999999Z",
+        "timezone": "Asia/Ho_Chi_Minh"
+      }
+    },
+    {
+      "operation": "dates.localDay",
+      "input": {
+        "value": "2026-10-20T00:00:00+07:00",
+        "timezone": "UTC"
+      }
+    },
+    {
+      "operation": "dates.months",
+      "input": {
+        "value": "2024-08-31",
+        "delta": -6
+      }
+    },
+    {
+      "operation": "dates.months",
+      "input": {
+        "value": "2026-08-31",
+        "delta": -6
+      }
+    },
+    {
+      "operation": "dates.calendar",
+      "input": {
+        "value": "2026-02-29"
+      }
+    },
+    {
+      "operation": "dates.localDay",
+      "input": {
+        "value": "2026-10-19T00:00:00Z",
+        "timezone": "unknown/timezone"
+      }
+    },
+    {
+      "operation": "dates.localDay",
+      "input": {
+        "value": "2026-10-19T24:00:00Z",
+        "timezone": "UTC"
+      }
+    }
+  ],
+  "expected": {
+    "results": [
+      "2026-10-20",
+      "2026-10-19",
+      "2024-02-29",
+      "2026-02-28",
+      {
+        "error": "invalid_date"
+      },
+      {
+        "error": "invalid_timezone"
+      },
+      {
+        "error": "invalid_date"
+      }
+    ],
+    "external_writes": [],
+    "state_assertions": []
+  }
+}

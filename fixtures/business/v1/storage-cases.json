@@ -1,0 +1,585 @@
+{
+  "cases": [
+    {
+      "acceptance": "C03",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.account_bindings.constraints",
+      "repository": "accountsRepository",
+      "table": "account_bindings",
+      "triggers": []
+    },
+    {
+      "acceptance": "D04",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.account_capture_locks.constraints",
+      "repository": "captureRepository",
+      "table": "account_capture_locks",
+      "triggers": []
+    },
+    {
+      "acceptance": "C03",
+      "checks": [
+        "identity_scope IN ('bank','profile')",
+        "scale BETWEEN 0 AND 12",
+        "supported IN (0,1)",
+        "selection IN ('unconfigured','enabled','ignored')",
+        "settings_version>=0",
+        "(identity_scope='bank' AND profile_key='') OR (identity_scope='profile' AND profile_key<>'')",
+        "(selection='enabled' AND zenmoney_account_id IS NOT NULL AND import_start IS NOT NULL)\n    OR (selection<>'enabled' AND zenmoney_account_id IS NULL)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.bank_accounts.constraints",
+      "repository": "accountsRepository",
+      "table": "bank_accounts",
+      "triggers": []
+    },
+    {
+      "acceptance": "D02",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.bank_aliases.constraints",
+      "repository": "recordsRepository",
+      "table": "bank_aliases",
+      "triggers": []
+    },
+    {
+      "acceptance": "B06",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.bank_exclusions.constraints",
+      "repository": "processingRepository",
+      "table": "bank_exclusions",
+      "triggers": []
+    },
+    {
+      "acceptance": "B06",
+      "checks": [
+        "state IN ('pending','prepared','uncertain','delivered','suppressed')"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.bank_processing.constraints",
+      "repository": "processingRepository",
+      "table": "bank_processing",
+      "triggers": [
+        "processing_terminal_delete",
+        "processing_terminal_update"
+      ]
+    },
+    {
+      "acceptance": "D02",
+      "checks": [
+        "identity_kind IN ('bank','fingerprint')",
+        "direction IN ('expense','income')",
+        "money_valid(amount)",
+        "json_valid(raw_json)",
+        "revision>=1"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.bank_transactions.constraints",
+      "repository": "recordsRepository",
+      "table": "bank_transactions",
+      "triggers": [
+        "bank_identity_immutable"
+      ]
+    },
+    {
+      "acceptance": "D02",
+      "checks": [
+        "revision>=1",
+        "json_valid(data_json)",
+        "json_valid(raw_json)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.bank_versions.constraints",
+      "repository": "recordsRepository",
+      "table": "bank_versions",
+      "triggers": [
+        "bank_version_immutable",
+        "bank_version_preserved"
+      ]
+    },
+    {
+      "acceptance": "D04",
+      "checks": [
+        "retryable IN (0,1)",
+        "resolved IN (0,1)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.capture_errors.constraints",
+      "repository": "captureRepository",
+      "table": "capture_errors",
+      "triggers": []
+    },
+    {
+      "acceptance": "D04",
+      "checks": [
+        "start_date<=end_date"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.capture_intervals.constraints",
+      "repository": "captureRepository",
+      "table": "capture_intervals",
+      "triggers": [
+        "interval_identity",
+        "interval_scope"
+      ]
+    },
+    {
+      "acceptance": "D04",
+      "checks": [
+        "json_valid(request_json)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.capture_jobs.constraints",
+      "repository": "captureRepository",
+      "table": "capture_jobs",
+      "triggers": []
+    },
+    {
+      "acceptance": "D04",
+      "checks": [
+        "page_number>=1",
+        "records_count>=0",
+        "json_valid(payload_json)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.capture_pages.constraints",
+      "repository": "captureRepository",
+      "table": "capture_pages",
+      "triggers": [
+        "page_immutable",
+        "page_preserved"
+      ]
+    },
+    {
+      "acceptance": "D04",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.captured_records.constraints",
+      "repository": "captureRepository",
+      "table": "captured_records",
+      "triggers": [
+        "captured_record_immutable",
+        "captured_record_preserved",
+        "captured_record_scope"
+      ]
+    },
+    {
+      "acceptance": "E14",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.category_choices.constraints",
+      "repository": "predictionsRepository",
+      "table": "category_choices",
+      "triggers": []
+    },
+    {
+      "acceptance": "E14",
+      "checks": [
+        "eligible IN (0,1)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.category_evidence.constraints",
+      "repository": "predictionsRepository",
+      "table": "category_evidence",
+      "triggers": []
+    },
+    {
+      "acceptance": "E14",
+      "checks": [
+        "eligible IN (0,1)",
+        "json_valid(zen_ids_json)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.category_payments.constraints",
+      "repository": "predictionsRepository",
+      "table": "category_payments",
+      "triggers": []
+    },
+    {
+      "acceptance": "E14",
+      "checks": [
+        "source IN ('manual','rule','history','unknown')",
+        "json_valid(candidates_json)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.category_predictions.constraints",
+      "repository": "predictionsRepository",
+      "table": "category_predictions",
+      "triggers": []
+    },
+    {
+      "acceptance": "C03",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.connection_accounts.constraints",
+      "repository": "accountsRepository",
+      "table": "connection_accounts",
+      "triggers": []
+    },
+    {
+      "acceptance": "C03",
+      "checks": [
+        "present IN (0,1)",
+        "supported IN (0,1)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.connection_discovery.constraints",
+      "repository": "accountsRepository",
+      "table": "connection_discovery",
+      "triggers": []
+    },
+    {
+      "acceptance": "C03",
+      "checks": [
+        "length(trim(label)) BETWEEN 1 AND 120"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.connection_labels.constraints",
+      "repository": "accountsRepository",
+      "table": "connection_labels",
+      "triggers": []
+    },
+    {
+      "acceptance": "C03",
+      "checks": [
+        "profile_identity IN ('bank','user_selected')",
+        "json_valid(capabilities_json)",
+        "accounts_complete IN (0,1)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.connections.constraints",
+      "repository": "accountsRepository",
+      "table": "connections",
+      "triggers": []
+    },
+    {
+      "acceptance": "D04",
+      "checks": [
+        "start_date<=end_date"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.coverage.constraints",
+      "repository": "captureRepository",
+      "table": "coverage",
+      "triggers": []
+    },
+    {
+      "acceptance": "F04",
+      "checks": [
+        "json_valid(payload)",
+        "state IN ('prepared','attempting','uncertain','delivered','suppressed')",
+        "ever_attempted IN (0,1)",
+        "needs_rebuild IN (0,1)",
+        "state<>'attempting' OR (ever_attempted=1 AND needs_rebuild=0)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.deliveries.constraints",
+      "repository": "deliveryRepository",
+      "table": "deliveries",
+      "triggers": [
+        "delivery_immutable",
+        "delivery_preserved"
+      ]
+    },
+    {
+      "acceptance": "F04",
+      "checks": [
+        "json_valid(payload)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.delivery_attempts.constraints",
+      "repository": "deliveryRepository",
+      "table": "delivery_attempts",
+      "triggers": [
+        "attempt_immutable",
+        "attempt_preserved"
+      ]
+    },
+    {
+      "acceptance": "F04",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.delivery_authorizations.constraints",
+      "repository": "deliveryRepository",
+      "table": "delivery_authorizations",
+      "triggers": [
+        "delivery_authorization_frozen",
+        "delivery_authorization_preserved",
+        "delivery_authorization_proof",
+        "delivery_authorization_update_proof"
+      ]
+    },
+    {
+      "acceptance": "F04",
+      "checks": [
+        "id=1",
+        "failures>=0"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.delivery_schedule.constraints",
+      "repository": "deliveryRepository",
+      "table": "delivery_schedule",
+      "triggers": []
+    },
+    {
+      "acceptance": "D04",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.job_accounts.constraints",
+      "repository": "captureRepository",
+      "table": "job_accounts",
+      "triggers": [
+        "job_account_snapshot"
+      ]
+    },
+    {
+      "acceptance": "D04",
+      "checks": [
+        "json_valid(capabilities_json)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.job_context.constraints",
+      "repository": "captureRepository",
+      "table": "job_context",
+      "triggers": [
+        "job_context_snapshot"
+      ]
+    },
+    {
+      "acceptance": "D04",
+      "checks": [
+        "json_valid(request_json)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.job_requests.constraints",
+      "repository": "captureRepository",
+      "table": "job_requests",
+      "triggers": [
+        "request_immutable",
+        "request_preserved"
+      ]
+    },
+    {
+      "acceptance": "G19",
+      "checks": [
+        "json_valid(manifest_json)",
+        "json_valid(report_json)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.legacy_imports.constraints",
+      "repository": "legacyRepository",
+      "table": "legacy_imports",
+      "triggers": []
+    },
+    {
+      "acceptance": "G19",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.legacy_objects.constraints",
+      "repository": "legacyRepository",
+      "table": "legacy_objects",
+      "triggers": []
+    },
+    {
+      "acceptance": "G19",
+      "checks": [
+        "json_valid(values_json)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.legacy_rows.constraints",
+      "repository": "legacyRepository",
+      "table": "legacy_rows",
+      "triggers": []
+    },
+    {
+      "acceptance": "E05",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.link_bank_members.constraints",
+      "repository": "matchingRepository",
+      "table": "link_bank_members",
+      "triggers": []
+    },
+    {
+      "acceptance": "E05",
+      "checks": [
+        "kind IN ('single','split','settlement')"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.link_groups.constraints",
+      "repository": "matchingRepository",
+      "table": "link_groups",
+      "triggers": []
+    },
+    {
+      "acceptance": "E05",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.link_zen_members.constraints",
+      "repository": "matchingRepository",
+      "table": "link_zen_members",
+      "triggers": []
+    },
+    {
+      "acceptance": "B06",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.processing_receipts.constraints",
+      "repository": "processingRepository",
+      "table": "processing_receipts",
+      "triggers": [
+        "receipt_immutable",
+        "receipt_preserved"
+      ]
+    },
+    {
+      "acceptance": "B06",
+      "checks": [
+        "length(target_id)>0"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.processing_targets.constraints",
+      "repository": "processingRepository",
+      "table": "processing_targets",
+      "triggers": [
+        "processing_target_immutable",
+        "processing_target_preserved"
+      ]
+    },
+    {
+      "acceptance": "E14",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.recipient_rules.constraints",
+      "repository": "predictionsRepository",
+      "table": "recipient_rules",
+      "triggers": []
+    },
+    {
+      "acceptance": "D04",
+      "checks": [
+        "json_valid(remaining_json)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.reimport_ranges.constraints",
+      "repository": "captureRepository",
+      "table": "reimport_ranges",
+      "triggers": []
+    },
+    {
+      "acceptance": "G01",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.schema_migrations.constraints",
+      "repository": "migrationRepository",
+      "table": "schema_migrations",
+      "triggers": []
+    },
+    {
+      "acceptance": "G01",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.service_meta.constraints",
+      "repository": "migrationRepository",
+      "table": "service_meta",
+      "triggers": []
+    },
+    {
+      "acceptance": "D08",
+      "checks": [
+        "json_valid(data)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.zen_deletions.constraints",
+      "repository": "mirrorRepository",
+      "table": "zen_deletions",
+      "triggers": []
+    },
+    {
+      "acceptance": "D08",
+      "checks": [
+        "json_valid(data)",
+        "deleted IN (0,1)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.zen_entities.constraints",
+      "repository": "mirrorRepository",
+      "table": "zen_entities",
+      "triggers": []
+    },
+    {
+      "acceptance": "B06",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.zen_exclusions.constraints",
+      "repository": "processingRepository",
+      "table": "zen_exclusions",
+      "triggers": []
+    },
+    {
+      "acceptance": "D08",
+      "checks": [
+        "id=1",
+        "cursor>=0",
+        "generation>=0",
+        "needs_full IN (0,1)",
+        "ready IN (0,1)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.zen_mirror_state.constraints",
+      "repository": "mirrorRepository",
+      "table": "zen_mirror_state",
+      "triggers": []
+    },
+    {
+      "acceptance": "D08",
+      "checks": [
+        "kind IN ('transaction','reminder','reminderMarker')"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.zen_movements.constraints",
+      "repository": "mirrorRepository",
+      "table": "zen_movements",
+      "triggers": []
+    },
+    {
+      "acceptance": "D08",
+      "checks": [
+        "json_valid(payload)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.zen_sync_runs.constraints",
+      "repository": "mirrorRepository",
+      "table": "zen_sync_runs",
+      "triggers": []
+    },
+    {
+      "acceptance": "D08",
+      "checks": [],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.zen_tags.constraints",
+      "repository": "mirrorRepository",
+      "table": "zen_tags",
+      "triggers": []
+    },
+    {
+      "acceptance": "D08",
+      "checks": [
+        "json_valid(data)"
+      ],
+      "expected": "invalid keys/foreign references/checks rejected; immutable changes abort atomically",
+      "id": "storage.zen_tombstones.constraints",
+      "repository": "mirrorRepository",
+      "table": "zen_tombstones",
+      "triggers": [
+        "tombstone_identity",
+        "tombstone_preserved"
+      ]
+    }
+  ],
+  "contract_version": 1,
+  "implemented_by_stage": "L4"
+}

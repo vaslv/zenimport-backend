@@ -1,0 +1,604 @@
+{
+  "activation": "architecture.md participant handoff for live migration; explicit archive-only recovery is distinct",
+  "archive_version": 2,
+  "canonical_encoding": {
+    "blob_scalar": "canonical padded base64",
+    "dataset_digest": "SHA256 of compact JSON descriptor plus LF; descriptor fixed property order: financial_schema_version,dataset_id,zenmoney_identity,required_features,tables; table fixed property order: name,filename,columns,rows,bytes,sha256; table list sorted by UTF-8 filename, owner_ids/features sorted by UTF-8 bytes; excludes producer/archive time/session IDs",
+    "empty_table": "zero bytes; SHA256 of empty bytes",
+    "format": "UTF-8 compact JSON, LF terminator, no BOM, no lone Unicode surrogates",
+    "integer_scalar": "canonical signed decimal string; no -0, exponent or leading zero",
+    "row_order": "primary-key tuple; integers compared numerically, text by UTF-8 byte order, blob by decoded bytes; NULL first only where logically allowed",
+    "strings": "JSON escaping for control characters, quote and backslash; Unicode otherwise literal"
+  },
+  "contract_version": 1,
+  "financial_schema_version": 1,
+  "limits": {
+    "compressed_bytes": 67108864,
+    "manifest_bytes": 65536,
+    "row_bytes": 134217728,
+    "tables": 100,
+    "uncompressed_bytes": 268435456
+  },
+  "logical_tables": {
+    "account_bindings": {
+      "columns": [
+        "id",
+        "account_id",
+        "zenmoney_account_id",
+        "settings_version",
+        "origin",
+        "created_at"
+      ],
+      "disposition": "preserve_exact",
+      "source": "account_bindings"
+    },
+    "bank_accounts": {
+      "columns": [
+        "id",
+        "bank",
+        "identity_scope",
+        "profile_key",
+        "source_key",
+        "currency",
+        "scale",
+        "label",
+        "masked_number",
+        "supported",
+        "unsupported_reason",
+        "selection",
+        "zenmoney_account_id",
+        "import_start",
+        "settings_version",
+        "last_complete_end"
+      ],
+      "disposition": "preserve_exact",
+      "source": "bank_accounts"
+    },
+    "bank_aliases": {
+      "columns": [
+        "account_id",
+        "external_id",
+        "identity_version",
+        "bank_id"
+      ],
+      "disposition": "preserve_exact",
+      "source": "bank_aliases"
+    },
+    "bank_exclusions": {
+      "columns": [
+        "bank_id",
+        "reason",
+        "created_at"
+      ],
+      "disposition": "preserve_exact",
+      "source": "bank_exclusions"
+    },
+    "bank_processing": {
+      "columns": [
+        "bank_id",
+        "state",
+        "reason",
+        "updated_at"
+      ],
+      "disposition": "preserve_exact",
+      "source": "bank_processing"
+    },
+    "bank_transactions": {
+      "columns": [
+        "id",
+        "account_id",
+        "external_id",
+        "identity_kind",
+        "identity_version",
+        "local_date",
+        "occurred_at",
+        "direction",
+        "amount",
+        "currency",
+        "description",
+        "beneficiary_account",
+        "beneficiary_name",
+        "raw_json",
+        "revision"
+      ],
+      "disposition": "preserve_exact",
+      "source": "bank_transactions"
+    },
+    "bank_versions": {
+      "columns": [
+        "bank_id",
+        "revision",
+        "data_json",
+        "raw_json",
+        "observed_at",
+        "parser_version"
+      ],
+      "disposition": "preserve_exact",
+      "source": "bank_versions"
+    },
+    "capture_errors": {
+      "columns": [
+        "id",
+        "job_id",
+        "account_id",
+        "code",
+        "retryable",
+        "resolved",
+        "created_at"
+      ],
+      "disposition": "preserve_exact",
+      "source": "capture_errors"
+    },
+    "capture_intervals": {
+      "columns": [
+        "id",
+        "job_id",
+        "account_id",
+        "settings_version",
+        "start_date",
+        "end_date",
+        "state",
+        "total_pages",
+        "total_records"
+      ],
+      "disposition": "preserve_exact",
+      "source": "capture_intervals"
+    },
+    "capture_jobs": {
+      "columns": [
+        "id",
+        "connection_id",
+        "request_id",
+        "request_json",
+        "end_date",
+        "capture_state",
+        "delivery_state",
+        "worker_id",
+        "lease_epoch",
+        "lease_expires_at",
+        "created_at"
+      ],
+      "disposition": "preserve_exact",
+      "source": "capture_jobs"
+    },
+    "capture_pages": {
+      "columns": [
+        "interval_id",
+        "page_number",
+        "digest",
+        "records_count",
+        "payload_json"
+      ],
+      "disposition": "preserve_exact",
+      "source": "capture_pages"
+    },
+    "captured_records": {
+      "columns": [
+        "interval_id",
+        "page_number",
+        "bank_id",
+        "revision"
+      ],
+      "disposition": "preserve_exact",
+      "source": "captured_records"
+    },
+    "category_choices": {
+      "columns": [
+        "bank_id",
+        "category_id",
+        "source",
+        "updated_at"
+      ],
+      "disposition": "preserve_exact",
+      "source": "category_choices"
+    },
+    "category_evidence": {
+      "columns": [
+        "bank_id",
+        "zen_id",
+        "category_id",
+        "direction",
+        "origin",
+        "eligible"
+      ],
+      "disposition": "preserve_exact",
+      "source": "category_evidence"
+    },
+    "category_payments": {
+      "columns": [
+        "bank_id",
+        "category_id",
+        "reason",
+        "eligible",
+        "zen_ids_json"
+      ],
+      "disposition": "preserve_exact",
+      "source": "category_payments"
+    },
+    "category_predictions": {
+      "columns": [
+        "bank_id",
+        "bank_revision",
+        "category_id",
+        "source",
+        "reason",
+        "candidates_json",
+        "mirror_generation",
+        "updated_at"
+      ],
+      "disposition": "preserve_audit_invalidate_derived",
+      "source": "category_predictions"
+    },
+    "connection_accounts": {
+      "columns": [
+        "connection_id",
+        "account_id"
+      ],
+      "disposition": "preserve_exact",
+      "source": "connection_accounts"
+    },
+    "connection_discovery": {
+      "columns": [
+        "connection_id",
+        "account_id",
+        "present",
+        "supported",
+        "unsupported_reason",
+        "label",
+        "masked_number"
+      ],
+      "disposition": "preserve_exact",
+      "source": "connection_discovery"
+    },
+    "connection_labels": {
+      "columns": [
+        "connection_id",
+        "label"
+      ],
+      "disposition": "preserve_exact",
+      "source": "connection_labels"
+    },
+    "connections": {
+      "columns": [
+        "id",
+        "bank",
+        "profile_key",
+        "profile_identity",
+        "connector_version",
+        "timezone",
+        "capabilities_json",
+        "accounts_complete"
+      ],
+      "disposition": "preserve_exact",
+      "source": "connections"
+    },
+    "coverage": {
+      "columns": [
+        "account_id",
+        "start_date",
+        "end_date",
+        "interval_id"
+      ],
+      "disposition": "preserve_exact",
+      "source": "coverage"
+    },
+    "dataset_metadata": {
+      "columns": [
+        "key",
+        "value"
+      ],
+      "disposition": "classify_each_key",
+      "source": "service_meta"
+    },
+    "deliveries": {
+      "columns": [
+        "bank_id",
+        "zen_id",
+        "payload",
+        "state",
+        "ever_attempted",
+        "origin",
+        "authorized_job_id",
+        "updated_at",
+        "needs_rebuild"
+      ],
+      "disposition": "preserve_exact",
+      "source": "deliveries"
+    },
+    "delivery_attempts": {
+      "columns": [
+        "id",
+        "bank_id",
+        "zen_id",
+        "at",
+        "outcome",
+        "payload"
+      ],
+      "disposition": "preserve_exact",
+      "source": "delivery_attempts"
+    },
+    "delivery_authorizations": {
+      "columns": [
+        "bank_id",
+        "revision",
+        "job_id",
+        "interval_id",
+        "settings_version",
+        "target_id",
+        "source_hash",
+        "authorized_at"
+      ],
+      "disposition": "preserve_exact",
+      "source": "delivery_authorizations"
+    },
+    "delivery_schedule": {
+      "columns": [
+        "id",
+        "next_run_at",
+        "failures"
+      ],
+      "disposition": "preserve_deadline_revalidate_context",
+      "source": "delivery_schedule"
+    },
+    "job_accounts": {
+      "columns": [
+        "job_id",
+        "account_id",
+        "settings_version",
+        "target_id",
+        "import_start",
+        "authorized_start"
+      ],
+      "disposition": "preserve_exact",
+      "source": "job_accounts"
+    },
+    "job_context": {
+      "columns": [
+        "job_id",
+        "connector_version",
+        "timezone",
+        "capabilities_json"
+      ],
+      "disposition": "preserve_exact",
+      "source": "job_context"
+    },
+    "job_requests": {
+      "columns": [
+        "request_id",
+        "job_id",
+        "request_json"
+      ],
+      "disposition": "preserve_exact",
+      "source": "job_requests"
+    },
+    "legacy_imports": {
+      "columns": [
+        "digest",
+        "imported_at",
+        "source_version",
+        "manifest_json",
+        "report_json"
+      ],
+      "disposition": "preserve_exact",
+      "source": "legacy_imports"
+    },
+    "legacy_objects": {
+      "columns": [
+        "source_digest",
+        "type",
+        "name",
+        "table_name",
+        "sql",
+        "columns_json"
+      ],
+      "disposition": "preserve_exact",
+      "source": "legacy_objects"
+    },
+    "legacy_rows": {
+      "columns": [
+        "source_digest",
+        "table_name",
+        "ordinal",
+        "values_json"
+      ],
+      "disposition": "preserve_exact",
+      "source": "legacy_rows"
+    },
+    "link_bank_members": {
+      "columns": [
+        "group_id",
+        "bank_id"
+      ],
+      "disposition": "preserve_exact",
+      "source": "link_bank_members"
+    },
+    "link_groups": {
+      "columns": [
+        "id",
+        "kind",
+        "account_id",
+        "created_at",
+        "origin"
+      ],
+      "disposition": "preserve_exact",
+      "source": "link_groups"
+    },
+    "link_zen_members": {
+      "columns": [
+        "group_id",
+        "zen_id"
+      ],
+      "disposition": "preserve_exact",
+      "source": "link_zen_members"
+    },
+    "processing_receipts": {
+      "columns": [
+        "bank_id",
+        "zen_id",
+        "origin",
+        "at"
+      ],
+      "disposition": "preserve_exact",
+      "source": "processing_receipts"
+    },
+    "processing_targets": {
+      "columns": [
+        "bank_id",
+        "zen_id",
+        "target_id",
+        "origin",
+        "at"
+      ],
+      "disposition": "preserve_exact",
+      "source": "processing_targets"
+    },
+    "recipient_rules": {
+      "columns": [
+        "bank",
+        "name",
+        "direction",
+        "category_id",
+        "updated_at"
+      ],
+      "disposition": "preserve_exact",
+      "source": "recipient_rules"
+    },
+    "reimport_ranges": {
+      "columns": [
+        "id",
+        "account_id",
+        "settings_version",
+        "source_job_id",
+        "remaining_json"
+      ],
+      "disposition": "preserve_exact",
+      "source": "reimport_ranges"
+    },
+    "source_capture_leases": {
+      "columns": [
+        "account_id",
+        "job_id"
+      ],
+      "disposition": "exclude_executable_lease",
+      "source": "account_capture_locks"
+    },
+    "source_schema_migrations": {
+      "columns": [
+        "version",
+        "applied_at",
+        "backup_path"
+      ],
+      "disposition": "audit_only",
+      "source": "schema_migrations"
+    },
+    "zen_deletions": {
+      "columns": [
+        "id",
+        "run_id",
+        "kind",
+        "entity_id",
+        "data"
+      ],
+      "disposition": "preserve_exact",
+      "source": "zen_deletions"
+    },
+    "zen_entities": {
+      "columns": [
+        "kind",
+        "id",
+        "data",
+        "changed",
+        "deleted",
+        "run_id"
+      ],
+      "disposition": "preserve_exact",
+      "source": "zen_entities"
+    },
+    "zen_exclusions": {
+      "columns": [
+        "zen_id",
+        "created_at"
+      ],
+      "disposition": "preserve_exact",
+      "source": "zen_exclusions"
+    },
+    "zen_mirror_state": {
+      "columns": [
+        "id",
+        "source_hash",
+        "cursor",
+        "generation",
+        "needs_full",
+        "ready",
+        "refreshed_at",
+        "error_code"
+      ],
+      "disposition": "preserve_audit_require_full_refresh",
+      "source": "zen_mirror_state"
+    },
+    "zen_movements": {
+      "columns": [
+        "kind",
+        "id",
+        "date",
+        "income_account",
+        "outcome_account",
+        "income_instrument",
+        "outcome_instrument",
+        "income",
+        "outcome",
+        "viewed",
+        "hold"
+      ],
+      "disposition": "preserve_exact",
+      "source": "zen_movements"
+    },
+    "zen_sync_runs": {
+      "columns": [
+        "id",
+        "received_at",
+        "requested_cursor",
+        "response_cursor",
+        "origin",
+        "payload"
+      ],
+      "disposition": "preserve_exact",
+      "source": "zen_sync_runs"
+    },
+    "zen_tags": {
+      "columns": [
+        "kind",
+        "entity_id",
+        "tag_id",
+        "position"
+      ],
+      "disposition": "preserve_exact",
+      "source": "zen_tags"
+    },
+    "zen_tombstones": {
+      "columns": [
+        "kind",
+        "entity_id",
+        "reason",
+        "data"
+      ],
+      "disposition": "preserve_exact",
+      "source": "zen_tombstones"
+    }
+  },
+  "normalizations": {
+    "capture_jobs.lease_expires_at": "null; preserve lease_epoch as audit only",
+    "capture_jobs.worker_id": "null; no executable source worker",
+    "category_predictions": "invalidate derived applicability after source generation change",
+    "delivery_authorizations": "attempted immutable; only unattempted source binding may be revalidated",
+    "service_meta": "explicit allowlist; instance_id becomes lineage, not installation identity",
+    "source_capture_leases": "empty executable set after quiescence; orphan locks cause export validation failure",
+    "source_schema_migrations.backup_path": "null; host path is not portable",
+    "zen_mirror_state": "preserve audit; destination needs_full=1 ready=0 fresh cursor context"
+  },
+  "physical_schema_reference": "sqlite-v7.json",
+  "typed_scalars": "portable-v2.schema.json#/$defs/scalar",
+  "unknown_service_meta": "reject",
+  "unknown_table_or_column": "reject",
+  "zip_members": "manifest.json and exactly the declared table files"
+}

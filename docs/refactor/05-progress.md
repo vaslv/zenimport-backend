@@ -506,3 +506,17 @@ fractional difference. Focused Docker tests: 85 passed. Final Docker unit suite:
 checks also passed authentication, SIGKILL recovery, graceful shutdown and restored
 snapshot delivery. A subsequent sign-only refinement passed all 553 tests again.
 This source-domain correction is committed separately from the L2 fixture harness.
+
+## 2026-10-20 — Standalone extension L2 reference adapter
+
+Added a manifest-pinned copy of the canonical Chrome c6e90aa business fixtures,
+the Python reference dispatcher and deterministic fixture context. Eight pure
+scenarios, 500 arithmetic vectors and 6,354 Unicode 15 vectors produce identical
+results in Python/TypeScript Docker runners. Four later stateful specifications
+explicitly reject unsupported execution. Added source/copy hash checks and unsafe
+numeric-DTO controls. Details and commands are in docs/business-contracts.md.
+
+Docker: 553 tests passed, HTTP/auth, SIGKILL recovery, graceful shutdown and restored
+snapshot delivery passed; latest focused source refinement passed all 553 unit
+tests again. No live API access, production database use, deployment, push, tags
+or publication occurred. Next: L3 portable server migration and participant gates.

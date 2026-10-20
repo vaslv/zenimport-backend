@@ -1,0 +1,219 @@
+{
+  "$defs": {
+    "row": {
+      "items": {
+        "$ref": "#/$defs/scalar"
+      },
+      "maxItems": 100,
+      "type": "array"
+    },
+    "scalar": {
+      "oneOf": [
+        {
+          "maxItems": 1,
+          "minItems": 1,
+          "prefixItems": [
+            {
+              "const": "null"
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "const": "text"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "const": "integer"
+            },
+            {
+              "pattern": "^(?:0|-?[1-9][0-9]*)$",
+              "type": "string"
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "const": "blob"
+            },
+            {
+              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+              "type": "string"
+            }
+          ],
+          "type": "array"
+        }
+      ]
+    }
+  },
+  "$id": "https://zenimport.invalid/contracts/portable-v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "archive_id": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "type": "string"
+    },
+    "archive_version": {
+      "const": 2
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "dataset_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "dataset_id": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "type": "string"
+    },
+    "export_session_id": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "type": "string"
+    },
+    "financial_schema_version": {
+      "const": 1
+    },
+    "format": {
+      "const": "zenimport-portable"
+    },
+    "producer": {
+      "additionalProperties": false,
+      "properties": {
+        "contract_revision": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "engine": {
+          "enum": [
+            "sqlite",
+            "indexeddb"
+          ]
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "engine",
+        "contract_revision"
+      ],
+      "type": "object"
+    },
+    "required_features": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 100,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "tables": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "bytes": {
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "type": "string"
+          },
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "filename": {
+            "pattern": "^tables/[a-z_]+\\.ndjson$",
+            "type": "string"
+          },
+          "name": {
+            "pattern": "^[a-z_]+$",
+            "type": "string"
+          },
+          "rows": {
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "filename",
+          "columns",
+          "rows",
+          "bytes",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 100,
+      "minItems": 1,
+      "type": "array"
+    },
+    "zenmoney_identity": {
+      "additionalProperties": false,
+      "properties": {
+        "owner_ids": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 200,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "proof_version": {
+          "const": 1
+        }
+      },
+      "required": [
+        "owner_ids",
+        "proof_version"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "format",
+    "archive_version",
+    "financial_schema_version",
+    "archive_id",
+    "created_at",
+    "producer",
+    "dataset_id",
+    "export_session_id",
+    "zenmoney_identity",
+    "tables",
+    "dataset_digest",
+    "required_features"
+  ],
+  "title": "Portable archive manifest; semantic table/identity validation remains mandatory",
+  "type": "object"
+}

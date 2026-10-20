@@ -1,0 +1,1895 @@
+{
+  "AccountCatalog": {
+    "$defs": {
+      "ZenAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "pattern": "^[A-Z]{3,12}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "instrument": {
+            "minimum": 1,
+            "title": "Instrument",
+            "type": "integer"
+          },
+          "title": {
+            "maxLength": 2000,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "currency",
+          "instrument"
+        ],
+        "title": "ZenAccount",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "accounts": {
+        "items": {
+          "$ref": "#/$defs/ZenAccount"
+        },
+        "title": "Accounts",
+        "type": "array"
+      },
+      "refreshed_at": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Refreshed At"
+      }
+    },
+    "required": [
+      "refreshed_at",
+      "accounts"
+    ],
+    "title": "AccountCatalog",
+    "type": "object"
+  },
+  "AccountSettings": {
+    "additionalProperties": false,
+    "properties": {
+      "expected_version": {
+        "minimum": 0,
+        "title": "Expected Version",
+        "type": "integer"
+      },
+      "import_start": {
+        "anyOf": [
+          {
+            "format": "date",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Import Start"
+      },
+      "selection": {
+        "enum": [
+          "unconfigured",
+          "enabled",
+          "ignored"
+        ],
+        "title": "Selection",
+        "type": "string"
+      },
+      "zenmoney_account_id": {
+        "anyOf": [
+          {
+            "maxLength": 240,
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Zenmoney Account Id"
+      }
+    },
+    "required": [
+      "expected_version",
+      "selection"
+    ],
+    "title": "AccountSettings",
+    "type": "object"
+  },
+  "AccountView": {
+    "additionalProperties": false,
+    "properties": {
+      "currency": {
+        "pattern": "^[A-Z]{3,12}$",
+        "title": "Currency",
+        "type": "string"
+      },
+      "id": {
+        "format": "uuid",
+        "title": "Id",
+        "type": "string"
+      },
+      "import_start": {
+        "anyOf": [
+          {
+            "format": "date",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Import Start"
+      },
+      "label": {
+        "maxLength": 2000,
+        "title": "Label",
+        "type": "string"
+      },
+      "last_complete_end": {
+        "anyOf": [
+          {
+            "format": "date",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Last Complete End"
+      },
+      "masked_number": {
+        "maxLength": 120,
+        "title": "Masked Number",
+        "type": "string"
+      },
+      "scale": {
+        "maximum": 12,
+        "minimum": 0,
+        "title": "Scale",
+        "type": "integer"
+      },
+      "selection": {
+        "enum": [
+          "unconfigured",
+          "enabled",
+          "ignored"
+        ],
+        "title": "Selection",
+        "type": "string"
+      },
+      "settings_version": {
+        "minimum": 0,
+        "title": "Settings Version",
+        "type": "integer"
+      },
+      "source_key": {
+        "maxLength": 240,
+        "minLength": 1,
+        "title": "Source Key",
+        "type": "string"
+      },
+      "supported": {
+        "title": "Supported",
+        "type": "boolean"
+      },
+      "unsupported_reason": {
+        "anyOf": [
+          {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Unsupported Reason"
+      },
+      "zenmoney_account_id": {
+        "anyOf": [
+          {
+            "maxLength": 240,
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Zenmoney Account Id"
+      }
+    },
+    "required": [
+      "id",
+      "source_key",
+      "label",
+      "masked_number",
+      "currency",
+      "scale",
+      "supported",
+      "settings_version",
+      "selection"
+    ],
+    "title": "AccountView",
+    "type": "object"
+  },
+  "CaptureComplete": {
+    "additionalProperties": false,
+    "properties": {
+      "lease_epoch": {
+        "minimum": 1,
+        "title": "Lease Epoch",
+        "type": "integer"
+      },
+      "total_pages": {
+        "maximum": 10000,
+        "minimum": 1,
+        "title": "Total Pages",
+        "type": "integer"
+      },
+      "total_records": {
+        "maximum": 1000000,
+        "minimum": 0,
+        "title": "Total Records",
+        "type": "integer"
+      },
+      "worker_id": {
+        "format": "uuid",
+        "title": "Worker Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "worker_id",
+      "lease_epoch",
+      "total_pages",
+      "total_records"
+    ],
+    "title": "CaptureComplete",
+    "type": "object"
+  },
+  "CaptureLease": {
+    "additionalProperties": false,
+    "properties": {
+      "epoch": {
+        "minimum": 1,
+        "title": "Epoch",
+        "type": "integer"
+      },
+      "expires_at": {
+        "format": "date-time",
+        "title": "Expires At",
+        "type": "string"
+      },
+      "worker_id": {
+        "format": "uuid",
+        "title": "Worker Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "worker_id",
+      "epoch",
+      "expires_at"
+    ],
+    "title": "CaptureLease",
+    "type": "object"
+  },
+  "CaptureLeaseRequest": {
+    "additionalProperties": false,
+    "properties": {
+      "worker_id": {
+        "format": "uuid",
+        "title": "Worker Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "worker_id"
+    ],
+    "title": "CaptureLeaseRequest",
+    "type": "object"
+  },
+  "CapturePage": {
+    "$defs": {
+      "BankRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "pattern": "^(?:0|[1-9][0-9]{0,23})(?:\\.[0-9]{1,12})?$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "balance": {
+            "anyOf": [
+              {
+                "pattern": "^-?(?:0|[1-9][0-9]{0,23})(?:\\.[0-9]{1,12})?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Balance"
+          },
+          "beneficiary_account": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Beneficiary Account"
+          },
+          "beneficiary_name": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Beneficiary Name"
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3,12}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 2000,
+            "title": "Description",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            "maxProperties": 64,
+            "propertyNames": {
+              "maxLength": 240,
+              "minLength": 1
+            },
+            "title": "Details",
+            "type": "object"
+          },
+          "details_state": {
+            "enum": [
+              "complete",
+              "unavailable"
+            ],
+            "title": "Details State",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "expense",
+              "income"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "external_id": {
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "External Id",
+            "type": "string"
+          },
+          "identity_kind": {
+            "enum": [
+              "bank",
+              "fingerprint"
+            ],
+            "title": "Identity Kind",
+            "type": "string"
+          },
+          "identity_version": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Identity Version",
+            "type": "string"
+          },
+          "local_date": {
+            "format": "date",
+            "title": "Local Date",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "external_id",
+          "identity_kind",
+          "identity_version",
+          "occurred_at",
+          "local_date",
+          "direction",
+          "amount",
+          "currency",
+          "description",
+          "details_state"
+        ],
+        "title": "BankRecord",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "lease_epoch": {
+        "minimum": 1,
+        "title": "Lease Epoch",
+        "type": "integer"
+      },
+      "page_number": {
+        "minimum": 1,
+        "title": "Page Number",
+        "type": "integer"
+      },
+      "records": {
+        "items": {
+          "$ref": "#/$defs/BankRecord"
+        },
+        "maxItems": 500,
+        "title": "Records",
+        "type": "array"
+      },
+      "total_pages": {
+        "maximum": 10000,
+        "minimum": 1,
+        "title": "Total Pages",
+        "type": "integer"
+      },
+      "total_records": {
+        "maximum": 1000000,
+        "minimum": 0,
+        "title": "Total Records",
+        "type": "integer"
+      },
+      "worker_id": {
+        "format": "uuid",
+        "title": "Worker Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "worker_id",
+      "lease_epoch",
+      "page_number",
+      "total_pages",
+      "total_records",
+      "records"
+    ],
+    "title": "CapturePage",
+    "type": "object"
+  },
+  "CaptureStatus": {
+    "additionalProperties": false,
+    "properties": {
+      "code": {
+        "enum": [
+          "bank_login_required",
+          "capture_context_changed",
+          "history_incomplete"
+        ],
+        "title": "Code",
+        "type": "string"
+      },
+      "lease_epoch": {
+        "minimum": 1,
+        "title": "Lease Epoch",
+        "type": "integer"
+      },
+      "state": {
+        "enum": [
+          "paused",
+          "failed"
+        ],
+        "title": "State",
+        "type": "string"
+      },
+      "worker_id": {
+        "format": "uuid",
+        "title": "Worker Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "worker_id",
+      "lease_epoch",
+      "state",
+      "code"
+    ],
+    "title": "CaptureStatus",
+    "type": "object"
+  },
+  "ConnectionCatalog": {
+    "$defs": {
+      "AccountView": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "pattern": "^[A-Z]{3,12}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "import_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Import Start"
+          },
+          "label": {
+            "maxLength": 2000,
+            "title": "Label",
+            "type": "string"
+          },
+          "last_complete_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Last Complete End"
+          },
+          "masked_number": {
+            "maxLength": 120,
+            "title": "Masked Number",
+            "type": "string"
+          },
+          "scale": {
+            "maximum": 12,
+            "minimum": 0,
+            "title": "Scale",
+            "type": "integer"
+          },
+          "selection": {
+            "enum": [
+              "unconfigured",
+              "enabled",
+              "ignored"
+            ],
+            "title": "Selection",
+            "type": "string"
+          },
+          "settings_version": {
+            "minimum": 0,
+            "title": "Settings Version",
+            "type": "integer"
+          },
+          "source_key": {
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Source Key",
+            "type": "string"
+          },
+          "supported": {
+            "title": "Supported",
+            "type": "boolean"
+          },
+          "unsupported_reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Unsupported Reason"
+          },
+          "zenmoney_account_id": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Zenmoney Account Id"
+          }
+        },
+        "required": [
+          "id",
+          "source_key",
+          "label",
+          "masked_number",
+          "currency",
+          "scale",
+          "supported",
+          "settings_version",
+          "selection"
+        ],
+        "title": "AccountView",
+        "type": "object"
+      },
+      "ConnectionView": {
+        "additionalProperties": false,
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/$defs/AccountView"
+            },
+            "title": "Accounts",
+            "type": "array"
+          },
+          "accounts_complete": {
+            "title": "Accounts Complete",
+            "type": "boolean"
+          },
+          "bank": {
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Bank",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Label",
+            "type": "string"
+          },
+          "profile_identity": {
+            "anyOf": [
+              {
+                "enum": [
+                  "bank",
+                  "user_selected"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profile Identity"
+          },
+          "profile_key": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profile Key"
+          }
+        },
+        "required": [
+          "id",
+          "bank",
+          "accounts_complete",
+          "accounts"
+        ],
+        "title": "ConnectionView",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "connections": {
+        "items": {
+          "$ref": "#/$defs/ConnectionView"
+        },
+        "title": "Connections",
+        "type": "array"
+      }
+    },
+    "required": [
+      "connections"
+    ],
+    "title": "ConnectionCatalog",
+    "type": "object"
+  },
+  "ConnectionLabel": {
+    "additionalProperties": false,
+    "properties": {
+      "label": {
+        "maxLength": 120,
+        "minLength": 1,
+        "title": "Label",
+        "type": "string"
+      }
+    },
+    "required": [
+      "label"
+    ],
+    "title": "ConnectionLabel",
+    "type": "object"
+  },
+  "ConnectionView": {
+    "$defs": {
+      "AccountView": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "pattern": "^[A-Z]{3,12}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "import_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Import Start"
+          },
+          "label": {
+            "maxLength": 2000,
+            "title": "Label",
+            "type": "string"
+          },
+          "last_complete_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Last Complete End"
+          },
+          "masked_number": {
+            "maxLength": 120,
+            "title": "Masked Number",
+            "type": "string"
+          },
+          "scale": {
+            "maximum": 12,
+            "minimum": 0,
+            "title": "Scale",
+            "type": "integer"
+          },
+          "selection": {
+            "enum": [
+              "unconfigured",
+              "enabled",
+              "ignored"
+            ],
+            "title": "Selection",
+            "type": "string"
+          },
+          "settings_version": {
+            "minimum": 0,
+            "title": "Settings Version",
+            "type": "integer"
+          },
+          "source_key": {
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Source Key",
+            "type": "string"
+          },
+          "supported": {
+            "title": "Supported",
+            "type": "boolean"
+          },
+          "unsupported_reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Unsupported Reason"
+          },
+          "zenmoney_account_id": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Zenmoney Account Id"
+          }
+        },
+        "required": [
+          "id",
+          "source_key",
+          "label",
+          "masked_number",
+          "currency",
+          "scale",
+          "supported",
+          "settings_version",
+          "selection"
+        ],
+        "title": "AccountView",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "accounts": {
+        "items": {
+          "$ref": "#/$defs/AccountView"
+        },
+        "title": "Accounts",
+        "type": "array"
+      },
+      "accounts_complete": {
+        "title": "Accounts Complete",
+        "type": "boolean"
+      },
+      "bank": {
+        "maxLength": 240,
+        "minLength": 1,
+        "title": "Bank",
+        "type": "string"
+      },
+      "id": {
+        "format": "uuid",
+        "title": "Id",
+        "type": "string"
+      },
+      "label": {
+        "default": "",
+        "maxLength": 2000,
+        "title": "Label",
+        "type": "string"
+      },
+      "profile_identity": {
+        "anyOf": [
+          {
+            "enum": [
+              "bank",
+              "user_selected"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Profile Identity"
+      },
+      "profile_key": {
+        "anyOf": [
+          {
+            "maxLength": 240,
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Profile Key"
+      }
+    },
+    "required": [
+      "id",
+      "bank",
+      "accounts_complete",
+      "accounts"
+    ],
+    "title": "ConnectionView",
+    "type": "object"
+  },
+  "DiscoverConnection": {
+    "$defs": {
+      "Capabilities": {
+        "additionalProperties": false,
+        "properties": {
+          "currencies": {
+            "items": {
+              "pattern": "^[A-Z]{3,12}$",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Currencies",
+            "type": "array"
+          },
+          "details": {
+            "enum": [
+              "included",
+              "separate",
+              "unavailable"
+            ],
+            "title": "Details",
+            "type": "string"
+          },
+          "earliest_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Earliest Date"
+          },
+          "max_window_days": {
+            "maximum": 366,
+            "minimum": 1,
+            "title": "Max Window Days",
+            "type": "integer"
+          },
+          "timezone": {
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Timezone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "timezone",
+          "currencies",
+          "max_window_days",
+          "details"
+        ],
+        "title": "Capabilities",
+        "type": "object"
+      },
+      "DiscoveredAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "pattern": "^[A-Z]{3,12}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "identity_scope": {
+            "enum": [
+              "bank",
+              "profile"
+            ],
+            "title": "Identity Scope",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 2000,
+            "title": "Label",
+            "type": "string"
+          },
+          "masked_number": {
+            "maxLength": 120,
+            "title": "Masked Number",
+            "type": "string"
+          },
+          "scale": {
+            "maximum": 12,
+            "minimum": 0,
+            "title": "Scale",
+            "type": "integer"
+          },
+          "source_key": {
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Source Key",
+            "type": "string"
+          },
+          "supported": {
+            "title": "Supported",
+            "type": "boolean"
+          },
+          "unsupported_reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Unsupported Reason"
+          }
+        },
+        "required": [
+          "source_key",
+          "identity_scope",
+          "label",
+          "masked_number",
+          "currency",
+          "scale",
+          "supported"
+        ],
+        "title": "DiscoveredAccount",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "accounts": {
+        "items": {
+          "$ref": "#/$defs/DiscoveredAccount"
+        },
+        "maxItems": 200,
+        "title": "Accounts",
+        "type": "array"
+      },
+      "accounts_complete": {
+        "title": "Accounts Complete",
+        "type": "boolean"
+      },
+      "bank": {
+        "pattern": "^[a-z0-9_-]{1,40}$",
+        "title": "Bank",
+        "type": "string"
+      },
+      "capabilities": {
+        "$ref": "#/$defs/Capabilities"
+      },
+      "connector_version": {
+        "maxLength": 40,
+        "minLength": 1,
+        "title": "Connector Version",
+        "type": "string"
+      },
+      "label": {
+        "anyOf": [
+          {
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Label"
+      },
+      "profile_identity": {
+        "enum": [
+          "bank",
+          "user_selected"
+        ],
+        "title": "Profile Identity",
+        "type": "string"
+      },
+      "profile_key": {
+        "maxLength": 240,
+        "minLength": 1,
+        "title": "Profile Key",
+        "type": "string"
+      }
+    },
+    "required": [
+      "bank",
+      "connector_version",
+      "profile_key",
+      "profile_identity",
+      "capabilities",
+      "accounts_complete",
+      "accounts"
+    ],
+    "title": "DiscoverConnection",
+    "type": "object"
+  },
+  "DiscrepancyReport": {
+    "$defs": {
+      "DifferenceDay": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "string"
+          },
+          "bank_operations": {
+            "items": {
+              "$ref": "#/$defs/ExtraOperation"
+            },
+            "title": "Bank Operations",
+            "type": "array"
+          },
+          "bank_total": {
+            "title": "Bank Total",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "difference": {
+            "title": "Difference",
+            "type": "string"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/$defs/ExtraOperation"
+            },
+            "title": "Operations",
+            "type": "array"
+          },
+          "zenmoney_total": {
+            "title": "Zenmoney Total",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "account_id",
+          "bank_total",
+          "zenmoney_total",
+          "difference",
+          "operations",
+          "bank_operations"
+        ],
+        "title": "DifferenceDay",
+        "type": "object"
+      },
+      "ExtraOperation": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "string"
+          },
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "comment": {
+            "title": "Comment",
+            "type": "string"
+          },
+          "created": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "payee": {
+            "title": "Payee",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "amount",
+          "payee",
+          "comment",
+          "categories",
+          "created"
+        ],
+        "title": "ExtraOperation",
+        "type": "object"
+      },
+      "ReportAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "checked_days": {
+            "title": "Checked Days",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "unchecked_days": {
+            "title": "Unchecked Days",
+            "type": "integer"
+          },
+          "zenmoney_title": {
+            "title": "Zenmoney Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "currency",
+          "zenmoney_title",
+          "status",
+          "checked_days",
+          "unchecked_days"
+        ],
+        "title": "ReportAccount",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "accounts": {
+        "items": {
+          "$ref": "#/$defs/ReportAccount"
+        },
+        "title": "Accounts",
+        "type": "array"
+      },
+      "bank": {
+        "title": "Bank",
+        "type": "string"
+      },
+      "connection_id": {
+        "title": "Connection Id",
+        "type": "string"
+      },
+      "days": {
+        "items": {
+          "$ref": "#/$defs/DifferenceDay"
+        },
+        "title": "Days",
+        "type": "array"
+      },
+      "from_date": {
+        "format": "date",
+        "title": "From Date",
+        "type": "string"
+      },
+      "refreshed_at": {
+        "format": "date-time",
+        "title": "Refreshed At",
+        "type": "string"
+      },
+      "to_date": {
+        "format": "date",
+        "title": "To Date",
+        "type": "string"
+      }
+    },
+    "required": [
+      "connection_id",
+      "bank",
+      "from_date",
+      "to_date",
+      "refreshed_at",
+      "accounts",
+      "days"
+    ],
+    "title": "DiscrepancyReport",
+    "type": "object"
+  },
+  "ErrorResponse": {
+    "$defs": {
+      "ApiError": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "unauthorized",
+              "unsupported_api_version",
+              "validation_error",
+              "payload_too_large",
+              "bank_login_required",
+              "unsupported_bank",
+              "unsupported_currency",
+              "account_unconfigured",
+              "account_disabled",
+              "settings_conflict",
+              "account_busy",
+              "capture_busy",
+              "lease_expired",
+              "idempotency_conflict",
+              "history_incomplete",
+              "capture_context_changed",
+              "zenmoney_unavailable",
+              "zenmoney_account_unavailable",
+              "delivery_uncertain",
+              "existing_ownership_unknown",
+              "not_found",
+              "method_not_allowed",
+              "internal_error",
+              "migration_busy",
+              "migration_paused",
+              "migration_not_empty",
+              "migration_invalid",
+              "migration_wrong_account",
+              "migration_incomplete"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "maxLength": 2000,
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "retryable",
+          "request_id"
+        ],
+        "title": "ApiError",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "error": {
+        "$ref": "#/$defs/ApiError"
+      }
+    },
+    "required": [
+      "error"
+    ],
+    "title": "ErrorResponse",
+    "type": "object"
+  },
+  "IntervalView": {
+    "$defs": {
+      "DateRange": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "DateRange",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "format": "uuid",
+        "title": "Id",
+        "type": "string"
+      },
+      "period": {
+        "$ref": "#/$defs/DateRange"
+      },
+      "received_pages": {
+        "minimum": 0,
+        "title": "Received Pages",
+        "type": "integer"
+      },
+      "received_records": {
+        "minimum": 0,
+        "title": "Received Records",
+        "type": "integer"
+      },
+      "state": {
+        "enum": [
+          "planned",
+          "collecting",
+          "paused",
+          "complete",
+          "cancelled",
+          "failed"
+        ],
+        "title": "State",
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "period",
+      "state",
+      "received_pages",
+      "received_records"
+    ],
+    "title": "IntervalView",
+    "type": "object"
+  },
+  "JobView": {
+    "$defs": {
+      "AccountProgress": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "capture_state": {
+            "enum": [
+              "planned",
+              "collecting",
+              "paused",
+              "complete",
+              "cancelled",
+              "failed"
+            ],
+            "title": "Capture State",
+            "type": "string"
+          },
+          "intervals": {
+            "items": {
+              "$ref": "#/$defs/IntervalView"
+            },
+            "title": "Intervals",
+            "type": "array"
+          },
+          "settings_version": {
+            "minimum": 0,
+            "title": "Settings Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "account_id",
+          "settings_version",
+          "capture_state",
+          "intervals"
+        ],
+        "title": "AccountProgress",
+        "type": "object"
+      },
+      "ApiError": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "unauthorized",
+              "unsupported_api_version",
+              "validation_error",
+              "payload_too_large",
+              "bank_login_required",
+              "unsupported_bank",
+              "unsupported_currency",
+              "account_unconfigured",
+              "account_disabled",
+              "settings_conflict",
+              "account_busy",
+              "capture_busy",
+              "lease_expired",
+              "idempotency_conflict",
+              "history_incomplete",
+              "capture_context_changed",
+              "zenmoney_unavailable",
+              "zenmoney_account_unavailable",
+              "delivery_uncertain",
+              "existing_ownership_unknown",
+              "not_found",
+              "method_not_allowed",
+              "internal_error",
+              "migration_busy",
+              "migration_paused",
+              "migration_not_empty",
+              "migration_invalid",
+              "migration_wrong_account",
+              "migration_incomplete"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "maxLength": 2000,
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "retryable",
+          "request_id"
+        ],
+        "title": "ApiError",
+        "type": "object"
+      },
+      "DateRange": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "DateRange",
+        "type": "object"
+      },
+      "DeliveryCounts": {
+        "additionalProperties": false,
+        "properties": {
+          "delivered": {
+            "minimum": 0,
+            "title": "Delivered",
+            "type": "integer"
+          },
+          "pending": {
+            "minimum": 0,
+            "title": "Pending",
+            "type": "integer"
+          },
+          "suppressed": {
+            "minimum": 0,
+            "title": "Suppressed",
+            "type": "integer"
+          },
+          "uncertain": {
+            "minimum": 0,
+            "title": "Uncertain",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pending",
+          "delivered",
+          "suppressed",
+          "uncertain"
+        ],
+        "title": "DeliveryCounts",
+        "type": "object"
+      },
+      "IntervalView": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "period": {
+            "$ref": "#/$defs/DateRange"
+          },
+          "received_pages": {
+            "minimum": 0,
+            "title": "Received Pages",
+            "type": "integer"
+          },
+          "received_records": {
+            "minimum": 0,
+            "title": "Received Records",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "planned",
+              "collecting",
+              "paused",
+              "complete",
+              "cancelled",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "period",
+          "state",
+          "received_pages",
+          "received_records"
+        ],
+        "title": "IntervalView",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "accounts": {
+        "items": {
+          "$ref": "#/$defs/AccountProgress"
+        },
+        "title": "Accounts",
+        "type": "array"
+      },
+      "capture_state": {
+        "enum": [
+          "planned",
+          "collecting",
+          "paused",
+          "complete",
+          "cancelled",
+          "failed"
+        ],
+        "title": "Capture State",
+        "type": "string"
+      },
+      "connection_id": {
+        "format": "uuid",
+        "title": "Connection Id",
+        "type": "string"
+      },
+      "delivery": {
+        "$ref": "#/$defs/DeliveryCounts"
+      },
+      "delivery_state": {
+        "enum": [
+          "waiting",
+          "running",
+          "complete",
+          "blocked"
+        ],
+        "title": "Delivery State",
+        "type": "string"
+      },
+      "end_date": {
+        "format": "date",
+        "title": "End Date",
+        "type": "string"
+      },
+      "errors": {
+        "items": {
+          "$ref": "#/$defs/ApiError"
+        },
+        "title": "Errors",
+        "type": "array"
+      },
+      "id": {
+        "format": "uuid",
+        "title": "Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "connection_id",
+      "capture_state",
+      "delivery_state",
+      "end_date",
+      "accounts",
+      "delivery",
+      "errors"
+    ],
+    "title": "JobView",
+    "type": "object"
+  },
+  "PageReceipt": {
+    "additionalProperties": false,
+    "properties": {
+      "page_number": {
+        "minimum": 1,
+        "title": "Page Number",
+        "type": "integer"
+      },
+      "received_records": {
+        "minimum": 0,
+        "title": "Received Records",
+        "type": "integer"
+      },
+      "repeated": {
+        "title": "Repeated",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "page_number",
+      "received_records",
+      "repeated"
+    ],
+    "title": "PageReceipt",
+    "type": "object"
+  },
+  "ServerInfo": {
+    "additionalProperties": false,
+    "properties": {
+      "api_version": {
+        "const": 1,
+        "default": 1,
+        "title": "Api Version",
+        "type": "integer"
+      },
+      "last_zenmoney_refresh": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Last Zenmoney Refresh"
+      },
+      "max_body_bytes": {
+        "default": 2000000,
+        "minimum": 1,
+        "title": "Max Body Bytes",
+        "type": "integer"
+      },
+      "max_page_records": {
+        "default": 500,
+        "minimum": 1,
+        "title": "Max Page Records",
+        "type": "integer"
+      },
+      "service_version": {
+        "maxLength": 240,
+        "minLength": 1,
+        "title": "Service Version",
+        "type": "string"
+      },
+      "zenmoney_state": {
+        "enum": [
+          "ready",
+          "not_configured",
+          "unavailable"
+        ],
+        "title": "Zenmoney State",
+        "type": "string"
+      }
+    },
+    "required": [
+      "service_version",
+      "zenmoney_state",
+      "last_zenmoney_refresh"
+    ],
+    "title": "ServerInfo",
+    "type": "object"
+  },
+  "StartSync": {
+    "additionalProperties": false,
+    "properties": {
+      "connection_id": {
+        "format": "uuid",
+        "title": "Connection Id",
+        "type": "string"
+      },
+      "reimport_from": {
+        "anyOf": [
+          {
+            "format": "date",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Reimport From"
+      },
+      "request_id": {
+        "format": "uuid",
+        "title": "Request Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "connection_id",
+      "request_id"
+    ],
+    "title": "StartSync",
+    "type": "object"
+  }
+}

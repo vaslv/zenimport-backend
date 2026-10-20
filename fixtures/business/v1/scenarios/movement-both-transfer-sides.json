@@ -1,0 +1,125 @@
+{
+  "id": "movement-both-transfer-sides",
+  "contract_version": 1,
+  "implemented_by_stage": "L2",
+  "clock": "1792458000",
+  "uuids": [],
+  "initial_state": {},
+  "commands": [
+    {
+      "operation": "movement.signed",
+      "input": {
+        "transaction": {
+          "income": "1000000",
+          "outcome": "38.560000",
+          "incomeAccount": "bidv",
+          "outcomeAccount": "vietin",
+          "incomeInstrument": "vnd",
+          "outcomeInstrument": "usd"
+        },
+        "target": "bidv",
+        "instrument": "vnd"
+      }
+    },
+    {
+      "operation": "movement.signed",
+      "input": {
+        "transaction": {
+          "income": "1000000",
+          "outcome": "38.560000",
+          "incomeAccount": "bidv",
+          "outcomeAccount": "vietin",
+          "incomeInstrument": "vnd",
+          "outcomeInstrument": "usd"
+        },
+        "target": "vietin",
+        "instrument": "usd"
+      }
+    },
+    {
+      "operation": "movement.signed",
+      "input": {
+        "transaction": {
+          "income": "1000000",
+          "outcome": "38.560000",
+          "incomeAccount": "bidv",
+          "outcomeAccount": "vietin",
+          "incomeInstrument": "vnd",
+          "outcomeInstrument": "usd"
+        },
+        "target": "bidv",
+        "instrument": "usd"
+      }
+    },
+    {
+      "operation": "movement.signed",
+      "input": {
+        "transaction": {
+          "income": "1000000",
+          "outcome": "38.560000",
+          "incomeAccount": "bidv",
+          "outcomeAccount": "vietin",
+          "incomeInstrument": "vnd",
+          "outcomeInstrument": "usd"
+        },
+        "target": "untracked",
+        "instrument": "vnd"
+      }
+    },
+    {
+      "operation": "movement.signed",
+      "input": {
+        "transaction": {
+          "income": "1000000",
+          "outcome": "1000000",
+          "incomeAccount": "bidv",
+          "outcomeAccount": "bidv",
+          "incomeInstrument": "vnd",
+          "outcomeInstrument": "vnd"
+        },
+        "target": "bidv",
+        "instrument": "vnd"
+      }
+    },
+    {
+      "operation": "movement.signed",
+      "input": {
+        "transaction": {
+          "outcome": "100.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+          "outcomeAccount": "a",
+          "outcomeInstrument": "vnd"
+        },
+        "target": "a",
+        "instrument": "vnd"
+      }
+    },
+    {
+      "operation": "movement.signed",
+      "input": {
+        "transaction": {
+          "income": "100.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+          "incomeAccount": "a",
+          "incomeInstrument": "vnd",
+          "outcome": "100",
+          "outcomeAccount": "a",
+          "outcomeInstrument": "vnd"
+        },
+        "target": "a",
+        "instrument": "vnd"
+      }
+    }
+  ],
+  "expected": {
+    "results": [
+      "1000000",
+      "-38.56",
+      null,
+      "0",
+      "0",
+      "-100.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+      "0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"
+    ],
+    "external_writes": [],
+    "state_assertions": []
+  }
+}

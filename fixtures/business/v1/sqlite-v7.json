@@ -1,0 +1,5068 @@
+{
+  "contract_version": 1,
+  "null_policy": "preserve SQL null; require all logical keys",
+  "service_meta": {
+    "instance_id": "preserve_as_dataset_lineage_not_physical_installation",
+    "legacy:*": "reject_until_explicitly_classified_including_secret_screening",
+    "migration_hold": "audit_and_recreate_protected_participant_state",
+    "migration_import_sha256": "preserve_import_provenance",
+    "sync_ever_started": "preserve_irreversible_activity",
+    "zenmoney_refreshed_at": "invalidate_freshness_preserve_audit"
+  },
+  "sqlite_schema_version": 7,
+  "tables": {
+    "account_bindings": {
+      "acceptance": "C03",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "account_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "zenmoney_account_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "settings_version",
+          "notnull": 0,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "origin",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "created_at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "account_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_accounts",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_account_bindings_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.account_bindings.constraints",
+      "repository": "accountsRepository",
+      "sql": "CREATE TABLE account_bindings (\n id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES bank_accounts(id),\n zenmoney_account_id TEXT NOT NULL, settings_version INTEGER, origin TEXT NOT NULL, created_at INTEGER NOT NULL)",
+      "triggers": []
+    },
+    "account_capture_locks": {
+      "acceptance": "D04",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "account_id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "job_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "exclude_executable_lease",
+      "foreign_keys": [
+        {
+          "from": "job_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "capture_jobs",
+          "to": "id"
+        },
+        {
+          "from": "account_id",
+          "id": 1,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_accounts",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "account_id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_account_capture_locks_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.account_capture_locks.constraints",
+      "repository": "captureRepository",
+      "sql": "CREATE TABLE account_capture_locks (\n account_id TEXT PRIMARY KEY REFERENCES bank_accounts(id), job_id TEXT NOT NULL REFERENCES capture_jobs(id))",
+      "triggers": []
+    },
+    "bank_accounts": {
+      "acceptance": "C03",
+      "checks": [
+        "identity_scope IN ('bank','profile')",
+        "scale BETWEEN 0 AND 12",
+        "supported IN (0,1)",
+        "selection IN ('unconfigured','enabled','ignored')",
+        "settings_version>=0",
+        "(identity_scope='bank' AND profile_key='') OR (identity_scope='profile' AND profile_key<>'')",
+        "(selection='enabled' AND zenmoney_account_id IS NOT NULL AND import_start IS NOT NULL)\n    OR (selection<>'enabled' AND zenmoney_account_id IS NULL)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "identity_scope",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": "''",
+          "logical_required": true,
+          "name": "profile_key",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "source_key",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "currency",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 6,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "scale",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 7,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "label",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 8,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "masked_number",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 9,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "supported",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 10,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "unsupported_reason",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 11,
+          "dflt_value": "'unconfigured'",
+          "logical_required": true,
+          "name": "selection",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 12,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "zenmoney_account_id",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 13,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "import_start",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 14,
+          "dflt_value": "0",
+          "logical_required": true,
+          "name": "settings_version",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 15,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "last_complete_end",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_bank_accounts_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        },
+        {
+          "columns": [
+            {
+              "cid": 1,
+              "name": "bank",
+              "seqno": 0
+            },
+            {
+              "cid": 2,
+              "name": "identity_scope",
+              "seqno": 1
+            },
+            {
+              "cid": 3,
+              "name": "profile_key",
+              "seqno": 2
+            },
+            {
+              "cid": 4,
+              "name": "source_key",
+              "seqno": 3
+            },
+            {
+              "cid": 5,
+              "name": "currency",
+              "seqno": 4
+            }
+          ],
+          "name": "sqlite_autoindex_bank_accounts_2",
+          "origin": "u",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.bank_accounts.constraints",
+      "repository": "accountsRepository",
+      "sql": "CREATE TABLE bank_accounts (\n id TEXT PRIMARY KEY, bank TEXT NOT NULL, identity_scope TEXT NOT NULL CHECK(identity_scope IN ('bank','profile')),\n profile_key TEXT NOT NULL DEFAULT '', source_key TEXT NOT NULL, currency TEXT NOT NULL,\n scale INTEGER NOT NULL CHECK(scale BETWEEN 0 AND 12), label TEXT NOT NULL, masked_number TEXT NOT NULL,\n supported INTEGER NOT NULL CHECK(supported IN (0,1)), unsupported_reason TEXT,\n selection TEXT NOT NULL DEFAULT 'unconfigured' CHECK(selection IN ('unconfigured','enabled','ignored')),\n zenmoney_account_id TEXT, import_start TEXT, settings_version INTEGER NOT NULL DEFAULT 0 CHECK(settings_version>=0),\n last_complete_end TEXT,\n CHECK((identity_scope='bank' AND profile_key='') OR (identity_scope='profile' AND profile_key<>'')),\n CHECK((selection='enabled' AND zenmoney_account_id IS NOT NULL AND import_start IS NOT NULL)\n    OR (selection<>'enabled' AND zenmoney_account_id IS NULL)),\n UNIQUE(bank,identity_scope,profile_key,source_key,currency))",
+      "triggers": []
+    },
+    "bank_aliases": {
+      "acceptance": "D02",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "account_id",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "external_id",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "identity_version",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "bank_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_transactions",
+          "to": "id"
+        },
+        {
+          "from": "account_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 1,
+          "table": "bank_transactions",
+          "to": "account_id"
+        },
+        {
+          "from": "account_id",
+          "id": 1,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_accounts",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "account_id",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "external_id",
+              "seqno": 1
+            }
+          ],
+          "name": "sqlite_autoindex_bank_aliases_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.bank_aliases.constraints",
+      "repository": "recordsRepository",
+      "sql": "CREATE TABLE bank_aliases (\n account_id TEXT NOT NULL REFERENCES bank_accounts(id), external_id TEXT NOT NULL, identity_version TEXT NOT NULL,\n bank_id TEXT NOT NULL, PRIMARY KEY(account_id,external_id),\n FOREIGN KEY(bank_id,account_id) REFERENCES bank_transactions(id,account_id))",
+      "triggers": []
+    },
+    "bank_exclusions": {
+      "acceptance": "B06",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank_id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "reason",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "created_at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "bank_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_transactions",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "bank_id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_bank_exclusions_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.bank_exclusions.constraints",
+      "repository": "processingRepository",
+      "sql": "CREATE TABLE bank_exclusions (\n bank_id TEXT PRIMARY KEY REFERENCES bank_transactions(id), reason TEXT NOT NULL, created_at INTEGER NOT NULL)",
+      "triggers": []
+    },
+    "bank_processing": {
+      "acceptance": "B06",
+      "checks": [
+        "state IN ('pending','prepared','uncertain','delivered','suppressed')"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank_id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "state",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "reason",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "updated_at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "bank_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_transactions",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "bank_id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_bank_processing_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.bank_processing.constraints",
+      "repository": "processingRepository",
+      "sql": "CREATE TABLE bank_processing (\n bank_id TEXT PRIMARY KEY REFERENCES bank_transactions(id),\n state TEXT NOT NULL CHECK(state IN ('pending','prepared','uncertain','delivered','suppressed')),\n reason TEXT NOT NULL, updated_at INTEGER NOT NULL)",
+      "triggers": [
+        {
+          "name": "processing_terminal_delete",
+          "sql": "CREATE TRIGGER processing_terminal_delete BEFORE DELETE ON bank_processing\n WHEN OLD.state IN ('delivered','suppressed')\n BEGIN SELECT RAISE(ABORT,'Processed bank operation cannot be deleted'); END"
+        },
+        {
+          "name": "processing_terminal_update",
+          "sql": "CREATE TRIGGER processing_terminal_update BEFORE UPDATE OF state ON bank_processing\n WHEN (OLD.state='suppressed' AND NEW.state<>'suppressed')\n   OR (OLD.state='delivered' AND NEW.state NOT IN ('delivered','suppressed'))\n BEGIN SELECT RAISE(ABORT,'Processed bank operation cannot be reset'); END"
+        }
+      ]
+    },
+    "bank_transactions": {
+      "acceptance": "D02",
+      "checks": [
+        "identity_kind IN ('bank','fingerprint')",
+        "direction IN ('expense','income')",
+        "money_valid(amount)",
+        "json_valid(raw_json)",
+        "revision>=1"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "account_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "external_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "identity_kind",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "identity_version",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "local_date",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 6,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "occurred_at",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 7,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "direction",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 8,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "amount",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 9,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "currency",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 10,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "description",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 11,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "beneficiary_account",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 12,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "beneficiary_name",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 13,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "raw_json",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 14,
+          "dflt_value": "1",
+          "logical_required": true,
+          "name": "revision",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "account_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_accounts",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_bank_transactions_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        },
+        {
+          "columns": [
+            {
+              "cid": 1,
+              "name": "account_id",
+              "seqno": 0
+            },
+            {
+              "cid": 2,
+              "name": "external_id",
+              "seqno": 1
+            }
+          ],
+          "name": "sqlite_autoindex_bank_transactions_2",
+          "origin": "u",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        },
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "account_id",
+              "seqno": 1
+            }
+          ],
+          "name": "sqlite_autoindex_bank_transactions_3",
+          "origin": "u",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.bank_transactions.constraints",
+      "repository": "recordsRepository",
+      "sql": "CREATE TABLE bank_transactions (\n id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES bank_accounts(id), external_id TEXT NOT NULL,\n identity_kind TEXT NOT NULL CHECK(identity_kind IN ('bank','fingerprint')), identity_version TEXT NOT NULL,\n local_date TEXT NOT NULL, occurred_at TEXT, direction TEXT NOT NULL CHECK(direction IN ('expense','income')),\n amount TEXT NOT NULL CHECK(money_valid(amount)), currency TEXT NOT NULL,\n description TEXT NOT NULL, beneficiary_account TEXT, beneficiary_name TEXT,\n raw_json TEXT NOT NULL CHECK(json_valid(raw_json)), revision INTEGER NOT NULL DEFAULT 1 CHECK(revision>=1),\n UNIQUE(account_id,external_id), UNIQUE(id,account_id))",
+      "triggers": [
+        {
+          "name": "bank_identity_immutable",
+          "sql": "CREATE TRIGGER bank_identity_immutable BEFORE UPDATE ON bank_transactions\n WHEN NEW.id<>OLD.id OR NEW.account_id<>OLD.account_id OR NEW.external_id<>OLD.external_id\n BEGIN SELECT RAISE(ABORT,'Canonical bank identity is immutable'); END"
+        }
+      ]
+    },
+    "bank_versions": {
+      "acceptance": "D02",
+      "checks": [
+        "revision>=1",
+        "json_valid(data_json)",
+        "json_valid(raw_json)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank_id",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "revision",
+          "notnull": 1,
+          "pk": 2,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "data_json",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "raw_json",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "observed_at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "parser_version",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "bank_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_transactions",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "bank_id",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "revision",
+              "seqno": 1
+            }
+          ],
+          "name": "sqlite_autoindex_bank_versions_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.bank_versions.constraints",
+      "repository": "recordsRepository",
+      "sql": "CREATE TABLE bank_versions (\n bank_id TEXT NOT NULL REFERENCES bank_transactions(id), revision INTEGER NOT NULL CHECK(revision>=1),\n data_json TEXT NOT NULL CHECK(json_valid(data_json)), raw_json TEXT NOT NULL CHECK(json_valid(raw_json)),\n observed_at INTEGER NOT NULL, parser_version TEXT NOT NULL, PRIMARY KEY(bank_id,revision))",
+      "triggers": [
+        {
+          "name": "bank_version_immutable",
+          "sql": "CREATE TRIGGER bank_version_immutable BEFORE UPDATE ON bank_versions\n BEGIN SELECT RAISE(ABORT,'Bank revision history is append-only'); END"
+        },
+        {
+          "name": "bank_version_preserved",
+          "sql": "CREATE TRIGGER bank_version_preserved BEFORE DELETE ON bank_versions\n BEGIN SELECT RAISE(ABORT,'Bank revision history is append-only'); END"
+        }
+      ]
+    },
+    "capture_errors": {
+      "acceptance": "D04",
+      "checks": [
+        "retryable IN (0,1)",
+        "resolved IN (0,1)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "job_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "account_id",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "code",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "retryable",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 5,
+          "dflt_value": "0",
+          "logical_required": true,
+          "name": "resolved",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 6,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "created_at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "account_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_accounts",
+          "to": "id"
+        },
+        {
+          "from": "job_id",
+          "id": 1,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "capture_jobs",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_capture_errors_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.capture_errors.constraints",
+      "repository": "captureRepository",
+      "sql": "CREATE TABLE capture_errors (\n id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES capture_jobs(id), account_id TEXT REFERENCES bank_accounts(id),\n code TEXT NOT NULL, retryable INTEGER NOT NULL CHECK(retryable IN (0,1)), resolved INTEGER NOT NULL DEFAULT 0 CHECK(resolved IN (0,1)),\n created_at INTEGER NOT NULL)",
+      "triggers": []
+    },
+    "capture_intervals": {
+      "acceptance": "D04",
+      "checks": [
+        "start_date<=end_date"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "job_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "account_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "settings_version",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "start_date",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "end_date",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 6,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "state",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 7,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "total_pages",
+          "notnull": 0,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 8,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "total_records",
+          "notnull": 0,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "account_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_accounts",
+          "to": "id"
+        },
+        {
+          "from": "job_id",
+          "id": 1,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "capture_jobs",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 1,
+              "name": "job_id",
+              "seqno": 0
+            },
+            {
+              "cid": 2,
+              "name": "account_id",
+              "seqno": 1
+            },
+            {
+              "cid": 6,
+              "name": "state",
+              "seqno": 2
+            }
+          ],
+          "name": "interval_job_account",
+          "origin": "c",
+          "partial": 0,
+          "sql": "CREATE INDEX interval_job_account ON capture_intervals(job_id,account_id,state)",
+          "unique": 0
+        },
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_capture_intervals_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.capture_intervals.constraints",
+      "repository": "captureRepository",
+      "sql": "CREATE TABLE capture_intervals (\n id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES capture_jobs(id),\n account_id TEXT NOT NULL REFERENCES bank_accounts(id), settings_version INTEGER NOT NULL,\n start_date TEXT NOT NULL, end_date TEXT NOT NULL, state TEXT NOT NULL,\n total_pages INTEGER, total_records INTEGER, CHECK(start_date<=end_date))",
+      "triggers": [
+        {
+          "name": "interval_identity",
+          "sql": "CREATE TRIGGER interval_identity BEFORE UPDATE ON capture_intervals\n WHEN NEW.id<>OLD.id OR NEW.job_id<>OLD.job_id OR NEW.account_id<>OLD.account_id\n OR NEW.settings_version<>OLD.settings_version OR NEW.start_date<>OLD.start_date OR NEW.end_date<>OLD.end_date\n OR (OLD.state='complete' AND (NEW.state<>'complete' OR NEW.total_pages IS NOT OLD.total_pages OR NEW.total_records IS NOT OLD.total_records))\n BEGIN SELECT RAISE(ABORT,'Capture interval identity and completion evidence are immutable'); END"
+        },
+        {
+          "name": "interval_scope",
+          "sql": "CREATE TRIGGER interval_scope BEFORE INSERT ON capture_intervals\n WHEN NOT EXISTS (SELECT 1 FROM job_accounts WHERE job_id=NEW.job_id AND account_id=NEW.account_id AND settings_version=NEW.settings_version)\n BEGIN SELECT RAISE(ABORT,'Interval must belong to a job account snapshot'); END"
+        }
+      ]
+    },
+    "capture_jobs": {
+      "acceptance": "D04",
+      "checks": [
+        "json_valid(request_json)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "connection_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "request_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "request_json",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "end_date",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "capture_state",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 6,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "delivery_state",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 7,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "worker_id",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 8,
+          "dflt_value": "0",
+          "logical_required": true,
+          "name": "lease_epoch",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 9,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "lease_expires_at",
+          "notnull": 0,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 10,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "created_at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "connection_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "connections",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 1,
+              "name": "connection_id",
+              "seqno": 0
+            }
+          ],
+          "name": "one_active_capture",
+          "origin": "c",
+          "partial": 1,
+          "sql": "CREATE UNIQUE INDEX one_active_capture ON capture_jobs(connection_id)\n WHERE capture_state IN ('planned','collecting','paused')",
+          "unique": 1
+        },
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_capture_jobs_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        },
+        {
+          "columns": [
+            {
+              "cid": 2,
+              "name": "request_id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_capture_jobs_2",
+          "origin": "u",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.capture_jobs.constraints",
+      "repository": "captureRepository",
+      "sql": "CREATE TABLE capture_jobs (\n id TEXT PRIMARY KEY, connection_id TEXT NOT NULL REFERENCES connections(id),\n request_id TEXT NOT NULL UNIQUE, request_json TEXT NOT NULL CHECK(json_valid(request_json)),\n end_date TEXT NOT NULL, capture_state TEXT NOT NULL, delivery_state TEXT NOT NULL,\n worker_id TEXT, lease_epoch INTEGER NOT NULL DEFAULT 0, lease_expires_at INTEGER,\n created_at INTEGER NOT NULL)",
+      "triggers": []
+    },
+    "capture_pages": {
+      "acceptance": "D04",
+      "checks": [
+        "page_number>=1",
+        "records_count>=0",
+        "json_valid(payload_json)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "interval_id",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "page_number",
+          "notnull": 1,
+          "pk": 2,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "digest",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "records_count",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "payload_json",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "interval_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "capture_intervals",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "interval_id",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "page_number",
+              "seqno": 1
+            }
+          ],
+          "name": "sqlite_autoindex_capture_pages_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.capture_pages.constraints",
+      "repository": "captureRepository",
+      "sql": "CREATE TABLE capture_pages (\n interval_id TEXT NOT NULL REFERENCES capture_intervals(id), page_number INTEGER NOT NULL CHECK(page_number>=1),\n digest TEXT NOT NULL, records_count INTEGER NOT NULL CHECK(records_count>=0),\n payload_json TEXT NOT NULL CHECK(json_valid(payload_json)), PRIMARY KEY(interval_id,page_number))",
+      "triggers": [
+        {
+          "name": "page_immutable",
+          "sql": "CREATE TRIGGER page_immutable BEFORE UPDATE ON capture_pages\n BEGIN SELECT RAISE(ABORT,'Acknowledged pages are append-only'); END"
+        },
+        {
+          "name": "page_preserved",
+          "sql": "CREATE TRIGGER page_preserved BEFORE DELETE ON capture_pages\n BEGIN SELECT RAISE(ABORT,'Acknowledged pages are append-only'); END"
+        }
+      ]
+    },
+    "captured_records": {
+      "acceptance": "D04",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "interval_id",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "page_number",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank_id",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "revision",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "bank_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_versions",
+          "to": "bank_id"
+        },
+        {
+          "from": "revision",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 1,
+          "table": "bank_versions",
+          "to": "revision"
+        },
+        {
+          "from": "interval_id",
+          "id": 1,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "capture_pages",
+          "to": "interval_id"
+        },
+        {
+          "from": "page_number",
+          "id": 1,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 1,
+          "table": "capture_pages",
+          "to": "page_number"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "interval_id",
+              "seqno": 0
+            },
+            {
+              "cid": 2,
+              "name": "bank_id",
+              "seqno": 1
+            }
+          ],
+          "name": "sqlite_autoindex_captured_records_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.captured_records.constraints",
+      "repository": "captureRepository",
+      "sql": "CREATE TABLE captured_records (\n interval_id TEXT NOT NULL, page_number INTEGER NOT NULL, bank_id TEXT NOT NULL, revision INTEGER NOT NULL,\n PRIMARY KEY(interval_id,bank_id),\n FOREIGN KEY(interval_id,page_number) REFERENCES capture_pages(interval_id,page_number),\n FOREIGN KEY(bank_id,revision) REFERENCES bank_versions(bank_id,revision))",
+      "triggers": [
+        {
+          "name": "captured_record_immutable",
+          "sql": "CREATE TRIGGER captured_record_immutable BEFORE UPDATE ON captured_records\n BEGIN SELECT RAISE(ABORT,'Captured revisions are append-only'); END"
+        },
+        {
+          "name": "captured_record_preserved",
+          "sql": "CREATE TRIGGER captured_record_preserved BEFORE DELETE ON captured_records\n BEGIN SELECT RAISE(ABORT,'Captured revisions are append-only'); END"
+        },
+        {
+          "name": "captured_record_scope",
+          "sql": "CREATE TRIGGER captured_record_scope BEFORE INSERT ON captured_records\n WHEN NOT EXISTS (SELECT 1 FROM capture_intervals i JOIN bank_transactions b ON b.id=NEW.bank_id\n                  WHERE i.id=NEW.interval_id AND i.account_id=b.account_id)\n BEGIN SELECT RAISE(ABORT,'Captured record must belong to interval account'); END"
+        }
+      ]
+    },
+    "category_choices": {
+      "acceptance": "E14",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank_id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "category_id",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "source",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "updated_at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "bank_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_transactions",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "bank_id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_category_choices_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.category_choices.constraints",
+      "repository": "predictionsRepository",
+      "sql": "CREATE TABLE category_choices (\n bank_id TEXT PRIMARY KEY REFERENCES bank_transactions(id), category_id TEXT, source TEXT NOT NULL, updated_at INTEGER NOT NULL)",
+      "triggers": []
+    },
+    "category_evidence": {
+      "acceptance": "E14",
+      "checks": [
+        "eligible IN (0,1)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank_id",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "zen_id",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "category_id",
+          "notnull": 1,
+          "pk": 3,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "direction",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "origin",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "eligible",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "bank_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_transactions",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "bank_id",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "zen_id",
+              "seqno": 1
+            },
+            {
+              "cid": 2,
+              "name": "category_id",
+              "seqno": 2
+            }
+          ],
+          "name": "sqlite_autoindex_category_evidence_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.category_evidence.constraints",
+      "repository": "predictionsRepository",
+      "sql": "CREATE TABLE category_evidence (\n bank_id TEXT NOT NULL REFERENCES bank_transactions(id), zen_id TEXT NOT NULL, category_id TEXT NOT NULL,\n direction TEXT NOT NULL, origin TEXT NOT NULL, eligible INTEGER NOT NULL CHECK(eligible IN (0,1)),\n PRIMARY KEY(bank_id,zen_id,category_id))",
+      "triggers": []
+    },
+    "category_payments": {
+      "acceptance": "E14",
+      "checks": [
+        "eligible IN (0,1)",
+        "json_valid(zen_ids_json)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank_id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "category_id",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "reason",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "eligible",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "zen_ids_json",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "bank_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_transactions",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "bank_id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_category_payments_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.category_payments.constraints",
+      "repository": "predictionsRepository",
+      "sql": "CREATE TABLE category_payments (\n bank_id TEXT PRIMARY KEY REFERENCES bank_transactions(id), category_id TEXT,\n reason TEXT NOT NULL, eligible INTEGER NOT NULL CHECK(eligible IN (0,1)),\n zen_ids_json TEXT NOT NULL CHECK(json_valid(zen_ids_json)))",
+      "triggers": []
+    },
+    "category_predictions": {
+      "acceptance": "E14",
+      "checks": [
+        "source IN ('manual','rule','history','unknown')",
+        "json_valid(candidates_json)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank_id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank_revision",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "category_id",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "source",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "reason",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "candidates_json",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 6,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "mirror_generation",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 7,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "updated_at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_audit_invalidate_derived",
+      "foreign_keys": [
+        {
+          "from": "bank_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_versions",
+          "to": "bank_id"
+        },
+        {
+          "from": "bank_revision",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 1,
+          "table": "bank_versions",
+          "to": "revision"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "bank_id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_category_predictions_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.category_predictions.constraints",
+      "repository": "predictionsRepository",
+      "sql": "CREATE TABLE category_predictions (\n bank_id TEXT PRIMARY KEY, bank_revision INTEGER NOT NULL, category_id TEXT,\n source TEXT NOT NULL CHECK(source IN ('manual','rule','history','unknown')), reason TEXT NOT NULL,\n candidates_json TEXT NOT NULL CHECK(json_valid(candidates_json)), mirror_generation INTEGER NOT NULL, updated_at INTEGER NOT NULL,\n FOREIGN KEY(bank_id,bank_revision) REFERENCES bank_versions(bank_id,revision))",
+      "triggers": []
+    },
+    "connection_accounts": {
+      "acceptance": "C03",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "connection_id",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "account_id",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "account_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_accounts",
+          "to": "id"
+        },
+        {
+          "from": "connection_id",
+          "id": 1,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "connections",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "connection_id",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "account_id",
+              "seqno": 1
+            }
+          ],
+          "name": "sqlite_autoindex_connection_accounts_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.connection_accounts.constraints",
+      "repository": "accountsRepository",
+      "sql": "CREATE TABLE connection_accounts (\n connection_id TEXT NOT NULL REFERENCES connections(id), account_id TEXT NOT NULL REFERENCES bank_accounts(id),\n PRIMARY KEY(connection_id,account_id))",
+      "triggers": []
+    },
+    "connection_discovery": {
+      "acceptance": "C03",
+      "checks": [
+        "present IN (0,1)",
+        "supported IN (0,1)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "connection_id",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "account_id",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "present",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "supported",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "unsupported_reason",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "label",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 6,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "masked_number",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "connection_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "connection_accounts",
+          "to": "connection_id"
+        },
+        {
+          "from": "account_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 1,
+          "table": "connection_accounts",
+          "to": "account_id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "connection_id",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "account_id",
+              "seqno": 1
+            }
+          ],
+          "name": "sqlite_autoindex_connection_discovery_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.connection_discovery.constraints",
+      "repository": "accountsRepository",
+      "sql": "CREATE TABLE connection_discovery (\n connection_id TEXT NOT NULL, account_id TEXT NOT NULL, present INTEGER NOT NULL CHECK(present IN (0,1)),\n supported INTEGER NOT NULL CHECK(supported IN (0,1)), unsupported_reason TEXT, label TEXT NOT NULL, masked_number TEXT NOT NULL,\n PRIMARY KEY(connection_id,account_id),\n FOREIGN KEY(connection_id,account_id) REFERENCES connection_accounts(connection_id,account_id))",
+      "triggers": []
+    },
+    "connection_labels": {
+      "acceptance": "C03",
+      "checks": [
+        "length(trim(label)) BETWEEN 1 AND 120"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "connection_id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "label",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "connection_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "connections",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "connection_id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_connection_labels_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.connection_labels.constraints",
+      "repository": "accountsRepository",
+      "sql": "CREATE TABLE connection_labels (\n connection_id TEXT PRIMARY KEY REFERENCES connections(id),\n label TEXT NOT NULL CHECK(length(trim(label)) BETWEEN 1 AND 120))",
+      "triggers": []
+    },
+    "connections": {
+      "acceptance": "C03",
+      "checks": [
+        "profile_identity IN ('bank','user_selected')",
+        "json_valid(capabilities_json)",
+        "accounts_complete IN (0,1)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "profile_key",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "profile_identity",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "connector_version",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "timezone",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 6,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "capabilities_json",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 7,
+          "dflt_value": "0",
+          "logical_required": true,
+          "name": "accounts_complete",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_connections_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        },
+        {
+          "columns": [
+            {
+              "cid": 1,
+              "name": "bank",
+              "seqno": 0
+            },
+            {
+              "cid": 2,
+              "name": "profile_key",
+              "seqno": 1
+            }
+          ],
+          "name": "sqlite_autoindex_connections_2",
+          "origin": "u",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.connections.constraints",
+      "repository": "accountsRepository",
+      "sql": "CREATE TABLE connections (\n id TEXT PRIMARY KEY, bank TEXT NOT NULL, profile_key TEXT NOT NULL,\n profile_identity TEXT NOT NULL CHECK(profile_identity IN ('bank','user_selected')),\n connector_version TEXT NOT NULL, timezone TEXT,\n capabilities_json TEXT NOT NULL CHECK(json_valid(capabilities_json)),\n accounts_complete INTEGER NOT NULL DEFAULT 0 CHECK(accounts_complete IN (0,1)),\n UNIQUE(bank,profile_key))",
+      "triggers": []
+    },
+    "coverage": {
+      "acceptance": "D04",
+      "checks": [
+        "start_date<=end_date"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "account_id",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "start_date",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "end_date",
+          "notnull": 1,
+          "pk": 3,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "interval_id",
+          "notnull": 1,
+          "pk": 4,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "interval_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "capture_intervals",
+          "to": "id"
+        },
+        {
+          "from": "account_id",
+          "id": 1,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_accounts",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "account_id",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "start_date",
+              "seqno": 1
+            },
+            {
+              "cid": 2,
+              "name": "end_date",
+              "seqno": 2
+            }
+          ],
+          "name": "coverage_account_dates",
+          "origin": "c",
+          "partial": 0,
+          "sql": "CREATE INDEX coverage_account_dates ON coverage(account_id,start_date,end_date)",
+          "unique": 0
+        },
+        {
+          "columns": [
+            {
+              "cid": 3,
+              "name": "interval_id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_coverage_1",
+          "origin": "u",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        },
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "account_id",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "start_date",
+              "seqno": 1
+            },
+            {
+              "cid": 2,
+              "name": "end_date",
+              "seqno": 2
+            },
+            {
+              "cid": 3,
+              "name": "interval_id",
+              "seqno": 3
+            }
+          ],
+          "name": "sqlite_autoindex_coverage_2",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.coverage.constraints",
+      "repository": "captureRepository",
+      "sql": "CREATE TABLE coverage (\n account_id TEXT NOT NULL REFERENCES bank_accounts(id), start_date TEXT NOT NULL, end_date TEXT NOT NULL,\n interval_id TEXT NOT NULL UNIQUE REFERENCES capture_intervals(id), CHECK(start_date<=end_date),\n PRIMARY KEY(account_id,start_date,end_date,interval_id))",
+      "triggers": []
+    },
+    "deliveries": {
+      "acceptance": "F04",
+      "checks": [
+        "json_valid(payload)",
+        "state IN ('prepared','attempting','uncertain','delivered','suppressed')",
+        "ever_attempted IN (0,1)",
+        "needs_rebuild IN (0,1)",
+        "state<>'attempting' OR (ever_attempted=1 AND needs_rebuild=0)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "zen_id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "payload",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "state",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "ever_attempted",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "origin",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 6,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "authorized_job_id",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 7,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "updated_at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 8,
+          "dflt_value": "0",
+          "logical_required": true,
+          "name": "needs_rebuild",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "authorized_job_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "capture_jobs",
+          "to": "id"
+        },
+        {
+          "from": "bank_id",
+          "id": 1,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_transactions",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "bank_id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_deliveries_1",
+          "origin": "u",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        },
+        {
+          "columns": [
+            {
+              "cid": 1,
+              "name": "zen_id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_deliveries_2",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.deliveries.constraints",
+      "repository": "deliveryRepository",
+      "sql": "CREATE TABLE deliveries (\n bank_id TEXT NOT NULL UNIQUE REFERENCES bank_transactions(id), zen_id TEXT PRIMARY KEY,\n payload TEXT NOT NULL CHECK(json_valid(payload)), state TEXT NOT NULL CHECK(state IN ('prepared','attempting','uncertain','delivered','suppressed')),\n ever_attempted INTEGER NOT NULL CHECK(ever_attempted IN (0,1)), origin TEXT NOT NULL,\n authorized_job_id TEXT REFERENCES capture_jobs(id), updated_at INTEGER NOT NULL,\n needs_rebuild INTEGER NOT NULL DEFAULT 0 CHECK(needs_rebuild IN (0,1)),\n CHECK(state<>'attempting' OR (ever_attempted=1 AND needs_rebuild=0)))",
+      "triggers": [
+        {
+          "name": "delivery_immutable",
+          "sql": "CREATE TRIGGER delivery_immutable BEFORE UPDATE ON deliveries\n WHEN NEW.zen_id<>OLD.zen_id OR NEW.bank_id<>OLD.bank_id OR NEW.ever_attempted<OLD.ever_attempted\n   OR (OLD.ever_attempted=1 AND NEW.payload<>OLD.payload)\n   OR (OLD.state='suppressed' AND NEW.state<>'suppressed')\n   OR (OLD.state='delivered' AND NEW.state NOT IN ('delivered','suppressed'))\n BEGIN SELECT RAISE(ABORT,'Delivery identity or attempted payload is immutable'); END"
+        },
+        {
+          "name": "delivery_preserved",
+          "sql": "CREATE TRIGGER delivery_preserved BEFORE DELETE ON deliveries\n WHEN OLD.ever_attempted=1 OR OLD.state IN ('delivered','suppressed')\n BEGIN SELECT RAISE(ABORT,'Attempted delivery cannot be deleted'); END"
+        }
+      ]
+    },
+    "delivery_attempts": {
+      "acceptance": "F04",
+      "checks": [
+        "json_valid(payload)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "zen_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "outcome",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "payload",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "bank_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_transactions",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 2,
+              "name": "zen_id",
+              "seqno": 0
+            }
+          ],
+          "name": "attempted_zen_id",
+          "origin": "c",
+          "partial": 0,
+          "sql": "CREATE INDEX attempted_zen_id ON delivery_attempts(zen_id)",
+          "unique": 0
+        },
+        {
+          "columns": [
+            {
+              "cid": 1,
+              "name": "bank_id",
+              "seqno": 0
+            }
+          ],
+          "name": "attempts_bank",
+          "origin": "c",
+          "partial": 0,
+          "sql": "CREATE INDEX attempts_bank ON delivery_attempts(bank_id)",
+          "unique": 0
+        },
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_delivery_attempts_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.delivery_attempts.constraints",
+      "repository": "deliveryRepository",
+      "sql": "CREATE TABLE delivery_attempts (\n id TEXT PRIMARY KEY, bank_id TEXT NOT NULL REFERENCES bank_transactions(id), zen_id TEXT NOT NULL,\n at INTEGER NOT NULL, outcome TEXT NOT NULL, payload TEXT NOT NULL CHECK(json_valid(payload)))",
+      "triggers": [
+        {
+          "name": "attempt_immutable",
+          "sql": "CREATE TRIGGER attempt_immutable BEFORE UPDATE ON delivery_attempts\n BEGIN SELECT RAISE(ABORT,'Delivery attempts are append-only'); END"
+        },
+        {
+          "name": "attempt_preserved",
+          "sql": "CREATE TRIGGER attempt_preserved BEFORE DELETE ON delivery_attempts\n BEGIN SELECT RAISE(ABORT,'Delivery attempts are append-only'); END"
+        }
+      ]
+    },
+    "delivery_authorizations": {
+      "acceptance": "F04",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank_id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "revision",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "job_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "interval_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "settings_version",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "target_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 6,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "source_hash",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 7,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "authorized_at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "interval_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "captured_records",
+          "to": "interval_id"
+        },
+        {
+          "from": "bank_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 1,
+          "table": "captured_records",
+          "to": "bank_id"
+        },
+        {
+          "from": "bank_id",
+          "id": 1,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_versions",
+          "to": "bank_id"
+        },
+        {
+          "from": "revision",
+          "id": 1,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 1,
+          "table": "bank_versions",
+          "to": "revision"
+        },
+        {
+          "from": "job_id",
+          "id": 2,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "capture_jobs",
+          "to": "id"
+        },
+        {
+          "from": "bank_id",
+          "id": 3,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_transactions",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "bank_id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_delivery_authorizations_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.delivery_authorizations.constraints",
+      "repository": "deliveryRepository",
+      "sql": "CREATE TABLE delivery_authorizations (\n bank_id TEXT PRIMARY KEY REFERENCES bank_transactions(id), revision INTEGER NOT NULL,\n job_id TEXT NOT NULL REFERENCES capture_jobs(id), interval_id TEXT NOT NULL,\n settings_version INTEGER NOT NULL, target_id TEXT NOT NULL, source_hash TEXT,\n authorized_at INTEGER NOT NULL,\n FOREIGN KEY(bank_id,revision) REFERENCES bank_versions(bank_id,revision),\n FOREIGN KEY(interval_id,bank_id) REFERENCES captured_records(interval_id,bank_id))",
+      "triggers": [
+        {
+          "name": "delivery_authorization_frozen",
+          "sql": "CREATE TRIGGER delivery_authorization_frozen BEFORE UPDATE ON delivery_authorizations\n WHEN EXISTS(SELECT 1 FROM deliveries d WHERE d.bank_id=OLD.bank_id AND d.ever_attempted=1)\n BEGIN SELECT RAISE(ABORT,'Attempted delivery authorization is immutable'); END"
+        },
+        {
+          "name": "delivery_authorization_preserved",
+          "sql": "CREATE TRIGGER delivery_authorization_preserved BEFORE DELETE ON delivery_authorizations\n WHEN EXISTS(SELECT 1 FROM deliveries d WHERE d.bank_id=OLD.bank_id AND d.ever_attempted=1)\n BEGIN SELECT RAISE(ABORT,'Attempted delivery authorization cannot be deleted'); END"
+        },
+        {
+          "name": "delivery_authorization_proof",
+          "sql": "CREATE TRIGGER delivery_authorization_proof BEFORE INSERT ON delivery_authorizations\n WHEN NOT EXISTS (SELECT 1 FROM captured_records r JOIN capture_intervals i ON i.id=r.interval_id\n   JOIN bank_transactions b ON b.id=r.bank_id JOIN job_accounts a ON a.job_id=NEW.job_id AND a.account_id=b.account_id\n   WHERE r.interval_id=NEW.interval_id AND r.bank_id=NEW.bank_id AND r.revision=NEW.revision AND i.state='complete'\n     AND a.settings_version=NEW.settings_version AND a.target_id=NEW.target_id)\n BEGIN SELECT RAISE(ABORT,'Delivery needs completed capture and job authorization'); END"
+        },
+        {
+          "name": "delivery_authorization_update_proof",
+          "sql": "CREATE TRIGGER delivery_authorization_update_proof BEFORE UPDATE ON delivery_authorizations\n WHEN NOT EXISTS (SELECT 1 FROM captured_records r JOIN capture_intervals i ON i.id=r.interval_id\n   JOIN bank_transactions b ON b.id=r.bank_id JOIN job_accounts a ON a.job_id=NEW.job_id AND a.account_id=b.account_id\n   WHERE r.interval_id=NEW.interval_id AND r.bank_id=NEW.bank_id AND r.revision=NEW.revision AND i.state='complete'\n     AND a.settings_version=NEW.settings_version AND a.target_id=NEW.target_id)\n BEGIN SELECT RAISE(ABORT,'Delivery needs completed capture and job authorization'); END"
+        }
+      ]
+    },
+    "delivery_schedule": {
+      "acceptance": "F04",
+      "checks": [
+        "id=1",
+        "failures>=0"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 1,
+          "dflt_value": "0",
+          "logical_required": true,
+          "name": "next_run_at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 2,
+          "dflt_value": "0",
+          "logical_required": true,
+          "name": "failures",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_deadline_revalidate_context",
+      "foreign_keys": [],
+      "indexes": [],
+      "invariant_case": "storage.delivery_schedule.constraints",
+      "repository": "deliveryRepository",
+      "sql": "CREATE TABLE delivery_schedule (\n id INTEGER PRIMARY KEY CHECK(id=1), next_run_at INTEGER NOT NULL DEFAULT 0,\n failures INTEGER NOT NULL DEFAULT 0 CHECK(failures>=0))",
+      "triggers": []
+    },
+    "job_accounts": {
+      "acceptance": "D04",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "job_id",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "account_id",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "settings_version",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "target_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "import_start",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "authorized_start",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "account_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_accounts",
+          "to": "id"
+        },
+        {
+          "from": "job_id",
+          "id": 1,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "capture_jobs",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "job_id",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "account_id",
+              "seqno": 1
+            }
+          ],
+          "name": "sqlite_autoindex_job_accounts_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.job_accounts.constraints",
+      "repository": "captureRepository",
+      "sql": "CREATE TABLE job_accounts (\n job_id TEXT NOT NULL REFERENCES capture_jobs(id), account_id TEXT NOT NULL REFERENCES bank_accounts(id),\n settings_version INTEGER NOT NULL, target_id TEXT NOT NULL, import_start TEXT NOT NULL, authorized_start TEXT NOT NULL,\n PRIMARY KEY(job_id,account_id))",
+      "triggers": [
+        {
+          "name": "job_account_snapshot",
+          "sql": "CREATE TRIGGER job_account_snapshot BEFORE UPDATE ON job_accounts\n BEGIN SELECT RAISE(ABORT,'Job account settings snapshot is immutable'); END"
+        }
+      ]
+    },
+    "job_context": {
+      "acceptance": "D04",
+      "checks": [
+        "json_valid(capabilities_json)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "job_id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "connector_version",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "timezone",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "capabilities_json",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "job_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "capture_jobs",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "job_id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_job_context_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.job_context.constraints",
+      "repository": "captureRepository",
+      "sql": "CREATE TABLE job_context (\n job_id TEXT PRIMARY KEY REFERENCES capture_jobs(id), connector_version TEXT NOT NULL,\n timezone TEXT NOT NULL, capabilities_json TEXT NOT NULL CHECK(json_valid(capabilities_json)))",
+      "triggers": [
+        {
+          "name": "job_context_snapshot",
+          "sql": "CREATE TRIGGER job_context_snapshot BEFORE UPDATE ON job_context\n BEGIN SELECT RAISE(ABORT,'Job connector context snapshot is immutable'); END"
+        }
+      ]
+    },
+    "job_requests": {
+      "acceptance": "D04",
+      "checks": [
+        "json_valid(request_json)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "request_id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "job_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "request_json",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "job_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "capture_jobs",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "request_id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_job_requests_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.job_requests.constraints",
+      "repository": "captureRepository",
+      "sql": "CREATE TABLE job_requests (\n request_id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES capture_jobs(id),\n request_json TEXT NOT NULL CHECK(json_valid(request_json)))",
+      "triggers": [
+        {
+          "name": "request_immutable",
+          "sql": "CREATE TRIGGER request_immutable BEFORE UPDATE ON job_requests\n BEGIN SELECT RAISE(ABORT,'Command identity is immutable'); END"
+        },
+        {
+          "name": "request_preserved",
+          "sql": "CREATE TRIGGER request_preserved BEFORE DELETE ON job_requests\n BEGIN SELECT RAISE(ABORT,'Command identity is permanent'); END"
+        }
+      ]
+    },
+    "legacy_imports": {
+      "acceptance": "G19",
+      "checks": [
+        "json_valid(manifest_json)",
+        "json_valid(report_json)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "digest",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "imported_at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "source_version",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "manifest_json",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "report_json",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "digest",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_legacy_imports_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.legacy_imports.constraints",
+      "repository": "legacyRepository",
+      "sql": "CREATE TABLE legacy_imports (\n digest TEXT PRIMARY KEY, imported_at INTEGER NOT NULL, source_version INTEGER NOT NULL,\n manifest_json TEXT NOT NULL CHECK(json_valid(manifest_json)), report_json TEXT NOT NULL CHECK(json_valid(report_json)))",
+      "triggers": []
+    },
+    "legacy_objects": {
+      "acceptance": "G19",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "source_digest",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "type",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "name",
+          "notnull": 1,
+          "pk": 3,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "table_name",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "sql",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "columns_json",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "source_digest",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "legacy_imports",
+          "to": "digest"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "source_digest",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "type",
+              "seqno": 1
+            },
+            {
+              "cid": 2,
+              "name": "name",
+              "seqno": 2
+            }
+          ],
+          "name": "sqlite_autoindex_legacy_objects_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.legacy_objects.constraints",
+      "repository": "legacyRepository",
+      "sql": "CREATE TABLE legacy_objects (\n source_digest TEXT NOT NULL REFERENCES legacy_imports(digest), type TEXT NOT NULL, name TEXT NOT NULL,\n table_name TEXT NOT NULL, sql TEXT, columns_json TEXT, PRIMARY KEY(source_digest,type,name))",
+      "triggers": []
+    },
+    "legacy_rows": {
+      "acceptance": "G19",
+      "checks": [
+        "json_valid(values_json)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "source_digest",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "table_name",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "ordinal",
+          "notnull": 1,
+          "pk": 3,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "values_json",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "source_digest",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "legacy_imports",
+          "to": "digest"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "source_digest",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "table_name",
+              "seqno": 1
+            },
+            {
+              "cid": 2,
+              "name": "ordinal",
+              "seqno": 2
+            }
+          ],
+          "name": "sqlite_autoindex_legacy_rows_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.legacy_rows.constraints",
+      "repository": "legacyRepository",
+      "sql": "CREATE TABLE legacy_rows (\n source_digest TEXT NOT NULL REFERENCES legacy_imports(digest), table_name TEXT NOT NULL,\n ordinal INTEGER NOT NULL, values_json TEXT NOT NULL CHECK(json_valid(values_json)),\n PRIMARY KEY(source_digest,table_name,ordinal))",
+      "triggers": []
+    },
+    "link_bank_members": {
+      "acceptance": "E05",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "group_id",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank_id",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "bank_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_transactions",
+          "to": "id"
+        },
+        {
+          "from": "group_id",
+          "id": 1,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "link_groups",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 1,
+              "name": "bank_id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_link_bank_members_1",
+          "origin": "u",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        },
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "group_id",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "bank_id",
+              "seqno": 1
+            }
+          ],
+          "name": "sqlite_autoindex_link_bank_members_2",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.link_bank_members.constraints",
+      "repository": "matchingRepository",
+      "sql": "CREATE TABLE link_bank_members (\n group_id TEXT NOT NULL REFERENCES link_groups(id), bank_id TEXT NOT NULL UNIQUE REFERENCES bank_transactions(id),\n PRIMARY KEY(group_id,bank_id))",
+      "triggers": []
+    },
+    "link_groups": {
+      "acceptance": "E05",
+      "checks": [
+        "kind IN ('single','split','settlement')"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "kind",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "account_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "created_at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "origin",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "account_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_accounts",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_link_groups_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.link_groups.constraints",
+      "repository": "matchingRepository",
+      "sql": "CREATE TABLE link_groups (\n id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN ('single','split','settlement')),\n account_id TEXT NOT NULL REFERENCES bank_accounts(id), created_at INTEGER NOT NULL, origin TEXT NOT NULL)",
+      "triggers": []
+    },
+    "link_zen_members": {
+      "acceptance": "E05",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "group_id",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "zen_id",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "group_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "link_groups",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 1,
+              "name": "zen_id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_link_zen_members_1",
+          "origin": "u",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        },
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "group_id",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "zen_id",
+              "seqno": 1
+            }
+          ],
+          "name": "sqlite_autoindex_link_zen_members_2",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.link_zen_members.constraints",
+      "repository": "matchingRepository",
+      "sql": "CREATE TABLE link_zen_members (\n group_id TEXT NOT NULL REFERENCES link_groups(id), zen_id TEXT NOT NULL UNIQUE, PRIMARY KEY(group_id,zen_id))",
+      "triggers": []
+    },
+    "processing_receipts": {
+      "acceptance": "B06",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank_id",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "zen_id",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "origin",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "bank_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_transactions",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "bank_id",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "zen_id",
+              "seqno": 1
+            }
+          ],
+          "name": "sqlite_autoindex_processing_receipts_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.processing_receipts.constraints",
+      "repository": "processingRepository",
+      "sql": "CREATE TABLE processing_receipts (\n bank_id TEXT NOT NULL REFERENCES bank_transactions(id), zen_id TEXT NOT NULL,\n origin TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(bank_id,zen_id))",
+      "triggers": [
+        {
+          "name": "receipt_immutable",
+          "sql": "CREATE TRIGGER receipt_immutable BEFORE UPDATE ON processing_receipts\n BEGIN SELECT RAISE(ABORT,'Confirmed processing history is append-only'); END"
+        },
+        {
+          "name": "receipt_preserved",
+          "sql": "CREATE TRIGGER receipt_preserved BEFORE DELETE ON processing_receipts\n BEGIN SELECT RAISE(ABORT,'Confirmed processing history is append-only'); END"
+        }
+      ]
+    },
+    "processing_targets": {
+      "acceptance": "B06",
+      "checks": [
+        "length(target_id)>0"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank_id",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "zen_id",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "target_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "origin",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "bank_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_transactions",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "bank_id",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "zen_id",
+              "seqno": 1
+            }
+          ],
+          "name": "sqlite_autoindex_processing_targets_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.processing_targets.constraints",
+      "repository": "processingRepository",
+      "sql": "CREATE TABLE processing_targets (\n bank_id TEXT NOT NULL REFERENCES bank_transactions(id), zen_id TEXT NOT NULL,\n target_id TEXT NOT NULL CHECK(length(target_id)>0), origin TEXT NOT NULL, at INTEGER NOT NULL,\n PRIMARY KEY(bank_id,zen_id))",
+      "triggers": [
+        {
+          "name": "processing_target_immutable",
+          "sql": "CREATE TRIGGER processing_target_immutable BEFORE UPDATE ON processing_targets\n BEGIN SELECT RAISE(ABORT,'Matched account ownership is immutable'); END"
+        },
+        {
+          "name": "processing_target_preserved",
+          "sql": "CREATE TRIGGER processing_target_preserved BEFORE DELETE ON processing_targets\n BEGIN SELECT RAISE(ABORT,'Matched account ownership is permanent'); END"
+        }
+      ]
+    },
+    "recipient_rules": {
+      "acceptance": "E14",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "bank",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "name",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "direction",
+          "notnull": 1,
+          "pk": 3,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "category_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "updated_at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "bank",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "name",
+              "seqno": 1
+            },
+            {
+              "cid": 2,
+              "name": "direction",
+              "seqno": 2
+            }
+          ],
+          "name": "sqlite_autoindex_recipient_rules_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.recipient_rules.constraints",
+      "repository": "predictionsRepository",
+      "sql": "CREATE TABLE recipient_rules (\n bank TEXT NOT NULL, name TEXT NOT NULL, direction TEXT NOT NULL, category_id TEXT NOT NULL, updated_at INTEGER NOT NULL,\n PRIMARY KEY(bank,name,direction))",
+      "triggers": []
+    },
+    "reimport_ranges": {
+      "acceptance": "D04",
+      "checks": [
+        "json_valid(remaining_json)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "account_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "settings_version",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "source_job_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "remaining_json",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "source_job_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "capture_jobs",
+          "to": "id"
+        },
+        {
+          "from": "account_id",
+          "id": 1,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "bank_accounts",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_reimport_ranges_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.reimport_ranges.constraints",
+      "repository": "captureRepository",
+      "sql": "CREATE TABLE reimport_ranges (\n id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES bank_accounts(id), settings_version INTEGER NOT NULL,\n source_job_id TEXT NOT NULL REFERENCES capture_jobs(id), remaining_json TEXT NOT NULL CHECK(json_valid(remaining_json)))",
+      "triggers": []
+    },
+    "schema_migrations": {
+      "acceptance": "G01",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "version",
+          "notnull": 0,
+          "pk": 1,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "applied_at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "backup_path",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "audit_only",
+      "foreign_keys": [],
+      "indexes": [],
+      "invariant_case": "storage.schema_migrations.constraints",
+      "repository": "migrationRepository",
+      "sql": "CREATE TABLE schema_migrations (\n version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL, backup_path TEXT)",
+      "triggers": []
+    },
+    "service_meta": {
+      "acceptance": "G01",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "key",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "value",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "classify_each_key",
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "key",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_service_meta_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.service_meta.constraints",
+      "repository": "migrationRepository",
+      "sql": "CREATE TABLE service_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+      "triggers": []
+    },
+    "zen_deletions": {
+      "acceptance": "D08",
+      "checks": [
+        "json_valid(data)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "run_id",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "kind",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "entity_id",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "data",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "run_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "zen_sync_runs",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_zen_deletions_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.zen_deletions.constraints",
+      "repository": "mirrorRepository",
+      "sql": "CREATE TABLE zen_deletions (\n id TEXT PRIMARY KEY, run_id TEXT REFERENCES zen_sync_runs(id), kind TEXT NOT NULL, entity_id TEXT NOT NULL,\n data TEXT NOT NULL CHECK(json_valid(data)))",
+      "triggers": []
+    },
+    "zen_entities": {
+      "acceptance": "D08",
+      "checks": [
+        "json_valid(data)",
+        "deleted IN (0,1)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "kind",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "id",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "data",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "changed",
+          "notnull": 0,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 4,
+          "dflt_value": "0",
+          "logical_required": true,
+          "name": "deleted",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "run_id",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "run_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "NO ACTION",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "zen_sync_runs",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "kind",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "id",
+              "seqno": 1
+            }
+          ],
+          "name": "sqlite_autoindex_zen_entities_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.zen_entities.constraints",
+      "repository": "mirrorRepository",
+      "sql": "CREATE TABLE zen_entities (\n kind TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL CHECK(json_valid(data)), changed INTEGER,\n deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN (0,1)), run_id TEXT REFERENCES zen_sync_runs(id),\n PRIMARY KEY(kind,id))",
+      "triggers": []
+    },
+    "zen_exclusions": {
+      "acceptance": "B06",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "zen_id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "created_at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "zen_id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_zen_exclusions_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.zen_exclusions.constraints",
+      "repository": "processingRepository",
+      "sql": "CREATE TABLE zen_exclusions (zen_id TEXT PRIMARY KEY, created_at INTEGER NOT NULL)",
+      "triggers": []
+    },
+    "zen_mirror_state": {
+      "acceptance": "D08",
+      "checks": [
+        "id=1",
+        "cursor>=0",
+        "generation>=0",
+        "needs_full IN (0,1)",
+        "ready IN (0,1)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "source_hash",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": "0",
+          "logical_required": true,
+          "name": "cursor",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 3,
+          "dflt_value": "0",
+          "logical_required": true,
+          "name": "generation",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 4,
+          "dflt_value": "1",
+          "logical_required": true,
+          "name": "needs_full",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 5,
+          "dflt_value": "0",
+          "logical_required": true,
+          "name": "ready",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 6,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "refreshed_at",
+          "notnull": 0,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 7,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "error_code",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_audit_require_full_refresh",
+      "foreign_keys": [],
+      "indexes": [],
+      "invariant_case": "storage.zen_mirror_state.constraints",
+      "repository": "mirrorRepository",
+      "sql": "CREATE TABLE zen_mirror_state (\n id INTEGER PRIMARY KEY CHECK(id=1), source_hash TEXT,\n cursor INTEGER NOT NULL DEFAULT 0 CHECK(cursor>=0), generation INTEGER NOT NULL DEFAULT 0 CHECK(generation>=0),\n needs_full INTEGER NOT NULL DEFAULT 1 CHECK(needs_full IN (0,1)), ready INTEGER NOT NULL DEFAULT 0 CHECK(ready IN (0,1)),\n refreshed_at INTEGER, error_code TEXT)",
+      "triggers": []
+    },
+    "zen_movements": {
+      "acceptance": "D08",
+      "checks": [
+        "kind IN ('transaction','reminder','reminderMarker')"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": "'transaction'",
+          "logical_required": true,
+          "name": "kind",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "id",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "date",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "income_account",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "outcome_account",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "income_instrument",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 6,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "outcome_instrument",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 7,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "income",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 8,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "outcome",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 9,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "viewed",
+          "notnull": 0,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 10,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "hold",
+          "notnull": 0,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "kind",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "CASCADE",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "zen_entities",
+          "to": "kind"
+        },
+        {
+          "from": "id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "CASCADE",
+          "on_update": "NO ACTION",
+          "seq": 1,
+          "table": "zen_entities",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 3,
+              "name": "income_account",
+              "seqno": 0
+            },
+            {
+              "cid": 4,
+              "name": "outcome_account",
+              "seqno": 1
+            },
+            {
+              "cid": 2,
+              "name": "date",
+              "seqno": 2
+            }
+          ],
+          "name": "movement_accounts",
+          "origin": "c",
+          "partial": 0,
+          "sql": "CREATE INDEX movement_accounts ON zen_movements(income_account,outcome_account,date)",
+          "unique": 0
+        },
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "kind",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "id",
+              "seqno": 1
+            }
+          ],
+          "name": "sqlite_autoindex_zen_movements_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.zen_movements.constraints",
+      "repository": "mirrorRepository",
+      "sql": "CREATE TABLE zen_movements (\n kind TEXT NOT NULL DEFAULT 'transaction' CHECK(kind IN ('transaction','reminder','reminderMarker')),\n id TEXT NOT NULL, date TEXT, income_account TEXT, outcome_account TEXT, income_instrument TEXT,\n outcome_instrument TEXT, income TEXT, outcome TEXT, viewed INTEGER, hold INTEGER,\n PRIMARY KEY(kind,id), FOREIGN KEY(kind,id) REFERENCES zen_entities(kind,id) ON DELETE CASCADE)",
+      "triggers": []
+    },
+    "zen_sync_runs": {
+      "acceptance": "D08",
+      "checks": [
+        "json_valid(payload)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "id",
+          "notnull": 0,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "received_at",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "requested_cursor",
+          "notnull": 0,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": false,
+          "name": "response_cursor",
+          "notnull": 0,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 4,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "origin",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 5,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "payload",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "seqno": 0
+            }
+          ],
+          "name": "sqlite_autoindex_zen_sync_runs_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.zen_sync_runs.constraints",
+      "repository": "mirrorRepository",
+      "sql": "CREATE TABLE zen_sync_runs (\n id TEXT PRIMARY KEY, received_at INTEGER NOT NULL, requested_cursor INTEGER, response_cursor INTEGER,\n origin TEXT NOT NULL, payload TEXT NOT NULL CHECK(json_valid(payload)))",
+      "triggers": []
+    },
+    "zen_tags": {
+      "acceptance": "D08",
+      "checks": [],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "kind",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "entity_id",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "tag_id",
+          "notnull": 1,
+          "pk": 3,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "position",
+          "notnull": 1,
+          "pk": 0,
+          "type": "INTEGER"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [
+        {
+          "from": "kind",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "CASCADE",
+          "on_update": "NO ACTION",
+          "seq": 0,
+          "table": "zen_entities",
+          "to": "kind"
+        },
+        {
+          "from": "entity_id",
+          "id": 0,
+          "match": "NONE",
+          "on_delete": "CASCADE",
+          "on_update": "NO ACTION",
+          "seq": 1,
+          "table": "zen_entities",
+          "to": "id"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "kind",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "entity_id",
+              "seqno": 1
+            },
+            {
+              "cid": 2,
+              "name": "tag_id",
+              "seqno": 2
+            }
+          ],
+          "name": "sqlite_autoindex_zen_tags_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.zen_tags.constraints",
+      "repository": "mirrorRepository",
+      "sql": "CREATE TABLE zen_tags (\n kind TEXT NOT NULL, entity_id TEXT NOT NULL, tag_id TEXT NOT NULL, position INTEGER NOT NULL,\n PRIMARY KEY(kind,entity_id,tag_id), FOREIGN KEY(kind,entity_id) REFERENCES zen_entities(kind,id) ON DELETE CASCADE)",
+      "triggers": []
+    },
+    "zen_tombstones": {
+      "acceptance": "D08",
+      "checks": [
+        "json_valid(data)"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "kind",
+          "notnull": 1,
+          "pk": 1,
+          "type": "TEXT"
+        },
+        {
+          "cid": 1,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "entity_id",
+          "notnull": 1,
+          "pk": 2,
+          "type": "TEXT"
+        },
+        {
+          "cid": 2,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "reason",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 3,
+          "dflt_value": null,
+          "logical_required": true,
+          "name": "data",
+          "notnull": 1,
+          "pk": 0,
+          "type": "TEXT"
+        }
+      ],
+      "disposition": "preserve_exact",
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "cid": 0,
+              "name": "kind",
+              "seqno": 0
+            },
+            {
+              "cid": 1,
+              "name": "entity_id",
+              "seqno": 1
+            }
+          ],
+          "name": "sqlite_autoindex_zen_tombstones_1",
+          "origin": "pk",
+          "partial": 0,
+          "sql": null,
+          "unique": 1
+        }
+      ],
+      "invariant_case": "storage.zen_tombstones.constraints",
+      "repository": "mirrorRepository",
+      "sql": "CREATE TABLE zen_tombstones (\n kind TEXT NOT NULL, entity_id TEXT NOT NULL, reason TEXT NOT NULL, data TEXT NOT NULL CHECK(json_valid(data)),\n PRIMARY KEY(kind,entity_id))",
+      "triggers": [
+        {
+          "name": "tombstone_identity",
+          "sql": "CREATE TRIGGER tombstone_identity BEFORE UPDATE ON zen_tombstones\n WHEN NEW.kind<>OLD.kind OR NEW.entity_id<>OLD.entity_id\n BEGIN SELECT RAISE(ABORT,'Remote deletion identity is immutable'); END"
+        },
+        {
+          "name": "tombstone_preserved",
+          "sql": "CREATE TRIGGER tombstone_preserved BEFORE DELETE ON zen_tombstones\n BEGIN SELECT RAISE(ABORT,'Remote deletion history is permanent'); END"
+        }
+      ]
+    }
+  },
+  "unknown_metadata": "reject"
+}

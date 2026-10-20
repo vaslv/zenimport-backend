@@ -1,0 +1,311 @@
+{
+  "routes": [
+    {
+      "handler": "settings",
+      "method": "PUT",
+      "parameters": [
+        {
+          "annotation": "UUID",
+          "name": "identifier"
+        },
+        {
+          "annotation": "AccountSettings",
+          "name": "data"
+        }
+      ],
+      "path": "/api/v1/accounts/{identifier}/settings",
+      "response": "AccountView",
+      "source": "backend/sync_api.py"
+    },
+    {
+      "handler": "connections",
+      "method": "GET",
+      "parameters": [
+        {
+          "annotation": "str",
+          "name": "bank"
+        }
+      ],
+      "path": "/api/v1/connections",
+      "response": "ConnectionCatalog",
+      "source": "backend/sync_api.py"
+    },
+    {
+      "handler": "discover",
+      "method": "POST",
+      "parameters": [
+        {
+          "annotation": "DiscoverConnection",
+          "name": "data"
+        }
+      ],
+      "path": "/api/v1/connections/discover",
+      "response": "ConnectionView",
+      "source": "backend/sync_api.py"
+    },
+    {
+      "handler": "connection",
+      "method": "GET",
+      "parameters": [
+        {
+          "annotation": "UUID",
+          "name": "identifier"
+        }
+      ],
+      "path": "/api/v1/connections/{identifier}",
+      "response": "ConnectionView",
+      "source": "backend/sync_api.py"
+    },
+    {
+      "handler": "unlink",
+      "method": "POST",
+      "parameters": [
+        {
+          "annotation": "UUID",
+          "name": "identifier"
+        },
+        {
+          "annotation": "UUID",
+          "name": "account_id"
+        },
+        {
+          "annotation": "EmptyRequest",
+          "name": "data"
+        }
+      ],
+      "path": "/api/v1/connections/{identifier}/accounts/{account_id}/unlink",
+      "response": "ConnectionView",
+      "source": "backend/sync_api.py"
+    },
+    {
+      "handler": "differences",
+      "method": "GET",
+      "parameters": [
+        {
+          "annotation": "UUID",
+          "name": "identifier"
+        },
+        {
+          "annotation": "date | None",
+          "name": "from_date"
+        },
+        {
+          "annotation": "date | None",
+          "name": "to_date"
+        },
+        {
+          "annotation": "UUID | None",
+          "name": "account_id"
+        },
+        {
+          "annotation": "bool",
+          "name": "refresh"
+        }
+      ],
+      "path": "/api/v1/connections/{identifier}/discrepancies",
+      "response": "discrepancies.DiscrepancyReport",
+      "source": "backend/sync_api.py"
+    },
+    {
+      "handler": "rename",
+      "method": "PUT",
+      "parameters": [
+        {
+          "annotation": "UUID",
+          "name": "identifier"
+        },
+        {
+          "annotation": "ConnectionLabel",
+          "name": "data"
+        }
+      ],
+      "path": "/api/v1/connections/{identifier}/label",
+      "response": "ConnectionView",
+      "source": "backend/sync_api.py"
+    },
+    {
+      "handler": "info",
+      "method": "GET",
+      "parameters": [],
+      "path": "/api/v1/info",
+      "response": "ServerInfo",
+      "source": "backend/app.py"
+    },
+    {
+      "handler": "start",
+      "method": "POST",
+      "parameters": [
+        {
+          "annotation": "StartSync",
+          "name": "data"
+        }
+      ],
+      "path": "/api/v1/jobs",
+      "response": "JobView",
+      "source": "backend/sync_api.py"
+    },
+    {
+      "handler": "job",
+      "method": "GET",
+      "parameters": [
+        {
+          "annotation": "UUID",
+          "name": "identifier"
+        }
+      ],
+      "path": "/api/v1/jobs/{identifier}",
+      "response": "JobView",
+      "source": "backend/sync_api.py"
+    },
+    {
+      "handler": "status",
+      "method": "POST",
+      "parameters": [
+        {
+          "annotation": "UUID",
+          "name": "identifier"
+        },
+        {
+          "annotation": "CaptureStatus",
+          "name": "data"
+        }
+      ],
+      "path": "/api/v1/jobs/{identifier}/capture-status",
+      "response": "JobView",
+      "source": "backend/sync_api.py"
+    },
+    {
+      "handler": "lease",
+      "method": "POST",
+      "parameters": [
+        {
+          "annotation": "UUID",
+          "name": "identifier"
+        },
+        {
+          "annotation": "CaptureLeaseRequest",
+          "name": "data"
+        }
+      ],
+      "path": "/api/v1/jobs/{identifier}/lease",
+      "response": "CaptureLease",
+      "source": "backend/sync_api.py"
+    },
+    {
+      "handler": "stop",
+      "method": "POST",
+      "parameters": [
+        {
+          "annotation": "UUID",
+          "name": "identifier"
+        },
+        {
+          "annotation": "EmptyRequest",
+          "name": "data"
+        }
+      ],
+      "path": "/api/v1/jobs/{identifier}/stop",
+      "response": "JobView",
+      "source": "backend/sync_api.py"
+    },
+    {
+      "handler": "complete",
+      "method": "POST",
+      "parameters": [
+        {
+          "annotation": "UUID",
+          "name": "job_id"
+        },
+        {
+          "annotation": "UUID",
+          "name": "interval_id"
+        },
+        {
+          "annotation": "CaptureComplete",
+          "name": "data"
+        }
+      ],
+      "path": "/api/v1/jobs/{job_id}/intervals/{interval_id}/complete",
+      "response": "IntervalView",
+      "source": "backend/sync_api.py"
+    },
+    {
+      "handler": "page",
+      "method": "PUT",
+      "parameters": [
+        {
+          "annotation": "UUID",
+          "name": "job_id"
+        },
+        {
+          "annotation": "UUID",
+          "name": "interval_id"
+        },
+        {
+          "annotation": "int",
+          "name": "number"
+        },
+        {
+          "annotation": "CapturePage",
+          "name": "data"
+        }
+      ],
+      "path": "/api/v1/jobs/{job_id}/intervals/{interval_id}/pages/{number}",
+      "response": "PageReceipt",
+      "source": "backend/sync_api.py"
+    },
+    {
+      "handler": "migration_export",
+      "method": "POST",
+      "parameters": [],
+      "path": "/api/v1/migration/export",
+      "response": null,
+      "source": "backend/app.py"
+    },
+    {
+      "handler": "migration_import",
+      "method": "POST",
+      "parameters": [
+        {
+          "annotation": "Request",
+          "name": "request"
+        }
+      ],
+      "path": "/api/v1/migration/import",
+      "response": null,
+      "source": "backend/app.py"
+    },
+    {
+      "handler": "migration_resume",
+      "method": "POST",
+      "parameters": [],
+      "path": "/api/v1/migration/resume",
+      "response": null,
+      "source": "backend/app.py"
+    },
+    {
+      "handler": "migration_status",
+      "method": "GET",
+      "parameters": [],
+      "path": "/api/v1/migration/status",
+      "response": null,
+      "source": "backend/app.py"
+    },
+    {
+      "handler": "catalog",
+      "method": "GET",
+      "parameters": [],
+      "path": "/api/v1/zenmoney/accounts",
+      "response": "AccountCatalog",
+      "source": "backend/sync_api.py"
+    },
+    {
+      "handler": "health",
+      "method": "GET",
+      "parameters": [],
+      "path": "/health",
+      "response": null,
+      "source": "backend/app.py"
+    }
+  ]
+}

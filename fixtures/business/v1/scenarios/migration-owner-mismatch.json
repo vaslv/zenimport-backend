@@ -1,0 +1,26 @@
+{
+  "id": "migration-owner-mismatch",
+  "contract_version": 1,
+  "implemented_by_stage": "L3",
+  "clock": "1792458000",
+  "uuids": [],
+  "initial_state": {},
+  "commands": [
+    {
+      "operation": "migration.import",
+      "input": {
+        "source_owner": "1",
+        "destination_owner": "2"
+      }
+    }
+  ],
+  "expected": {
+    "results": [
+      {
+        "error": "migration_wrong_account"
+      }
+    ],
+    "external_writes": [],
+    "state_assertions": []
+  }
+}

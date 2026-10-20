@@ -1,0 +1,220 @@
+{
+  "AccountCatalog": {
+    "accounts": [
+      {
+        "currency": "VND",
+        "id": "00000000-0000-4000-8000-000000000010",
+        "instrument": 3,
+        "title": "Test VND"
+      }
+    ],
+    "refreshed_at": "2026-10-15T05:00:00Z"
+  },
+  "AccountSettings": {
+    "expected_version": 0,
+    "import_start": "2026-09-15",
+    "selection": "enabled",
+    "zenmoney_account_id": "00000000-0000-4000-8000-000000000010"
+  },
+  "AccountView": {
+    "currency": "VND",
+    "id": "00000000-0000-4000-8000-000000000006",
+    "import_start": "2026-09-15",
+    "label": "Test current account",
+    "last_complete_end": null,
+    "masked_number": "\u2022\u2022 1234",
+    "scale": 0,
+    "selection": "enabled",
+    "settings_version": 1,
+    "source_key": "fixture-account-vnd",
+    "supported": true,
+    "unsupported_reason": null,
+    "zenmoney_account_id": "00000000-0000-4000-8000-000000000010"
+  },
+  "CaptureComplete": {
+    "lease_epoch": 1,
+    "total_pages": 1,
+    "total_records": 1,
+    "worker_id": "00000000-0000-4000-8000-000000000003"
+  },
+  "CaptureLease": {
+    "epoch": 1,
+    "expires_at": "2026-10-15T05:02:00Z",
+    "worker_id": "00000000-0000-4000-8000-000000000003"
+  },
+  "CaptureLeaseRequest": {
+    "worker_id": "00000000-0000-4000-8000-000000000003"
+  },
+  "CapturePage": {
+    "lease_epoch": 1,
+    "page_number": 1,
+    "records": [
+      {
+        "amount": "125000",
+        "balance": "1000000",
+        "beneficiary_account": "fixture-beneficiary",
+        "beneficiary_name": "FIXTURE SHOP",
+        "currency": "VND",
+        "description": "Test purchase",
+        "details": {
+          "channel": "60"
+        },
+        "details_state": "complete",
+        "direction": "expense",
+        "external_id": "vib:id:fixture-transaction-1",
+        "identity_kind": "bank",
+        "identity_version": "vib:id:1",
+        "local_date": "2026-10-15",
+        "occurred_at": "2026-10-15T10:12:25+07:00"
+      }
+    ],
+    "total_pages": 1,
+    "total_records": 1,
+    "worker_id": "00000000-0000-4000-8000-000000000003"
+  },
+  "CaptureStatus": {
+    "code": "bank_login_required",
+    "lease_epoch": 1,
+    "state": "paused",
+    "worker_id": "00000000-0000-4000-8000-000000000003"
+  },
+  "ConnectionView": {
+    "accounts": [
+      {
+        "currency": "VND",
+        "id": "00000000-0000-4000-8000-000000000006",
+        "import_start": "2026-09-15",
+        "label": "Test current account",
+        "last_complete_end": null,
+        "masked_number": "\u2022\u2022 1234",
+        "scale": 0,
+        "selection": "enabled",
+        "settings_version": 1,
+        "source_key": "fixture-account-vnd",
+        "supported": true,
+        "unsupported_reason": null,
+        "zenmoney_account_id": "00000000-0000-4000-8000-000000000010"
+      }
+    ],
+    "accounts_complete": true,
+    "bank": "vietinbank",
+    "id": "00000000-0000-4000-8000-000000000001"
+  },
+  "DiscoverConnection": {
+    "accounts": [
+      {
+        "currency": "VND",
+        "identity_scope": "profile",
+        "label": "Test current account",
+        "masked_number": "\u2022\u2022 1234",
+        "scale": 0,
+        "source_key": "fixture-account-vnd",
+        "supported": true,
+        "unsupported_reason": null
+      },
+      {
+        "currency": "USD",
+        "identity_scope": "profile",
+        "label": "Test foreign currency account",
+        "masked_number": "\u2022\u2022 5678",
+        "scale": 2,
+        "source_key": "fixture-account-usd",
+        "supported": false,
+        "unsupported_reason": "USD reads have not been verified for this connector"
+      }
+    ],
+    "accounts_complete": true,
+    "bank": "vietinbank",
+    "capabilities": {
+      "currencies": [
+        "VND"
+      ],
+      "details": "included",
+      "earliest_date": null,
+      "max_window_days": 30,
+      "timezone": "Asia/Ho_Chi_Minh"
+    },
+    "connector_version": "1.0.0",
+    "profile_identity": "user_selected",
+    "profile_key": "fixture-profile-1"
+  },
+  "ErrorResponse": {
+    "error": {
+      "code": "delivery_uncertain",
+      "message": "Verifying delivery results",
+      "request_id": "00000000-0000-4000-8000-000000000005",
+      "retryable": true
+    }
+  },
+  "IntervalView": {
+    "id": "00000000-0000-4000-8000-000000000004",
+    "period": {
+      "end": "2026-10-14",
+      "start": "2026-09-15"
+    },
+    "received_pages": 0,
+    "received_records": 0,
+    "state": "planned"
+  },
+  "JobView": {
+    "accounts": [
+      {
+        "account_id": "00000000-0000-4000-8000-000000000006",
+        "capture_state": "planned",
+        "intervals": [
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "period": {
+              "end": "2026-10-14",
+              "start": "2026-09-15"
+            },
+            "received_pages": 0,
+            "received_records": 0,
+            "state": "planned"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "period": {
+              "end": "2026-10-15",
+              "start": "2026-10-15"
+            },
+            "received_pages": 0,
+            "received_records": 0,
+            "state": "planned"
+          }
+        ],
+        "settings_version": 1
+      }
+    ],
+    "capture_state": "planned",
+    "connection_id": "00000000-0000-4000-8000-000000000001",
+    "delivery": {
+      "delivered": 0,
+      "pending": 0,
+      "suppressed": 0,
+      "uncertain": 0
+    },
+    "delivery_state": "waiting",
+    "end_date": "2026-10-15",
+    "errors": [],
+    "id": "00000000-0000-4000-8000-000000000007"
+  },
+  "PageReceipt": {
+    "page_number": 1,
+    "received_records": 1,
+    "repeated": false
+  },
+  "ServerInfo": {
+    "api_version": 1,
+    "last_zenmoney_refresh": "2026-10-15T05:00:00Z",
+    "max_body_bytes": 2000000,
+    "max_page_records": 500,
+    "service_version": "0.1.0",
+    "zenmoney_state": "ready"
+  },
+  "StartSync": {
+    "connection_id": "00000000-0000-4000-8000-000000000001",
+    "reimport_from": null,
+    "request_id": "00000000-0000-4000-8000-000000000002"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "clock": "1792458000",
+  "commands": [
+    {
+      "input": {
+        "values": [
+          "9007199254740993.01",
+          "-9007199254740993",
+          "-0.01"
+        ]
+      },
+      "operation": "money.sum"
+    }
+  ],
+  "contract_version": 1,
+  "expected": {
+    "external_writes": [],
+    "results": [
+      "0"
+    ],
+    "state_assertions": []
+  },
+  "id": "money-cancellation",
+  "implemented_by_stage": "L2",
+  "initial_state": {},
+  "uuids": []
+}

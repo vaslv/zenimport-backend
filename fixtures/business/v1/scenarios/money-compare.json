@@ -1,0 +1,24 @@
+{
+  "clock": "1792458000",
+  "commands": [
+    {
+      "input": {
+        "left": "1.000",
+        "right": "1"
+      },
+      "operation": "money.compare"
+    }
+  ],
+  "contract_version": 1,
+  "expected": {
+    "external_writes": [],
+    "results": [
+      0
+    ],
+    "state_assertions": []
+  },
+  "id": "money-compare",
+  "implemented_by_stage": "L2",
+  "initial_state": {},
+  "uuids": []
+}

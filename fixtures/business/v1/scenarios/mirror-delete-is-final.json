@@ -1,0 +1,55 @@
+{
+  "id": "mirror-delete-is-final",
+  "contract_version": 1,
+  "implemented_by_stage": "L6",
+  "clock": "1792458000",
+  "uuids": [],
+  "initial_state": {},
+  "commands": [
+    {
+      "operation": "mirror.apply",
+      "input": {
+        "full": true,
+        "transactions": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "date": "2026-10-19",
+            "outcome": "100",
+            "outcomeAccount": "a"
+          }
+        ]
+      }
+    },
+    {
+      "operation": "mirror.apply",
+      "input": {
+        "full": false,
+        "deletions": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "object": "transaction"
+          }
+        ]
+      }
+    }
+  ],
+  "expected": {
+    "results": [
+      {
+        "cursor": "1"
+      },
+      {
+        "cursor": "2"
+      }
+    ],
+    "external_writes": [],
+    "state_assertions": [
+      {
+        "table": "zen_tombstones",
+        "contains": {
+          "entity_id": "00000000-0000-4000-8000-000000000001"
+        }
+      }
+    ]
+  }
+}

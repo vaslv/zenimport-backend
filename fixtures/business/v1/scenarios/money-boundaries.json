@@ -1,0 +1,123 @@
+{
+  "id": "money-boundaries",
+  "contract_version": 1,
+  "implemented_by_stage": "L2",
+  "clock": "1792458000",
+  "uuids": [],
+  "initial_state": {},
+  "commands": [
+    {
+      "operation": "money.subtract",
+      "input": {
+        "left": "1",
+        "right": "0.000000000001"
+      }
+    },
+    {
+      "operation": "money.sign",
+      "input": {
+        "value": "-0.000"
+      }
+    },
+    {
+      "operation": "money.bank",
+      "input": {
+        "value": "123456789012345678901234.123456789012",
+        "scale": 12
+      }
+    },
+    {
+      "operation": "money.bank",
+      "input": {
+        "value": "1.0",
+        "scale": 0
+      }
+    },
+    {
+      "operation": "money.bank",
+      "input": {
+        "value": "0",
+        "scale": 0
+      }
+    },
+    {
+      "operation": "money.bank",
+      "input": {
+        "value": "1\n",
+        "scale": 0
+      }
+    },
+    {
+      "operation": "money.sum",
+      "input": {
+        "values": [
+          "1e1"
+        ]
+      }
+    },
+    {
+      "operation": "money.sum",
+      "input": {
+        "values": [
+          "1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        ]
+      }
+    },
+    {
+      "operation": "money.wire",
+      "input": {
+        "value": "1e97"
+      }
+    },
+    {
+      "operation": "money.wire",
+      "input": {
+        "value": "1e-97"
+      }
+    },
+    {
+      "operation": "money.wire",
+      "input": {
+        "value": "1.2300e2"
+      }
+    },
+    {
+      "operation": "money.wire",
+      "input": {
+        "value": "0e999999999"
+      }
+    }
+  ],
+  "expected": {
+    "results": [
+      "0.999999999999",
+      0,
+      "123456789012345678901234.123456789012",
+      {
+        "error": "unsupported_scale"
+      },
+      {
+        "error": "invalid_bank_amount"
+      },
+      {
+        "error": "invalid_bank_amount"
+      },
+      {
+        "error": "invalid_amount"
+      },
+      {
+        "error": "amount_overflow"
+      },
+      {
+        "error": "amount_overflow"
+      },
+      {
+        "error": "amount_overflow"
+      },
+      "123",
+      "0"
+    ],
+    "external_writes": [],
+    "state_assertions": []
+  }
+}
