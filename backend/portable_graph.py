@@ -121,8 +121,17 @@ def source_tables(db, dataset_id):
     def rows(name):
         policy, definition = TABLES[name], columns(name)
         source = policy['source']
-        if name == 'source_schema_migrations' and db.execute('SELECT 1 FROM portable_schema_audit LIMIT 1').fetchone():
-            source = 'portable_schema_audit'
+        if name == 'source_schema_migrations':
+            provenance=db.execute("SELECT value FROM service_meta WHERE key='portable_imports'").fetchone()
+            imported=False
+            if provenance:
+                metadata_value('portable_imports',provenance[0],dataset_id)
+                imported=bool(json.loads(provenance[0]))
+            # An imported browser dataset can have an empty original audit.
+            # Import provenance selects that audit even when it has no rows;
+            # destination runtime migrations must never become source history.
+            if imported or db.execute('SELECT 1 FROM portable_schema_audit LIMIT 1').fetchone():
+                source = 'portable_schema_audit'
         actual = [row[1] for row in db.execute('PRAGMA table_info(' + quote(source) + ')')]
         require(actual == [column['name'] for column in CONTRACT['schema']['tables'][policy['source']]['columns']], 'unclassified_source_column')
         names = policy['columns']

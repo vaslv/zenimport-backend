@@ -12,10 +12,11 @@ from test_portable_graph import source, snapshot
 from test_migration_participant import Endpoint
 
 
-def prepare(source,tmp_path,*,audit_hold=False):
+def prepare(source,tmp_path,*,audit_hold=False,empty_schema_audit=False):
     origin=Endpoint(source.path);target=Endpoint(tmp_path/'target.sqlite3');switch=str(uuid4())
     origin.command('source_start',switch,peer_id=target.status()['installation_id'])
     lineage,rows,_=snapshot(source)
+    if empty_schema_audit:rows['source_schema_migrations']=[]
     if audit_hold:
         rows['dataset_metadata'].append(['migration_hold','exported'])
         rows['dataset_metadata'].sort(key=lambda row:row[0].encode())
@@ -82,6 +83,28 @@ def test_file_changed_after_validation_cannot_install_or_consume_handoff(source,
     assert target.status(switch)==before
     with storage.transaction(target.path,read_only=True) as db:
         assert not db.execute('SELECT 1 FROM bank_transactions').fetchone()
+
+
+def test_an_empty_original_schema_audit_is_not_replaced_by_destination_runtime_history(source,tmp_path):
+    _,target,switch,_,stage,proof=prepare(source,tmp_path,empty_schema_audit=True)
+    target.command('destination_activate',switch,peer_receipt=proof,
+        install=lambda db,operation:portable_install.install(db,operation,stage,source_hash='f'*64))
+    with storage.transaction(target.path,read_only=True) as db:
+        assert db.execute('SELECT max(version) FROM schema_migrations').fetchone()[0]==storage.SCHEMA_VERSION
+        assert not db.execute('SELECT 1 FROM portable_schema_audit').fetchone()
+        rows,_=graph.source_tables(db,stage.manifest['dataset_id'])
+        assert list(rows['source_schema_migrations'])==[]
+
+
+def test_a_never_imported_server_still_exports_its_own_schema_audit(tmp_path):
+    endpoint=Endpoint(tmp_path/'fresh.sqlite3')
+    with storage.transaction(endpoint.path) as db:
+        db.execute("INSERT OR REPLACE INTO service_meta VALUES ('portable_imports','[]')")
+        lineage=db.execute("SELECT value FROM service_meta WHERE key='instance_id'").fetchone()[0]
+        rows,_=graph.source_tables(db,lineage)
+        audit=list(rows['source_schema_migrations'])
+        assert audit and audit[-1][0]==storage.SCHEMA_VERSION
+        assert all(row[2] is None for row in audit)
 
 
 def test_install_failure_after_table_copy_rolls_back_schema_and_source_facts(source,tmp_path,monkeypatch):

@@ -164,3 +164,10 @@ including exact monetary text and all detail values, without rewriting either
 audit byte string. The desired-behavior regression failed before the correction;
 self-consistent page rehashes with changed descriptions/details remain rejected.
 The complete isolated Docker suite passed 718 tests after this correction.
+
+An original schema audit may legitimately be empty for a browser dataset. A
+subsequent server re-export uses the retained original audit even when it has no
+rows; validated nonempty import provenance distinguishes this from a never-imported
+server's own runtime audit. Provenance remains audit, not activation authority.
+The empty-audit regression failed before correction; 54 install/graph/API tests
+passed after it, including the fresh-server fallback and journal preservation.
