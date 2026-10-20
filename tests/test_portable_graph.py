@@ -112,6 +112,17 @@ def test_screening_prefix_normalization_does_not_rewrite_ordinary_financial_text
     assert graph.inspect_json(json.dumps(value))==value
 
 
+@pytest.mark.parametrize('value',[{'text':'\ud800'},{'\ud800':'text'},{'nested':json.dumps({'text':'\ud800'})}])
+def test_financial_json_cannot_hide_non_utf8_surrogates_in_escaped_values_or_keys(value):
+    with pytest.raises(codec.PortableError,match='invalid_financial_json'):
+        graph.inspect_json(json.dumps(value))
+
+
+def test_literal_backslash_unicode_notes_are_preserved_without_becoming_surrogates():
+    value={'note':'literal \\ud800 text'}
+    assert graph.inspect_json(json.dumps(value))==value
+
+
 @pytest.mark.parametrize('kind', ['foreign_key', 'missing_processing', 'missing_revision', 'missing_alias', 'bad_raw_amount',
     'missing_attempt', 'attempt_payload', 'terminal_state', 'unknown_metadata', 'metadata_token', 'secret_raw',
     'nested_secret', 'bad_page_digest', 'bad_coverage', 'bad_frontier', 'missing_capture_proof', 'mirror_amount', 'missing_mirror_context', 'missing_mirror_projection',

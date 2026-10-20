@@ -177,3 +177,9 @@ and whitespace prefixes. Prefix normalization applies only to the screening copy
 the original financial text stays byte-for-byte unchanged. Six prefix regressions
 failed before the correction; the 112 focused codec/graph/install Docker cases
 passed afterward, including benign prefixed text and credential rejection.
+
+Decoded financial JSON must also contain valid UTF-8 Unicode scalars in every key
+and string value, including escaped nested JSON. Invalid lone surrogates are
+rejected rather than becoming lossy browser identifiers. Ordinary literal
+backslash-u notes remain unchanged. Three desired regressions failed beforehand;
+116 focused codec/graph/install Docker cases passed after the correction.

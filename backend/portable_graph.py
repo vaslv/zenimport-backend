@@ -47,11 +47,13 @@ def inspect_json(raw):
             require(depth <= 128 and visited <= 5_000_000, 'json_budget_exceeded')
             if isinstance(item, dict):
                 for key, child in item.items():
+                    key.encode('utf-8')
                     require(re.sub('[^a-z0-9]', '', key.lower()) not in SECRET_KEYS, 'credential_material')
                     stack.append((child, depth + 1))
             elif isinstance(item, list):
                 stack.extend((child, depth + 1) for child in item)
             elif isinstance(item, str):
+                item.encode('utf-8')
                 require(not SECRET_TEXT.search(item), 'credential_material')
                 candidate=NESTED_JSON_PREFIX.sub('',item)
                 if candidate.startswith(('{', '[')):
