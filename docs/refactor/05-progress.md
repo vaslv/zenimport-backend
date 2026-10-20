@@ -530,3 +530,15 @@ checked in Python/Node and explicitly grants no activation authority. Existing
 format-1 endpoints are unchanged; no new endpoint is exposed. Financial graph,
 owner/credential screening, durable participants and protected handoff remain.
 See docs/portable-format-v2.md. No production data/services or live API access.
+
+### Browser storage parity checkpoint (L4, incomplete)
+
+Added a shared generator for 1,044 actual Python archive-screening, classified
+metadata, Decimal-text and mirror flag/amount observations, plus frozen Unicode-15
+word ranges. Chrome now checks these outcomes in its native archive codec. The
+reference suite recomputes the fixture; it cannot silently drift from Python.
+The source-side nested JSON/surrogate/audit fixes remain separate earlier commits.
+
+Validation: the full read-only network-disabled Docker test suite passed 737 tests
+(34.39s), with synthetic data only. Contract copies pin Chrome 4690b92; all artifact
+hashes agree. No production data, published images, tags or remotes changed.

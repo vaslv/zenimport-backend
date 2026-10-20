@@ -2,11 +2,13 @@
   "contract_version": 1,
   "files": {
     "application.json": "c59957d0df9785b847e149d01faa8a4a49c7949676e53d69e5f82840bbb9f9fb",
+    "archive-value-vectors.json": "6ef93a60a9910fd3d3417068b3aa69a9654d34b8b4de9e5b8e48e19f3f3b00f9",
     "arithmetic-vectors.json": "f6a0e50c9a21ff51dd16f91796e68e1a10894375f20dfaf159324158e7bb6ed8",
     "baseline.json": "106e52419f893d3ae9cd3fc584383ba8b333916a27db251b2404000cc9c296b0",
     "http-routes-v1.json": "8a4678bf069b6593589586d0bfde2f9337c1d10c59015968a9e934efb658143b",
     "portable-format-v2.json": "8111c4d4f9685c0a43c359ae144bf158eeea7481853a29053a3efa8f51560291",
     "portable-golden-v2.json": "4766f98245a15542baf17cc7bca4e6f4d1e537f84811e537408c60a4fb682aca",
+    "portable-http-v2.json": "b9be61751532d6e2665a461e20eea1eceae3a6030a909b65ce5251fce7c93158",
     "portable-policy.json": "cd3962827b80ca1824feb14d5d4ca54271bd94881d3cbcd0b2739ea8c3448eb0",
     "portable-v2.schema.json": "28090b20e4a7abe2661a49803e560b9008f384af5e3f1b26cc9c2d177a62a627",
     "portable-validation-v2.json": "17c443664756ba431d41d036e96eeefb9520a6cfe03cd03f1ce3a7163d65c721",
@@ -24,12 +26,11 @@
     "scenarios/money-compare.json": "2286fcce2709054fe7f6efcacd97736239e267d049bb4d47e00f667b32412ecf",
     "scenarios/money-large.json": "2e5009091e2eddc75645cf160c1bf3bcccb6b947034666228a2818df46dd43fb",
     "scenarios/movement-both-transfer-sides.json": "6725b1eb53fe27adc4c83c9ac95e4cf5ff7c6e12dd3453a2acbd53726a297562",
+    "sqlite-check-vectors.json": "1058e448c55d1c7e4c044a5ab5835f3e5f4b1c9c5a6491de3db284117b5cab27",
     "sqlite-v7.json": "23ec0d42d2be96b81407991730684bcb1fa95f23f64207630991e72d5736b7d5",
     "storage-cases.json": "9dedb87ac04493d910a6e76eefe2c2c7971a6430e34314cbededb3338d85ccb9",
     "unicode15.json": "edd824a306bde912bf896f706d44bc4a004202786f8b12c4f1b9e7bc4f7f9da7",
     "wire-examples-v1.json": "d6319a38bad15ded1f8c783cc40ae7261ee4a445bf8b7543b78a28dca8c18140",
-    "wire-v1.json": "ecb8530bedb19bef497149050677882383308ddc20691e50ee104eadf66c2dec",
-    "portable-http-v2.json": "b9be61751532d6e2665a461e20eea1eceae3a6030a909b65ce5251fce7c93158",
-    "sqlite-check-vectors.json": "1058e448c55d1c7e4c044a5ab5835f3e5f4b1c9c5a6491de3db284117b5cab27"
+    "wire-v1.json": "ecb8530bedb19bef497149050677882383308ddc20691e50ee104eadf66c2dec"
   }
 }
