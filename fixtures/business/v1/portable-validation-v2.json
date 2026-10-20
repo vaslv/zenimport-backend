@@ -1,0 +1,1000 @@
+{
+  "metadata": {
+    "instance_id": "dataset_uuid",
+    "migration_hold": "legacy_hold_audit",
+    "migration_import_sha256": "sha256",
+    "sync_ever_started": "started_flag",
+    "zenmoney_refreshed_at": "counter_audit",
+    "legacy:cursor": "counter_audit",
+    "legacy:zenmoney_cursor": "counter_audit",
+    "legacy:needs_full_sync": "boolean_audit",
+    "legacy:mode": "mode_audit",
+    "legacy:category_fresh_ids": "id_list_audit",
+    "legacy:operation_fresh_ids": "id_list_audit",
+    "legacy:creation_fresh": "catalog_ids_audit"
+  },
+  "unknown_metadata": "reject",
+  "legacy_objects": [
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_bank_accounts_1",
+      "table_name": "bank_accounts",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_bank_accounts_2",
+      "table_name": "bank_accounts",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_bank_operation_drafts_1",
+      "table_name": "bank_operation_drafts",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_bank_transactions_1",
+      "table_name": "bank_transactions",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_bank_transactions_2",
+      "table_name": "bank_transactions",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_category_drafts_1",
+      "table_name": "category_drafts",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_creation_drafts_1",
+      "table_name": "creation_drafts",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_creation_jobs_1",
+      "table_name": "creation_jobs",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_creation_jobs_2",
+      "table_name": "creation_jobs",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_imports_1",
+      "table_name": "imports",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_meta_1",
+      "table_name": "meta",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_outbox_1",
+      "table_name": "outbox",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_outbox_2",
+      "table_name": "outbox",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_recipient_rules_1",
+      "table_name": "recipient_rules",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_reconciliation_bank_members_1",
+      "table_name": "reconciliation_bank_members",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_reconciliation_bank_members_2",
+      "table_name": "reconciliation_bank_members",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_reconciliation_exclusions_1",
+      "table_name": "reconciliation_exclusions",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_reconciliation_groups_1",
+      "table_name": "reconciliation_groups",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_reconciliation_zen_members_1",
+      "table_name": "reconciliation_zen_members",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_reconciliation_zen_members_2",
+      "table_name": "reconciliation_zen_members",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_account_1",
+      "table_name": "zen_account",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_budget_1",
+      "table_name": "zen_budget",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_category_drafts_1",
+      "table_name": "zen_category_drafts",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_category_sends_1",
+      "table_name": "zen_category_sends",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_company_1",
+      "table_name": "zen_company",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_country_1",
+      "table_name": "zen_country",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_instrument_1",
+      "table_name": "zen_instrument",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_merchant_1",
+      "table_name": "zen_merchant",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_operation_drafts_1",
+      "table_name": "zen_operation_drafts",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_operation_sends_1",
+      "table_name": "zen_operation_sends",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_reminder_1",
+      "table_name": "zen_reminder",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_reminder_marker_1",
+      "table_name": "zen_reminder_marker",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_reminder_marker_tags_1",
+      "table_name": "zen_reminder_marker_tags",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_reminder_tags_1",
+      "table_name": "zen_reminder_tags",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_tag_1",
+      "table_name": "zen_tag",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_transaction_1",
+      "table_name": "zen_transaction",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_transaction_tags_1",
+      "table_name": "zen_transaction_tags",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_zen_user_1",
+      "table_name": "zen_user",
+      "sql": null,
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_account_company_id",
+      "table_name": "zen_account",
+      "sql": "CREATE INDEX zen_account_company_id ON zen_account(company_id)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_account_instrument_id",
+      "table_name": "zen_account",
+      "sql": "CREATE INDEX zen_account_instrument_id ON zen_account(instrument_id)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_account_user_id",
+      "table_name": "zen_account",
+      "sql": "CREATE INDEX zen_account_user_id ON zen_account(user_id)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_budget_date",
+      "table_name": "zen_budget",
+      "sql": "CREATE INDEX zen_budget_date ON zen_budget(date)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_budget_tag_id",
+      "table_name": "zen_budget",
+      "sql": "CREATE INDEX zen_budget_tag_id ON zen_budget(tag_id)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_budget_user_id",
+      "table_name": "zen_budget",
+      "sql": "CREATE INDEX zen_budget_user_id ON zen_budget(user_id)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_reminder_marker_date",
+      "table_name": "zen_reminder_marker",
+      "sql": "CREATE INDEX zen_reminder_marker_date ON zen_reminder_marker(date)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_reminder_marker_reminder_id",
+      "table_name": "zen_reminder_marker",
+      "sql": "CREATE INDEX zen_reminder_marker_reminder_id ON zen_reminder_marker(reminder_id)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_reminder_marker_tags_tag",
+      "table_name": "zen_reminder_marker_tags",
+      "sql": "CREATE INDEX zen_reminder_marker_tags_tag ON zen_reminder_marker_tags(tag_id)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_reminder_tags_tag",
+      "table_name": "zen_reminder_tags",
+      "sql": "CREATE INDEX zen_reminder_tags_tag ON zen_reminder_tags(tag_id)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_tag_parent_id",
+      "table_name": "zen_tag",
+      "sql": "CREATE INDEX zen_tag_parent_id ON zen_tag(parent_id)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_tag_user_id",
+      "table_name": "zen_tag",
+      "sql": "CREATE INDEX zen_tag_user_id ON zen_tag(user_id)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_transaction_date",
+      "table_name": "zen_transaction",
+      "sql": "CREATE INDEX zen_transaction_date ON zen_transaction(date)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_transaction_income_account",
+      "table_name": "zen_transaction",
+      "sql": "CREATE INDEX zen_transaction_income_account ON zen_transaction(income_account)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_transaction_merchant_id",
+      "table_name": "zen_transaction",
+      "sql": "CREATE INDEX zen_transaction_merchant_id ON zen_transaction(merchant_id)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_transaction_outcome_account",
+      "table_name": "zen_transaction",
+      "sql": "CREATE INDEX zen_transaction_outcome_account ON zen_transaction(outcome_account)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_transaction_payee",
+      "table_name": "zen_transaction",
+      "sql": "CREATE INDEX zen_transaction_payee ON zen_transaction(payee)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_transaction_reminder_marker_id",
+      "table_name": "zen_transaction",
+      "sql": "CREATE INDEX zen_transaction_reminder_marker_id ON zen_transaction(reminder_marker_id)",
+      "columns": null
+    },
+    {
+      "type": "index",
+      "name": "zen_transaction_tags_tag",
+      "table_name": "zen_transaction_tags",
+      "sql": "CREATE INDEX zen_transaction_tags_tag ON zen_transaction_tags(tag_id)",
+      "columns": null
+    },
+    {
+      "type": "table",
+      "name": "audit",
+      "table_name": "audit",
+      "sql": "CREATE TABLE audit (\n id INTEGER PRIMARY KEY, at INTEGER NOT NULL, operation TEXT NOT NULL, data TEXT NOT NULL)",
+      "columns": [
+        "id",
+        "at",
+        "operation",
+        "data"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "bank_accounts",
+      "table_name": "bank_accounts",
+      "sql": "CREATE TABLE bank_accounts (\n id TEXT PRIMARY KEY, bank TEXT NOT NULL, account TEXT NOT NULL,\n currency TEXT NOT NULL, zenmoney_account TEXT,\n UNIQUE(bank, account))",
+      "columns": [
+        "id",
+        "bank",
+        "account",
+        "currency",
+        "zenmoney_account"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "bank_operation_drafts",
+      "table_name": "bank_operation_drafts",
+      "sql": "CREATE TABLE bank_operation_drafts (bank_id TEXT PRIMARY KEY REFERENCES bank_transactions(id), definition TEXT NOT NULL, updated_at INTEGER NOT NULL)",
+      "columns": [
+        "bank_id",
+        "definition",
+        "updated_at"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "bank_transactions",
+      "table_name": "bank_transactions",
+      "sql": "CREATE TABLE bank_transactions (\n id TEXT PRIMARY KEY, bank_account TEXT NOT NULL REFERENCES bank_accounts(id),\n external_id TEXT NOT NULL, date TEXT NOT NULL, amount_minor INTEGER NOT NULL,\n description TEXT NOT NULL, raw TEXT NOT NULL,\n state TEXT NOT NULL DEFAULT 'pending', linked_id TEXT,\n UNIQUE(bank_account, external_id))",
+      "columns": [
+        "id",
+        "bank_account",
+        "external_id",
+        "date",
+        "amount_minor",
+        "description",
+        "raw",
+        "state",
+        "linked_id"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "category_drafts",
+      "table_name": "category_drafts",
+      "sql": "CREATE TABLE category_drafts (bank_id TEXT PRIMARY KEY REFERENCES bank_transactions(id), category_id TEXT NOT NULL, updated_at INTEGER NOT NULL)",
+      "columns": [
+        "bank_id",
+        "category_id",
+        "updated_at"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "creation_drafts",
+      "table_name": "creation_drafts",
+      "sql": "CREATE TABLE creation_drafts (bank_id TEXT PRIMARY KEY REFERENCES bank_transactions(id), category_id TEXT, source TEXT NOT NULL, updated_at INTEGER NOT NULL)",
+      "columns": [
+        "bank_id",
+        "category_id",
+        "source",
+        "updated_at"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "creation_jobs",
+      "table_name": "creation_jobs",
+      "sql": "CREATE TABLE creation_jobs (bank_id TEXT PRIMARY KEY REFERENCES bank_transactions(id), zen_id TEXT NOT NULL UNIQUE, payload TEXT NOT NULL, state TEXT NOT NULL, error TEXT)",
+      "columns": [
+        "bank_id",
+        "zen_id",
+        "payload",
+        "state",
+        "error"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "imports",
+      "table_name": "imports",
+      "sql": "CREATE TABLE imports (\n id TEXT PRIMARY KEY, received_at INTEGER NOT NULL, bank_account TEXT NOT NULL,\n adapter_version TEXT NOT NULL, payload TEXT NOT NULL)",
+      "columns": [
+        "id",
+        "received_at",
+        "bank_account",
+        "adapter_version",
+        "payload"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "meta",
+      "table_name": "meta",
+      "sql": "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+      "columns": [
+        "key",
+        "value"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "outbox",
+      "table_name": "outbox",
+      "sql": "CREATE TABLE outbox (\n bank_transaction TEXT PRIMARY KEY REFERENCES bank_transactions(id),\n zen_id TEXT NOT NULL UNIQUE, payload TEXT NOT NULL,\n state TEXT NOT NULL DEFAULT 'queued', error TEXT)",
+      "columns": [
+        "bank_transaction",
+        "zen_id",
+        "payload",
+        "state",
+        "error"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "recipient_rules",
+      "table_name": "recipient_rules",
+      "sql": "CREATE TABLE recipient_rules (bank TEXT NOT NULL, name TEXT NOT NULL, direction TEXT NOT NULL, category_id TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(bank,name,direction))",
+      "columns": [
+        "bank",
+        "name",
+        "direction",
+        "category_id",
+        "updated_at"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "reconciliation_bank_members",
+      "table_name": "reconciliation_bank_members",
+      "sql": "CREATE TABLE reconciliation_bank_members (\n        group_id TEXT NOT NULL REFERENCES reconciliation_groups(id) ON DELETE CASCADE,\n        bank_id TEXT NOT NULL UNIQUE REFERENCES bank_transactions(id), PRIMARY KEY(group_id,bank_id))",
+      "columns": [
+        "group_id",
+        "bank_id"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "reconciliation_exclusions",
+      "table_name": "reconciliation_exclusions",
+      "sql": "CREATE TABLE reconciliation_exclusions (zen_id TEXT PRIMARY KEY, created_at INTEGER NOT NULL)",
+      "columns": [
+        "zen_id",
+        "created_at"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "reconciliation_groups",
+      "table_name": "reconciliation_groups",
+      "sql": "CREATE TABLE reconciliation_groups (\n        id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN ('single','split','settlement')),\n        bank_account TEXT NOT NULL REFERENCES bank_accounts(id), created_at INTEGER NOT NULL,\n        origin TEXT NOT NULL)",
+      "columns": [
+        "id",
+        "kind",
+        "bank_account",
+        "created_at",
+        "origin"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "reconciliation_zen_members",
+      "table_name": "reconciliation_zen_members",
+      "sql": "CREATE TABLE reconciliation_zen_members (\n        group_id TEXT NOT NULL REFERENCES reconciliation_groups(id) ON DELETE CASCADE,\n        zen_id TEXT NOT NULL UNIQUE, PRIMARY KEY(group_id,zen_id))",
+      "columns": [
+        "group_id",
+        "zen_id"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_account",
+      "table_name": "zen_account",
+      "sql": "CREATE TABLE zen_account (\n            id TEXT PRIMARY KEY, user_id TEXT,instrument_id TEXT,company_id TEXT,title TEXT,type TEXT,archive INTEGER,balance TEXT,role_id TEXT,sync_ids TEXT,start_balance TEXT,credit_limit TEXT,in_balance INTEGER,savings INTEGER,enable_correction INTEGER,enable_sms INTEGER,private INTEGER,balance_correction_type TEXT,capitalization INTEGER,percent TEXT,start_date TEXT,end_date_offset INTEGER,end_date_offset_interval TEXT,payoff_step INTEGER,payoff_interval TEXT, changed INTEGER, deleted INTEGER NOT NULL DEFAULT 0,\n            data TEXT NOT NULL, run_id INTEGER REFERENCES zen_sync_runs(id))",
+      "columns": [
+        "id",
+        "user_id",
+        "instrument_id",
+        "company_id",
+        "title",
+        "type",
+        "archive",
+        "balance",
+        "role_id",
+        "sync_ids",
+        "start_balance",
+        "credit_limit",
+        "in_balance",
+        "savings",
+        "enable_correction",
+        "enable_sms",
+        "private",
+        "balance_correction_type",
+        "capitalization",
+        "percent",
+        "start_date",
+        "end_date_offset",
+        "end_date_offset_interval",
+        "payoff_step",
+        "payoff_interval",
+        "changed",
+        "deleted",
+        "data",
+        "run_id"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_budget",
+      "table_name": "zen_budget",
+      "sql": "CREATE TABLE zen_budget (\n            id TEXT PRIMARY KEY, user_id TEXT,date TEXT,tag_id TEXT,income TEXT,outcome TEXT,income_lock INTEGER,outcome_lock INTEGER,is_income_forecast INTEGER,is_outcome_forecast INTEGER, changed INTEGER, deleted INTEGER NOT NULL DEFAULT 0,\n            data TEXT NOT NULL, run_id INTEGER REFERENCES zen_sync_runs(id))",
+      "columns": [
+        "id",
+        "user_id",
+        "date",
+        "tag_id",
+        "income",
+        "outcome",
+        "income_lock",
+        "outcome_lock",
+        "is_income_forecast",
+        "is_outcome_forecast",
+        "changed",
+        "deleted",
+        "data",
+        "run_id"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_category_drafts",
+      "table_name": "zen_category_drafts",
+      "sql": "CREATE TABLE zen_category_drafts (zen_id TEXT PRIMARY KEY, category_id TEXT NOT NULL, original_tags TEXT NOT NULL, updated_at INTEGER NOT NULL)",
+      "columns": [
+        "zen_id",
+        "category_id",
+        "original_tags",
+        "updated_at"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_category_sends",
+      "table_name": "zen_category_sends",
+      "sql": "CREATE TABLE zen_category_sends (zen_id TEXT PRIMARY KEY, category_id TEXT NOT NULL, draft_updated_at INTEGER NOT NULL, before_payload TEXT NOT NULL, payload TEXT NOT NULL, state TEXT NOT NULL, error TEXT)",
+      "columns": [
+        "zen_id",
+        "category_id",
+        "draft_updated_at",
+        "before_payload",
+        "payload",
+        "state",
+        "error"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_company",
+      "table_name": "zen_company",
+      "sql": "CREATE TABLE zen_company (\n            id TEXT PRIMARY KEY, title TEXT,full_title TEXT,www TEXT,country_id TEXT, changed INTEGER, deleted INTEGER NOT NULL DEFAULT 0,\n            data TEXT NOT NULL, run_id INTEGER REFERENCES zen_sync_runs(id))",
+      "columns": [
+        "id",
+        "title",
+        "full_title",
+        "www",
+        "country_id",
+        "changed",
+        "deleted",
+        "data",
+        "run_id"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_country",
+      "table_name": "zen_country",
+      "sql": "CREATE TABLE zen_country (\n            id TEXT PRIMARY KEY, title TEXT, changed INTEGER, deleted INTEGER NOT NULL DEFAULT 0,\n            data TEXT NOT NULL, run_id INTEGER REFERENCES zen_sync_runs(id))",
+      "columns": [
+        "id",
+        "title",
+        "changed",
+        "deleted",
+        "data",
+        "run_id"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_deletions",
+      "table_name": "zen_deletions",
+      "sql": "CREATE TABLE zen_deletions (\n        id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL REFERENCES zen_sync_runs(id),\n        kind TEXT NOT NULL, entity_id TEXT NOT NULL, data TEXT NOT NULL)",
+      "columns": [
+        "id",
+        "run_id",
+        "kind",
+        "entity_id",
+        "data"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_instrument",
+      "table_name": "zen_instrument",
+      "sql": "CREATE TABLE zen_instrument (\n            id TEXT PRIMARY KEY, title TEXT,code TEXT,symbol TEXT,rate TEXT, changed INTEGER, deleted INTEGER NOT NULL DEFAULT 0,\n            data TEXT NOT NULL, run_id INTEGER REFERENCES zen_sync_runs(id))",
+      "columns": [
+        "id",
+        "title",
+        "code",
+        "symbol",
+        "rate",
+        "changed",
+        "deleted",
+        "data",
+        "run_id"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_merchant",
+      "table_name": "zen_merchant",
+      "sql": "CREATE TABLE zen_merchant (\n            id TEXT PRIMARY KEY, user_id TEXT,title TEXT,mcc INTEGER, changed INTEGER, deleted INTEGER NOT NULL DEFAULT 0,\n            data TEXT NOT NULL, run_id INTEGER REFERENCES zen_sync_runs(id))",
+      "columns": [
+        "id",
+        "user_id",
+        "title",
+        "mcc",
+        "changed",
+        "deleted",
+        "data",
+        "run_id"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_migrations",
+      "table_name": "zen_migrations",
+      "sql": "CREATE TABLE zen_migrations (\n        version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL, report TEXT NOT NULL)",
+      "columns": [
+        "version",
+        "applied_at",
+        "report"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_operation_drafts",
+      "table_name": "zen_operation_drafts",
+      "sql": "CREATE TABLE zen_operation_drafts (zen_id TEXT PRIMARY KEY, definition TEXT NOT NULL, before_payload TEXT NOT NULL, updated_at INTEGER NOT NULL)",
+      "columns": [
+        "zen_id",
+        "definition",
+        "before_payload",
+        "updated_at"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_operation_sends",
+      "table_name": "zen_operation_sends",
+      "sql": "CREATE TABLE zen_operation_sends (zen_id TEXT PRIMARY KEY, definition TEXT NOT NULL, draft_snapshot TEXT NOT NULL, before_payload TEXT NOT NULL, payload TEXT NOT NULL, state TEXT NOT NULL, error TEXT)",
+      "columns": [
+        "zen_id",
+        "definition",
+        "draft_snapshot",
+        "before_payload",
+        "payload",
+        "state",
+        "error"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_reminder",
+      "table_name": "zen_reminder",
+      "sql": "CREATE TABLE zen_reminder (\n            id TEXT PRIMARY KEY, income_account TEXT,outcome_account TEXT,income_instrument TEXT,outcome_instrument TEXT,income TEXT,outcome TEXT,merchant_id TEXT,payee TEXT,comment TEXT,user_id TEXT,start_date TEXT,end_date TEXT,interval TEXT,step INTEGER,points TEXT,notify INTEGER, changed INTEGER, deleted INTEGER NOT NULL DEFAULT 0,\n            data TEXT NOT NULL, run_id INTEGER REFERENCES zen_sync_runs(id))",
+      "columns": [
+        "id",
+        "income_account",
+        "outcome_account",
+        "income_instrument",
+        "outcome_instrument",
+        "income",
+        "outcome",
+        "merchant_id",
+        "payee",
+        "comment",
+        "user_id",
+        "start_date",
+        "end_date",
+        "interval",
+        "step",
+        "points",
+        "notify",
+        "changed",
+        "deleted",
+        "data",
+        "run_id"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_reminder_marker",
+      "table_name": "zen_reminder_marker",
+      "sql": "CREATE TABLE zen_reminder_marker (\n            id TEXT PRIMARY KEY, income_account TEXT,outcome_account TEXT,income_instrument TEXT,outcome_instrument TEXT,income TEXT,outcome TEXT,merchant_id TEXT,payee TEXT,comment TEXT,user_id TEXT,reminder_id TEXT,date TEXT,state TEXT,notify INTEGER,is_forecast INTEGER, changed INTEGER, deleted INTEGER NOT NULL DEFAULT 0,\n            data TEXT NOT NULL, run_id INTEGER REFERENCES zen_sync_runs(id))",
+      "columns": [
+        "id",
+        "income_account",
+        "outcome_account",
+        "income_instrument",
+        "outcome_instrument",
+        "income",
+        "outcome",
+        "merchant_id",
+        "payee",
+        "comment",
+        "user_id",
+        "reminder_id",
+        "date",
+        "state",
+        "notify",
+        "is_forecast",
+        "changed",
+        "deleted",
+        "data",
+        "run_id"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_reminder_marker_tags",
+      "table_name": "zen_reminder_marker_tags",
+      "sql": "CREATE TABLE zen_reminder_marker_tags (\n            owner_id TEXT NOT NULL REFERENCES zen_reminder_marker(id) ON DELETE CASCADE,\n            tag_id TEXT NOT NULL, position INTEGER NOT NULL, PRIMARY KEY(owner_id,tag_id))",
+      "columns": [
+        "owner_id",
+        "tag_id",
+        "position"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_reminder_tags",
+      "table_name": "zen_reminder_tags",
+      "sql": "CREATE TABLE zen_reminder_tags (\n            owner_id TEXT NOT NULL REFERENCES zen_reminder(id) ON DELETE CASCADE,\n            tag_id TEXT NOT NULL, position INTEGER NOT NULL, PRIMARY KEY(owner_id,tag_id))",
+      "columns": [
+        "owner_id",
+        "tag_id",
+        "position"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_sync_runs",
+      "table_name": "zen_sync_runs",
+      "sql": "CREATE TABLE zen_sync_runs (\n        id INTEGER PRIMARY KEY, received_at INTEGER NOT NULL, requested_cursor INTEGER,\n        response_cursor INTEGER, origin TEXT NOT NULL, payload TEXT NOT NULL)",
+      "columns": [
+        "id",
+        "received_at",
+        "requested_cursor",
+        "response_cursor",
+        "origin",
+        "payload"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_tag",
+      "table_name": "zen_tag",
+      "sql": "CREATE TABLE zen_tag (\n            id TEXT PRIMARY KEY, user_id TEXT,parent_id TEXT,title TEXT,icon TEXT,picture TEXT,color INTEGER,show_income INTEGER,show_outcome INTEGER,budget_income INTEGER,budget_outcome INTEGER,required INTEGER,archive INTEGER,static_id TEXT, changed INTEGER, deleted INTEGER NOT NULL DEFAULT 0,\n            data TEXT NOT NULL, run_id INTEGER REFERENCES zen_sync_runs(id))",
+      "columns": [
+        "id",
+        "user_id",
+        "parent_id",
+        "title",
+        "icon",
+        "picture",
+        "color",
+        "show_income",
+        "show_outcome",
+        "budget_income",
+        "budget_outcome",
+        "required",
+        "archive",
+        "static_id",
+        "changed",
+        "deleted",
+        "data",
+        "run_id"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_transaction",
+      "table_name": "zen_transaction",
+      "sql": "CREATE TABLE zen_transaction (\n            id TEXT PRIMARY KEY, income_account TEXT,outcome_account TEXT,income_instrument TEXT,outcome_instrument TEXT,income TEXT,outcome TEXT,merchant_id TEXT,payee TEXT,comment TEXT,user_id TEXT,date TEXT,created INTEGER,op_income TEXT,op_outcome TEXT,op_income_instrument TEXT,op_outcome_instrument TEXT,original_payee TEXT,hold INTEGER,mcc INTEGER,reminder_marker_id TEXT,latitude TEXT,longitude TEXT,viewed INTEGER,qr_code TEXT,source TEXT,income_bank_id TEXT,outcome_bank_id TEXT, changed INTEGER, deleted INTEGER NOT NULL DEFAULT 0,\n            data TEXT NOT NULL, run_id INTEGER REFERENCES zen_sync_runs(id))",
+      "columns": [
+        "id",
+        "income_account",
+        "outcome_account",
+        "income_instrument",
+        "outcome_instrument",
+        "income",
+        "outcome",
+        "merchant_id",
+        "payee",
+        "comment",
+        "user_id",
+        "date",
+        "created",
+        "op_income",
+        "op_outcome",
+        "op_income_instrument",
+        "op_outcome_instrument",
+        "original_payee",
+        "hold",
+        "mcc",
+        "reminder_marker_id",
+        "latitude",
+        "longitude",
+        "viewed",
+        "qr_code",
+        "source",
+        "income_bank_id",
+        "outcome_bank_id",
+        "changed",
+        "deleted",
+        "data",
+        "run_id"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_transaction_tags",
+      "table_name": "zen_transaction_tags",
+      "sql": "CREATE TABLE zen_transaction_tags (\n            transaction_id TEXT NOT NULL REFERENCES zen_transaction(id) ON DELETE CASCADE,\n            tag_id TEXT NOT NULL, position INTEGER NOT NULL, PRIMARY KEY(transaction_id,tag_id))",
+      "columns": [
+        "transaction_id",
+        "tag_id",
+        "position"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "zen_user",
+      "table_name": "zen_user",
+      "sql": "CREATE TABLE zen_user (\n            id TEXT PRIMARY KEY, login TEXT,parent_id TEXT,currency_id TEXT, changed INTEGER, deleted INTEGER NOT NULL DEFAULT 0,\n            data TEXT NOT NULL, run_id INTEGER REFERENCES zen_sync_runs(id))",
+      "columns": [
+        "id",
+        "login",
+        "parent_id",
+        "currency_id",
+        "changed",
+        "deleted",
+        "data",
+        "run_id"
+      ]
+    },
+    {
+      "type": "view",
+      "name": "split_links",
+      "table_name": "split_links",
+      "sql": "CREATE VIEW split_links AS SELECT b.bank_id,z.zen_id\n            FROM reconciliation_bank_members b JOIN reconciliation_groups g ON g.id=b.group_id\n            JOIN reconciliation_zen_members z ON z.group_id=g.id WHERE g.kind='split'",
+      "columns": null
+    }
+  ],
+  "legacy_unknown_objects": "reject_until_classified",
+  "active_capture": "reject",
+  "executable_capture_leases": "reject",
+  "attempting_delivery": "reject_until_recovered",
+  "source_schema_backup_paths": "null",
+  "source_lease_owner": "null",
+  "required_pre_activation": "fresh destination owner/full mirror and protected handoff; this graph is not activation authority"
+}

@@ -1,7 +1,7 @@
 {
-  "contract_stage": "L3.1",
+  "contract_stage": "L3.2",
   "source_repository": "https://github.com/vaslv/zenimport-chrome",
   "source_directory": "contracts/business/v1",
-  "manifest_sha256": "38cd370790aaf4ac2b65a887bdd6e339abe59356180be974f5d7af74cf34a43e",
-  "source_commit": "b0db1533fc90c061c07522fdb38274a3c85bba3c"
+  "manifest_sha256": "976440e9583b969d4c98e16d508d7b57e11f36f38cd5f86702856c668d28420b",
+  "source_commit": "22251a074b2113658e96e1973ad92753242a0705"
 }
