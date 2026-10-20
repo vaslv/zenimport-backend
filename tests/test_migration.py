@@ -16,6 +16,7 @@ from backend.config import Settings
 from backend.migration import meta
 from capture_factory import TOKEN
 from delivery_factory import DeliveryHarness
+from storage_factory import remove_schema8
 
 
 @pytest.fixture
@@ -62,18 +63,21 @@ def repack(payload, change):
     return output.getvalue()
 
 
-def test_published_schema6_archive_upgrades_only_verified_temporary_copy(source, tmp_path):
+@pytest.mark.parametrize('schema_version',[6,7])
+def test_published_archive_upgrades_only_verified_temporary_copy(source, tmp_path,schema_version):
     payload = exported(source)
     def downgrade(members):
         old = tmp_path / 'published-v6.sqlite3'
         old.write_bytes(members['database.sqlite3'])
         with sqlite3.connect(old) as db:
-            db.execute('DROP TABLE connection_labels')
-            db.execute('DELETE FROM schema_migrations WHERE version=7')
-            db.execute('PRAGMA user_version=6')
+            remove_schema8(db)
+            if schema_version==6:
+                db.execute('DROP TABLE connection_labels')
+                db.execute('DELETE FROM schema_migrations WHERE version=7')
+            db.execute('PRAGMA user_version='+str(schema_version))
         data = old.read_bytes()
         manifest = json.loads(members['manifest.json'])
-        manifest.update(schema_version=6, service_version='0.2.0', database_size=len(data), database_sha256=sha256(data).hexdigest())
+        manifest.update(schema_version=schema_version, service_version='0.2.0' if schema_version==6 else '0.2.1', database_size=len(data), database_sha256=sha256(data).hexdigest())
         members.update({'database.sqlite3': data, 'manifest.json': json.dumps(manifest).encode()})
     published = repack(payload, downgrade)
     before = len(source.remote.writes)
@@ -85,7 +89,7 @@ def test_published_schema6_archive_upgrades_only_verified_temporary_copy(source,
         assert app.state.migration.status()['awaiting_sync']
         assert len(source.remote.writes) == before
     with storage.transaction(tmp_path / 'imported-v6/target.sqlite3', read_only=True) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 7
+        assert db.execute('PRAGMA user_version').fetchone()[0] == storage.SCHEMA_VERSION
         assert db.execute('SELECT count(*) FROM processing_receipts').fetchone()[0] > 0
 
 
@@ -97,6 +101,22 @@ def test_manifest_cannot_lie_about_schema6(source, tmp_path):
     _, client = target_client(tmp_path / 'invalid-v6', source)
     with client:
         assert upload(client, repack(payload, lie)).json()['error']['code'] == 'migration_invalid'
+
+
+def test_format1_keeps_dataset_but_never_clones_physical_installation(source,tmp_path):
+    from backend.migration_participant import installation
+    payload=exported(source)
+    with storage.transaction(source.path,read_only=True) as db:
+        source_id=installation(db)['installation_id']
+        lineage=meta(db,'instance_id')
+    app,client=target_client(tmp_path/'physical-target',source)
+    with client:
+        with storage.transaction(app.state.migration.path,read_only=True) as db:
+            before=installation(db)['installation_id']
+        assert upload(client,payload).status_code==200
+        with storage.transaction(app.state.migration.path,read_only=True) as db:
+            assert installation(db)['installation_id']==before!=source_id
+            assert meta(db,'instance_id')==lineage
 
 
 def test_export_pauses_source_and_stays_paused_after_restart(source):

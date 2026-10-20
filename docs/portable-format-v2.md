@@ -69,3 +69,41 @@ Docker validation: 626 backend tests passed, including current and legacy
 synthetic graphs and hash-consistent corrupted archives. No live calls or active
 storage changes were made. HTTP migration/activation remains unimplemented for
 format 2; L3 is still in progress.
+
+## Durable participant primitives (L3.3, internal only)
+
+SQLite schema 8 adds a physical installation UUID independent of `instance_id`,
+a monotonic participant epoch, explicit global holds, permanent switch bindings
+and immutable command receipts. Received chunks are bounded to 256 KiB, keyed by
+switch/index and committed before acknowledgment. Their complete contiguous byte
+stream must match its declared length and SHA256 before sealing/validation.
+These runtime authority tables never enter the portable financial cohort.
+
+The source arbitrates `export_hold -> handed_off` versus
+`export_hold -> cancel_pending` in one write transaction. Cancellation resumes
+only after a matching destination discard receipt. A destination that never
+started uploading still records an irreversible discard tombstone, preventing a
+delayed old start command from activating that switch. Handoff cannot be undone;
+a new reverse migration is required. Peer receipt hashes provide integrity, not
+cross-server authentication: the coordinator must verify them through authenticated
+status. The threat model excludes a malicious administrator fabricating authority.
+
+Activation consumes a matched source handoff and installs data within the same
+transaction. The internal primitive requires an installer; the unfinished HTTP
+service cannot yet invoke it. Destination eligibility is rechecked immediately
+before installation. An activated target stays awaiting explicit synchronization,
+so its worker cannot send automatically. Repeated command UUIDs return the exact
+persisted receipt, including after restart; a changed request is rejected.
+
+Legacy requests cannot clear a format-2 hold. Startup token-context maintenance
+is deferred while held; an old Mirror object cannot reclaim a replaced context.
+Format-1 transfer is rejected after participant history exists. For eligible old
+archives, formats with SQLite 6/7/8 remain accepted and a verified private copy is
+upgraded before installation. Its installation controls are replaced with the
+existing destination's physical identity, never cloned from the source. The
+financial lineage is preserved. Original source schema audit has a separate
+runtime table and remains exportable through its logical financial alias.
+
+The public ordinary API remains version 1; portable HTTP capabilities/commands,
+background staging/installation and full interop acceptance are still pending.
+Do not advertise format-2 or standalone mode as available yet.

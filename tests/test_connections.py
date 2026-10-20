@@ -71,11 +71,13 @@ def test_unlink_cannot_touch_an_account_from_another_connection(h):
 
 
 def test_schema6_upgrade_backs_up_and_keeps_legacy_membership_and_settings(tmp_path):
+    from storage_factory import remove_schema8
     path = tmp_path / 'v6.sqlite3'
     h = Harness(path)
     connection = h.ready(profile='legacy-uuid')
     h.close()
     with closing(storage.configured(sqlite3.connect(path))) as db:
+        remove_schema8(db)
         db.execute('DROP TABLE connection_labels')
         db.execute('DELETE FROM schema_migrations WHERE version=7')
         db.execute('PRAGMA user_version=6')

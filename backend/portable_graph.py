@@ -107,12 +107,15 @@ def source_tables(db, dataset_id):
     report = {'source_schema_migrations.backup_path': 0, 'capture_jobs.worker_id': 0, 'capture_jobs.lease_expires_at': 0}
     def rows(name):
         policy, definition = TABLES[name], columns(name)
-        actual = [row[1] for row in db.execute('PRAGMA table_info(' + quote(policy['source']) + ')')]
+        source = policy['source']
+        if name == 'source_schema_migrations' and db.execute('SELECT 1 FROM portable_schema_audit LIMIT 1').fetchone():
+            source = 'portable_schema_audit'
+        actual = [row[1] for row in db.execute('PRAGMA table_info(' + quote(source) + ')')]
         require(actual == [column['name'] for column in CONTRACT['schema']['tables'][policy['source']]['columns']], 'unclassified_source_column')
         names = policy['columns']
         keys = [column for column in sorted(definition, key=lambda column: column['pk']) if column['pk']]
         order = [quote(column['name']) + (' COLLATE PORTABLE_UTF8' if not utf8 and column['type'] == 'TEXT' else '') for column in keys]
-        query = 'SELECT ' + ','.join(map(quote, names)) + ' FROM ' + quote(policy['source']) + ' ORDER BY ' + ','.join(order)
+        query = 'SELECT ' + ','.join(map(quote, names)) + ' FROM ' + quote(source) + ' ORDER BY ' + ','.join(order)
         for original in db.execute(query):
             row = list(original)
             if name == 'source_capture_leases':

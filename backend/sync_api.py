@@ -4,7 +4,7 @@ from datetime import date
 
 from fastapi import APIRouter
 
-from . import accounts, capture, delivery, predictions, storage
+from . import accounts, capture, delivery, predictions, storage, migration_participant as participant
 from . import discrepancies
 from .capture_policy import get
 from .capture_policy import SyncError
@@ -22,6 +22,8 @@ def router(path, clock, mirror, wake):
 
     def run(operation, *args):
         with storage.transaction(path) as db:
+            if participant.blocked(db):
+                raise SyncError('migration_paused')
             try:
                 return operation(db, *args, clock())
             except SyncError as exc:
@@ -88,6 +90,7 @@ def router(path, clock, mirror, wake):
             job = capture.start(db, data, now)
             db.execute("INSERT OR REPLACE INTO service_meta VALUES ('sync_ever_started','1')")
             db.execute("DELETE FROM service_meta WHERE key='migration_hold' AND value='imported'")
+            db.execute('UPDATE migration_installation SET awaiting_sync=0 WHERE id=1 AND state=\'active\'')
             if not repeated:
                 delivery.authorize_job(db, job['id'], now)
             return job, bool(repeated)

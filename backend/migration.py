@@ -10,7 +10,7 @@ import threading
 from uuid import UUID
 import zipfile
 
-from . import __version__, storage
+from . import __version__, storage, migration_participant as participant
 from .capture_policy import SyncError
 from .delivery import writer_lock
 from .snapshot import copy_snapshot
@@ -51,6 +51,8 @@ class MigrationGate:
         try:
             with storage.transaction(self.path, read_only=True) as db:
                 hold = meta(db, 'migration_hold')
+                if participant.blocked(db, worker=worker):
+                    raise SyncError('migration_paused')
             if hold == 'exported' or worker and hold == 'imported':
                 raise SyncError('migration_paused')
             yield
@@ -81,13 +83,17 @@ class Migration:
     def status(self):
         with storage.transaction(self.path, read_only=True) as db:
             hold = meta(db, 'migration_hold')
-            return dict(format_version=1, can_import=not started(db) and not meta(db, 'migration_import_sha256'),
-                        paused=hold == 'exported', awaiting_sync=hold == 'imported',
+            control = participant.installation(db)
+            can_import = not started(db) and not meta(db, 'migration_import_sha256') and not participant.blocked(db)
+            can_import = can_import and not db.execute('SELECT 1 FROM migration_operations LIMIT 1').fetchone()
+            return dict(format_version=1, can_import=bool(can_import),
+                        paused=hold == 'exported' or participant.blocked(db), awaiting_sync=hold == 'imported' or bool(control['awaiting_sync']),
                         imported_sha256=meta(db, 'migration_import_sha256'), max_archive_bytes=MAX_MIGRATION_BYTES)
 
     def export(self):
         with self.gate.exclusive(), self.mirror.lock:
             with storage.transaction(self.path, read_only=True) as db:
+                participant.guard_legacy(db, transfer=True)
                 if db.execute("SELECT 1 FROM capture_jobs WHERE capture_state IN ('planned','collecting','paused') LIMIT 1").fetchone():
                     raise SyncError('migration_incomplete')
                 if not owners(db):
@@ -119,6 +125,7 @@ class Migration:
 
     def resume(self):
         with self.gate.exclusive(), storage.transaction(self.path) as db:
+            participant.guard_legacy(db)
             if meta(db, 'migration_hold') == 'exported':
                 db.execute("DELETE FROM service_meta WHERE key='migration_hold'")
         return self.status()
@@ -129,6 +136,8 @@ class Migration:
         digest = sha256(payload).hexdigest()
         with self.gate.exclusive(), self.mirror.lock:
             with storage.transaction(self.path, read_only=True) as db:
+                participant.guard_legacy(db, transfer=True)
+                target_installation = dict(participant.installation(db))
                 previous = meta(db, 'migration_import_sha256')
                 if previous:
                     if previous == digest and meta(db, 'migration_hold') == 'imported':
@@ -151,6 +160,8 @@ class Migration:
                     if owners(db) != manifest['zenmoney_users']:
                         raise SyncError('migration_wrong_account', 409)
                 with storage.transaction(incoming) as db:
+                    participant.guard_legacy(db, transfer=True)
+                    reset_private_runtime(db, target_installation)
                     db.execute("INSERT OR REPLACE INTO service_meta VALUES ('migration_hold','imported')")
                     db.execute("INSERT OR REPLACE INTO service_meta VALUES ('migration_import_sha256',?)", (digest,))
                     # A new token for the same verified identity is allowed. The next
@@ -166,6 +177,15 @@ class Migration:
                 return dict(restored=True, already_imported=False, sha256=digest)
 
 
+def reset_private_runtime(db, destination):
+    """Format-1 private copy only: retain destination physical authority."""
+    for kind, name in sorted(storage.OBJECTS - storage.OBJECTS_V7, key=lambda item: (item[0] != 'trigger', item[1])):
+        db.execute('DROP ' + kind.upper() + ' "' + name + '"')
+    storage.execute_schema(db, storage.B8_SQL)
+    db.execute("INSERT INTO migration_installation VALUES (1,?,?,'active',NULL,0,0)",
+        (destination['installation_id'], destination['participant_epoch'] + 1))
+
+
 def unpack(payload, destination):
     with zipfile.ZipFile(BytesIO(payload)) as archive:
         names = archive.namelist()
@@ -178,7 +198,7 @@ def unpack(payload, destination):
         manifest = json.loads(archive.read('manifest.json'))
         if (not isinstance(manifest, dict) or manifest.get('format') != 'zenimport-migration'
                 or type(manifest.get('format_version')) is not int or manifest['format_version'] != 1
-                or type(manifest.get('schema_version')) is not int or manifest['schema_version'] not in (6, storage.SCHEMA_VERSION)
+                or type(manifest.get('schema_version')) is not int or manifest['schema_version'] not in (6, 7, storage.SCHEMA_VERSION)
                 or not isinstance(manifest.get('instance_id'), str)):
             raise ValueError('Unsupported format')
         UUID(manifest['instance_id'])

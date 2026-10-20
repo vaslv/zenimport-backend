@@ -10,7 +10,7 @@ from uuid import uuid4
 from zenmoney_api import HTTPError, ResponseError, TransportError
 from zenmoney_api.protocol import FORCE_FETCH, KINDS, decode_diff, encode_json, entity_key
 
-from . import storage
+from . import storage, migration_participant as participant
 from .accounts import CATALOG_MAX_AGE
 from .capture_policy import SyncError
 
@@ -147,13 +147,20 @@ class Mirror:
         self.path, self.client, self.clock, self.sleep = path, client, clock, sleep
         self.source_hash = sha256(token.encode()).hexdigest() if client is not None else None
         self.lock = threading.RLock()
-        with storage.transaction(path) as db:
+        self.context_deferred = not self.bind_context()
+
+    def bind_context(self):
+        with storage.transaction(self.path) as db:
+            legacy = db.execute("SELECT value FROM service_meta WHERE key='migration_hold'").fetchone()
+            if participant.blocked(db) or legacy is not None and legacy[0] == 'exported':
+                return False
             state = db.execute('SELECT * FROM zen_mirror_state WHERE id=1').fetchone()
-            if client is None or state['source_hash'] != self.source_hash:
+            if self.client is None or state['source_hash'] != self.source_hash:
                 db.execute('''UPDATE zen_mirror_state SET source_hash=?,cursor=0,needs_full=1,ready=0,
                     generation=generation+1,error_code=NULL WHERE id=1''', (self.source_hash,))
                 db.execute("DELETE FROM service_meta WHERE key='zenmoney_refreshed_at'")
                 db.execute('DELETE FROM category_predictions')
+        return True
 
     def fresh(self, state, now):
         return bool(self.client is not None and state['source_hash'] == self.source_hash and state['ready']
@@ -175,6 +182,14 @@ class Mirror:
                 db.execute('DELETE FROM category_predictions')
 
     def refresh(self, *, force=False, transactions=False):
+        if self.context_deferred:
+            if not self.bind_context():
+                raise SyncError('migration_paused')
+            self.context_deferred = False
+        else:
+            with storage.transaction(self.path, read_only=True) as db:
+                if participant.blocked(db):
+                    raise SyncError('migration_paused')
         if self.client is None:
             with storage.transaction(self.path, read_only=True) as db:
                 generation = db.execute('SELECT generation FROM zen_mirror_state WHERE id=1').fetchone()[0]

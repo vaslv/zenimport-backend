@@ -996,5 +996,13 @@
   "attempting_delivery": "reject_until_recovered",
   "source_schema_backup_paths": "null",
   "source_lease_owner": "null",
-  "required_pre_activation": "fresh destination owner/full mirror and protected handoff; this graph is not activation authority"
+  "required_pre_activation": "fresh destination owner/full mirror and protected handoff; this graph is not activation authority",
+  "runtime_only_tables": [
+    "migration_installation",
+    "migration_operations",
+    "migration_receipts",
+    "migration_chunks",
+    "portable_schema_audit"
+  ],
+  "runtime_only_disposition": "Physical installation identity, epoch, migration decisions, chunks and receipts never become portable financial authority. Original source schema audit is exported through source_schema_migrations instead of destination runtime markers."
 }

@@ -10,6 +10,7 @@ from backend import existing, ownership, storage
 from capture_factory import TARGET, record
 from delivery_factory import DeliveryHarness
 from mirror_factory import movement
+from storage_factory import remove_schema8
 
 OTHER = 'fixture-other-vnd'
 
@@ -41,6 +42,7 @@ def v5_copy(h):
     # Recreate the pre-fix schema on this disposable fixture only. All v5
     # receipts, authorizations and immutable request payloads remain intact.
     with closing(storage.configured(sqlite3.connect(h.path))) as db:
+        remove_schema8(db)
         db.execute('DROP TABLE connection_labels')
         db.execute('DROP TRIGGER processing_target_immutable')
         db.execute('DROP TRIGGER processing_target_preserved')
