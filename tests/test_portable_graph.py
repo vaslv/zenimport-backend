@@ -99,6 +99,19 @@ def test_capture_proof_value_changes_remain_invalid_after_rehashing_the_page(sou
         graph.validate_stage(data,expected_owners=['1'])
 
 
+@pytest.mark.parametrize('prefix',['\ufeff',' \ufeff','\ufeff \ufeff','\x1c','\x85','\u2000'])
+def test_nested_json_credential_screening_cannot_be_bypassed_with_prefix_markers(prefix):
+    raw=json.dumps({'futureField':prefix+json.dumps({'token':'synthetic-value'})})
+    with pytest.raises(codec.PortableError,match='credential_material'):
+        graph.inspect_json(raw)
+
+
+@pytest.mark.parametrize('prefix',['\ufeff',' \ufeff','\ufeff \ufeff','\x1c','\x85','\u2000'])
+def test_screening_prefix_normalization_does_not_rewrite_ordinary_financial_text(prefix):
+    value={'futureField':prefix+json.dumps({'ordinary':'retained'})}
+    assert graph.inspect_json(json.dumps(value))==value
+
+
 @pytest.mark.parametrize('kind', ['foreign_key', 'missing_processing', 'missing_revision', 'missing_alias', 'bad_raw_amount',
     'missing_attempt', 'attempt_payload', 'terminal_state', 'unknown_metadata', 'metadata_token', 'secret_raw',
     'nested_secret', 'bad_page_digest', 'bad_coverage', 'bad_frontier', 'missing_capture_proof', 'mirror_amount', 'missing_mirror_context', 'missing_mirror_projection',

@@ -22,6 +22,7 @@ from .sync_contracts import BankRecord, CapturePage, StartSync
 RULES = CONTRACT['validation']
 SECRET_KEYS = frozenset('password passwd token accesstoken refreshtoken apitoken clientsecret authorization auth cookie cookies sessioncookie zenmoneytoken backendtoken servertoken'.split())
 SECRET_TEXT = re.compile(r'\bbearer\s+[A-Za-z0-9._~+/-]{12,}|\b(?:access_token|api[_-]?token|password|authorization|cookie)\s*[:=]\s*\S+', re.I)
+NESTED_JSON_PREFIX = re.compile(r'^[\s\ufeff]+')
 META = RULES['metadata']
 
 
@@ -52,9 +53,10 @@ def inspect_json(raw):
                 stack.extend((child, depth + 1) for child in item)
             elif isinstance(item, str):
                 require(not SECRET_TEXT.search(item), 'credential_material')
-                if item.lstrip().startswith(('{', '[')):
+                candidate=NESTED_JSON_PREFIX.sub('',item)
+                if candidate.startswith(('{', '[')):
                     try:
-                        nested = decode_json(item.encode('utf-8'))
+                        nested = decode_json(candidate.encode('utf-8'))
                     except (ResponseError, ValueError, RecursionError):
                         continue  # An ordinary note need not itself be JSON.
                     stack.append((nested, depth + 1))

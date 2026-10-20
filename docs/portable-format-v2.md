@@ -171,3 +171,9 @@ rows; validated nonempty import provenance distinguishes this from a never-impor
 server's own runtime audit. Provenance remains audit, not activation authority.
 The empty-audit regression failed before correction; 54 install/graph/API tests
 passed after it, including the fresh-server fallback and journal preservation.
+
+Credential screening also examines JSON encoded inside string fields after BOM
+and whitespace prefixes. Prefix normalization applies only to the screening copy;
+the original financial text stays byte-for-byte unchanged. Six prefix regressions
+failed before the correction; the 112 focused codec/graph/install Docker cases
+passed afterward, including benign prefixed text and credential rejection.
