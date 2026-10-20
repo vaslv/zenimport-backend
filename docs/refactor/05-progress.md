@@ -591,3 +591,12 @@ the original raw bank record, while a one-microsecond mismatch is rejected.
 Focused Docker financial fixture/graph suite: 67 passed in 3.78s. Browser raw bank
 proof remains inactive and read-only; complete capture proof and lifecycle gates
 are still outstanding. No production data or API calls were involved.
+
+### Bound complete-page validation by actual stored evidence
+
+A new isolated 256 MiB child-process regression reproduced MemoryError for
+self-consistent archives claiming 10^12 or 2^63-1 pages without those pages.
+The validator now compares the actual row count and ordered page numbers, without
+constructing range(total_pages). Both cases fail with incomplete_coverage.
+Focused read-only Docker graph/resource/fixture checks: 69 passed in 4.00s.
+The pre-fix failure log is retained locally; no production data was accessed.
