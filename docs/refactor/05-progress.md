@@ -542,3 +542,12 @@ The source-side nested JSON/surrogate/audit fixes remain separate earlier commit
 Validation: the full read-only network-disabled Docker test suite passed 737 tests
 (34.39s), with synthetic data only. Contract copies pin Chrome 4690b92; all artifact
 hashes agree. No production data, published images, tags or remotes changed.
+
+### Shared complete financial fixture (L4 graph proof in progress)
+
+Pinned the synthetic financial journal captured and delivered by DeliveryHarness.
+The stored fixture has a complete independent Python graph/digest proof; it is
+not the earlier deliberately invalid format golden. Missing-parent mutations of
+all 33 populated FK cohorts are rejected. Focused Docker verification: 54 fixture
+and graph tests passed in 3.13s. Chrome ce41164 implements only its read-only
+relational subset so far; no financial activation or complete L4 claim is made.
