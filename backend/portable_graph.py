@@ -378,7 +378,7 @@ def _capture_proofs(db):
             pages = list(db.execute('SELECT page_number,records_count FROM capture_pages WHERE interval_id=? ORDER BY page_number', (interval['id'],)))
             # Bounds come from stored evidence, never an archive-controlled
             # range allocation. A huge declared count must be cheap to reject.
-            require(type(interval['total_pages']) is int and len(pages)==interval['total_pages'] and
+            require(type(interval['total_pages']) is int and 1<=interval['total_pages']<=10_000 and len(pages)==interval['total_pages'] and
                 all(row[0]==number for number,row in enumerate(pages,1)), 'incomplete_coverage')
             require(sum(row[1] for row in pages) == interval['total_records'], 'incomplete_coverage')
     require(not db.execute('''SELECT 1 FROM coverage c JOIN capture_intervals i ON i.id=c.interval_id

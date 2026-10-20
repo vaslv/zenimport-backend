@@ -626,3 +626,12 @@ scalars, identifiers and audit metadata. Existing browser validators already
 matched the reference; no runtime correction was needed. The shared suite now
 contains 2,642 SQLite CHECK outcomes and 1,132 value observations. Two focused
 Docker regeneration tests passed in 0.21s. Contracts are repinned locally.
+
+### Require actual empty-page evidence for complete intervals
+
+A regression showed that an added complete interval with zero declared pages
+and no page evidence was accepted by the archive graph, despite CaptureComplete
+requiring 1–10,000 pages. The graph now enforces those same bounds. Genuine
+empty history still uses one confirmed empty page. Focused offline Docker
+resource/graph/fixture checks: 72 passed in 5.15s; the zero-page case failed before
+the correction. Ordinary capture behavior and production data were unchanged.

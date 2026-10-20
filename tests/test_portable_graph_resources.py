@@ -9,8 +9,8 @@ from backend import portable_codec as codec
 from test_portable_financial_fixture import FIXTURE,decoded
 
 
-@pytest.mark.parametrize('pages',[10**12,2**63-1])
-def test_complete_interval_rejects_huge_missing_page_count_under_a_bounded_heap(tmp_path,pages):
+@pytest.mark.parametrize('pages',[0,-1,10**12,2**63-1])
+def test_complete_interval_rejects_invalid_or_missing_page_count_under_a_bounded_heap(tmp_path,pages):
     rows=decoded();columns=codec.TABLES['capture_intervals']['columns'];index=lambda name:columns.index(name)
     interval=deepcopy(next(row for row in rows['capture_intervals'] if row[index('state')]=='complete'))
     interval[index('id')]=str(uuid4());interval[index('total_pages')]=pages;interval[index('total_records')]=0
