@@ -30,3 +30,17 @@ else:raise AssertionError('Incomplete interval accepted')
 '''
     result=subprocess.run([sys.executable,'-c',program,str(archive),str(tmp_path/'stage')],capture_output=True,text=True,timeout=15)
     assert result.returncode==0,result.stderr
+
+
+def test_oversized_json_fanout_rejects_before_allocating_an_unbounded_visit_stack():
+    program='''
+import resource
+resource.setrlimit(resource.RLIMIT_AS,(256*1024*1024,256*1024*1024))
+from backend import portable_codec as codec,portable_graph as graph
+raw='['+'0,'*5000000+'0]'
+try:graph.inspect_json(raw)
+except codec.PortableError as error:assert error.code=='json_budget_exceeded',error.code
+else:raise AssertionError('Oversized fanout accepted')
+'''
+    result=subprocess.run([sys.executable,'-c',program],capture_output=True,text=True,timeout=15)
+    assert result.returncode==0,result.stderr

@@ -46,11 +46,13 @@ def inspect_json(raw):
             visited += 1
             require(depth <= 128 and visited <= 5_000_000, 'json_budget_exceeded')
             if isinstance(item, dict):
+                require(visited+len(stack)+len(item)<=5_000_000,'json_budget_exceeded')
                 for key, child in item.items():
                     key.encode('utf-8')
                     require(re.sub('[^a-z0-9]', '', key.lower()) not in SECRET_KEYS, 'credential_material')
                     stack.append((child, depth + 1))
             elif isinstance(item, list):
+                require(visited+len(stack)+len(item)<=5_000_000,'json_budget_exceeded')
                 stack.extend((child, depth + 1) for child in item)
             elif isinstance(item, str):
                 item.encode('utf-8')

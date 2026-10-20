@@ -600,3 +600,12 @@ The validator now compares the actual row count and ordered page numbers, withou
 constructing range(total_pages). Both cases fail with incomplete_coverage.
 Focused read-only Docker graph/resource/fixture checks: 69 passed in 4.00s.
 The pre-fix failure log is retained locally; no production data was accessed.
+
+### Reject excessive JSON fanout before building its visit stack
+
+A separate 256 MiB isolated child reproduced MemoryError when the decoder's
+5,000,001-element list was expanded into visit tuples before checking the existing
+5,000,000-node budget. The graph scanner now checks the known pending-node lower
+bound before extending dictionary/list children. Oversized input returns the
+existing json_budget_exceeded error. Focused offline Docker checks: 70 passed
+in 4.46s, including the failing-before-fix resource regression. No live data used.
