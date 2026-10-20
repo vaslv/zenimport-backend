@@ -559,3 +559,11 @@ and schema objects. Python independently validates its full graph and unchanged
 financial digest; Chrome now checks the exact original legacy fingerprint without
 executing archived SQL. Focused Docker fixture/graph checks: 55 passed in 3.62s.
 Browser L4 still needs its remaining financial and lifecycle gates.
+
+### Shared create-once history negatives (L4)
+
+Added ten independent Python rejections for the same fixed synthetic journal:
+missing/mismatched attempt, missing/wrong authorization, wrong payload identity,
+active delivery and lost/contradictory terminal evidence. Focused Docker module:
+13 tests passed in 0.71s. Browser validation remains read-only and incomplete;
+these tests do not grant sending or migration authority.

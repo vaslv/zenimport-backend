@@ -47,3 +47,23 @@ def test_shared_populated_foreign_keys_cannot_lose_their_parent(tmp_path):
             with pytest.raises(codec.PortableError):graph.validate_stage(stage(tmp_path,rows))
             tested+=1
     assert tested>=30
+
+
+@pytest.mark.parametrize('problem',['missing_attempt','different_payload','missing_authorization','wrong_job',
+    'authorization_job','attempt_id','delivery_id','attempting','terminal','missing_terminal'])
+def test_shared_fixture_rejects_broken_create_once_history(tmp_path,problem):
+    rows=decoded()
+    def offset(table,column):return codec.TABLES[table]['columns'].index(column)
+    if problem=='missing_attempt':rows['delivery_attempts']=[]
+    if problem=='different_payload':
+        for row in rows['delivery_attempts']:row[offset('delivery_attempts','payload')]+=' '
+    if problem=='missing_authorization':rows['delivery_authorizations']=[]
+    if problem=='wrong_job':
+        for row in rows['deliveries']:row[offset('deliveries','authorized_job_id')]='wrong-job'
+    if problem=='authorization_job':rows['delivery_authorizations'][0][offset('delivery_authorizations','job_id')]='wrong-job'
+    if problem=='attempt_id':rows['delivery_attempts'][0][offset('delivery_attempts','payload')]='{"id":"another-uuid"}'
+    if problem=='delivery_id':rows['deliveries'][0][offset('deliveries','payload')]='{"id":"another-uuid"}'
+    if problem=='attempting':rows['deliveries'][0][offset('deliveries','state')]='attempting'
+    if problem=='terminal':rows['bank_processing'][0][offset('bank_processing','state')]='pending'
+    if problem=='missing_terminal':rows['processing_receipts']=[];rows['link_bank_members']=[]
+    with pytest.raises(codec.PortableError):graph.validate_stage(stage(tmp_path,rows))
