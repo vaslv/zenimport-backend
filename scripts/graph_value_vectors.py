@@ -45,6 +45,12 @@ def generate():
     for raw in ['{"duplicate":1,"duplicate":1}','{"bad":','{"text":"\\ud800"}']:
         expected=observed(lambda: graph.inspect_json(raw) and None);expected.pop('value',None)
         screening.append(dict(raw=raw,expected=expected))
+    nested=['['*129+'{"token":"synthetic"}'+']'*129,'{"text":"\\ud800"}','{"\\ud800":"value"}',
+        '{"duplicate":1,"duplicate":1}']
+    boundaries=['['*128+'0'+']'*128,'['*129+'0'+']'*129,'['*129+']'*129,'['*130+']'*130]
+    for raw in [*(json.dumps({'nested':value}) for value in nested),*boundaries]:
+        expected=observed(lambda: graph.inspect_json(raw) and None);expected.pop('value',None)
+        screening.append(dict(raw=raw,expected=expected))
     provenance=dict(archive_id=LINEAGE,archive_sha256='a'*64,dataset_digest='b'*64,
         export_session_id='00000000-0000-4000-8000-000000000002',accepted_at='1792540800')
     metadata=[]

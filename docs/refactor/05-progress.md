@@ -609,3 +609,12 @@ A separate 256 MiB isolated child reproduced MemoryError when the decoder's
 bound before extending dictionary/list children. Oversized input returns the
 existing json_budget_exceeded error. Focused offline Docker checks: 70 passed
 in 4.46s, including the failing-before-fix resource regression. No live data used.
+
+### Nested JSON screening boundary observations (L4)
+
+Added eight actual Python expectations for nested surrogate text, decoded
+duplicate keys and exact depth boundaries. Chrome now distinguishes an ordinary
+syntax failure from fatal Unicode/resource decoder rejection when screening
+nested JSON text. All shared artifacts are repinned to that source commit.
+Focused offline Docker screening/resource/graph checks: 56 passed in 5.24s.
+No production credentials, financial writes or publication were involved.
