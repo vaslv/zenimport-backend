@@ -520,3 +520,13 @@ Docker: 553 tests passed, HTTP/auth, SIGKILL recovery, graceful shutdown and res
 snapshot delivery passed; latest focused source refinement passed all 553 unit
 tests again. No live API access, production database use, deployment, push, tags
 or publication occurred. Next: L3 portable server migration and participant gates.
+
+## 2026-10-20 — L3.1 format primitives (L3 remains in progress)
+
+Added a private streaming format-2 codec and a canonical runtime definition, with
+typed rows, all 49 table descriptors, strict UTF-8 key ordering, digest rules,
+resource budgets and ZIP/CRC defenses. The golden format fixture is independently
+checked in Python/Node and explicitly grants no activation authority. Existing
+format-1 endpoints are unchanged; no new endpoint is exposed. Financial graph,
+owner/credential screening, durable participants and protected handoff remain.
+See docs/portable-format-v2.md. No production data/services or live API access.

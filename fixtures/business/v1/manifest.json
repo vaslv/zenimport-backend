@@ -5,6 +5,8 @@
     "arithmetic-vectors.json": "f6a0e50c9a21ff51dd16f91796e68e1a10894375f20dfaf159324158e7bb6ed8",
     "baseline.json": "106e52419f893d3ae9cd3fc584383ba8b333916a27db251b2404000cc9c296b0",
     "http-routes-v1.json": "8a4678bf069b6593589586d0bfde2f9337c1d10c59015968a9e934efb658143b",
+    "portable-format-v2.json": "8111c4d4f9685c0a43c359ae144bf158eeea7481853a29053a3efa8f51560291",
+    "portable-golden-v2.json": "4766f98245a15542baf17cc7bca4e6f4d1e537f84811e537408c60a4fb682aca",
     "portable-policy.json": "cd3962827b80ca1824feb14d5d4ca54271bd94881d3cbcd0b2739ea8c3448eb0",
     "portable-v2.schema.json": "c179bef03c0591a8b9f026ef44934731269426d704123815ef64b672e64514b2",
     "rules.json": "c443990d3cc7ccd73c12c30c6bef106bc2b4c6cb7c7dab626492542ed974234b",

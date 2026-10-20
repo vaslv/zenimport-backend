@@ -1,0 +1,14 @@
+{
+  "required_features": [
+    "create-once-journal",
+    "permanent-tombstones",
+    "target-side-receipts"
+  ],
+  "integer_min": "-9223372036854775808",
+  "integer_max": "9223372036854775807",
+  "manifest_timestamp": "UTC RFC3339 with Z and up to six fractional digits",
+  "manifest_duplicate_keys": "reject",
+  "row_encoding": "compact UTF-8 JSON plus LF; exact re-encoding required",
+  "row_order": "strict primary-key order; integers numeric and text UTF-8 bytes",
+  "graph_validation": "required separately before import or activation; format validity alone grants no authority"
+}

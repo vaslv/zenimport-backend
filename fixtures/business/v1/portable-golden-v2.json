@@ -1,0 +1,850 @@
+{
+  "format_only": true,
+  "activation_permitted": false,
+  "description": "Serialization fixture only; deliberately missing financial provenance and foreign keys",
+  "dataset_id": "00000000-0000-4000-8000-000000000001",
+  "owner_ids": [
+    "9007199254740993"
+  ],
+  "rows": {
+    "account_bindings": [],
+    "bank_accounts": [],
+    "bank_aliases": [],
+    "bank_exclusions": [],
+    "bank_processing": [],
+    "bank_transactions": [],
+    "bank_versions": [],
+    "capture_errors": [],
+    "capture_intervals": [],
+    "capture_jobs": [],
+    "capture_pages": [],
+    "captured_records": [],
+    "category_choices": [],
+    "category_evidence": [],
+    "category_payments": [],
+    "category_predictions": [],
+    "connection_accounts": [],
+    "connection_discovery": [],
+    "connection_labels": [],
+    "connections": [],
+    "coverage": [],
+    "dataset_metadata": [
+      [
+        [
+          "text",
+          "instance_id"
+        ],
+        [
+          "text",
+          "00000000-0000-4000-8000-000000000001"
+        ]
+      ],
+      [
+        [
+          "text",
+          "sync_ever_started"
+        ],
+        [
+          "text",
+          "1"
+        ]
+      ]
+    ],
+    "deliveries": [],
+    "delivery_attempts": [],
+    "delivery_authorizations": [],
+    "delivery_schedule": [],
+    "job_accounts": [],
+    "job_context": [],
+    "job_requests": [],
+    "legacy_imports": [],
+    "legacy_objects": [],
+    "legacy_rows": [],
+    "link_bank_members": [],
+    "link_groups": [],
+    "link_zen_members": [],
+    "processing_receipts": [],
+    "processing_targets": [],
+    "recipient_rules": [],
+    "reimport_ranges": [],
+    "source_capture_leases": [],
+    "source_schema_migrations": [
+      [
+        [
+          "integer",
+          "2"
+        ],
+        [
+          "integer",
+          "9007199254740993"
+        ],
+        [
+          "null"
+        ]
+      ],
+      [
+        [
+          "integer",
+          "10"
+        ],
+        [
+          "integer",
+          "9007199254740994"
+        ],
+        [
+          "null"
+        ]
+      ]
+    ],
+    "zen_deletions": [],
+    "zen_entities": [
+      [
+        [
+          "text",
+          "user"
+        ],
+        [
+          "text",
+          "9007199254740993"
+        ],
+        [
+          "text",
+          "{\"id\":9007199254740993,\"exact\":1.00000000000000000001,\"note\":\"café\"}"
+        ],
+        [
+          "null"
+        ],
+        [
+          "integer",
+          "0"
+        ],
+        [
+          "text",
+          "run"
+        ]
+      ]
+    ],
+    "zen_exclusions": [],
+    "zen_mirror_state": [],
+    "zen_movements": [],
+    "zen_sync_runs": [],
+    "zen_tags": [],
+    "zen_tombstones": []
+  },
+  "expected_tables": [
+    {
+      "name": "account_bindings",
+      "filename": "tables/account_bindings.ndjson",
+      "columns": [
+        "id",
+        "account_id",
+        "zenmoney_account_id",
+        "settings_version",
+        "origin",
+        "created_at"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "bank_accounts",
+      "filename": "tables/bank_accounts.ndjson",
+      "columns": [
+        "id",
+        "bank",
+        "identity_scope",
+        "profile_key",
+        "source_key",
+        "currency",
+        "scale",
+        "label",
+        "masked_number",
+        "supported",
+        "unsupported_reason",
+        "selection",
+        "zenmoney_account_id",
+        "import_start",
+        "settings_version",
+        "last_complete_end"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "bank_aliases",
+      "filename": "tables/bank_aliases.ndjson",
+      "columns": [
+        "account_id",
+        "external_id",
+        "identity_version",
+        "bank_id"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "bank_exclusions",
+      "filename": "tables/bank_exclusions.ndjson",
+      "columns": [
+        "bank_id",
+        "reason",
+        "created_at"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "bank_processing",
+      "filename": "tables/bank_processing.ndjson",
+      "columns": [
+        "bank_id",
+        "state",
+        "reason",
+        "updated_at"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "bank_transactions",
+      "filename": "tables/bank_transactions.ndjson",
+      "columns": [
+        "id",
+        "account_id",
+        "external_id",
+        "identity_kind",
+        "identity_version",
+        "local_date",
+        "occurred_at",
+        "direction",
+        "amount",
+        "currency",
+        "description",
+        "beneficiary_account",
+        "beneficiary_name",
+        "raw_json",
+        "revision"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "bank_versions",
+      "filename": "tables/bank_versions.ndjson",
+      "columns": [
+        "bank_id",
+        "revision",
+        "data_json",
+        "raw_json",
+        "observed_at",
+        "parser_version"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "capture_errors",
+      "filename": "tables/capture_errors.ndjson",
+      "columns": [
+        "id",
+        "job_id",
+        "account_id",
+        "code",
+        "retryable",
+        "resolved",
+        "created_at"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "capture_intervals",
+      "filename": "tables/capture_intervals.ndjson",
+      "columns": [
+        "id",
+        "job_id",
+        "account_id",
+        "settings_version",
+        "start_date",
+        "end_date",
+        "state",
+        "total_pages",
+        "total_records"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "capture_jobs",
+      "filename": "tables/capture_jobs.ndjson",
+      "columns": [
+        "id",
+        "connection_id",
+        "request_id",
+        "request_json",
+        "end_date",
+        "capture_state",
+        "delivery_state",
+        "worker_id",
+        "lease_epoch",
+        "lease_expires_at",
+        "created_at"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "capture_pages",
+      "filename": "tables/capture_pages.ndjson",
+      "columns": [
+        "interval_id",
+        "page_number",
+        "digest",
+        "records_count",
+        "payload_json"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "captured_records",
+      "filename": "tables/captured_records.ndjson",
+      "columns": [
+        "interval_id",
+        "page_number",
+        "bank_id",
+        "revision"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "category_choices",
+      "filename": "tables/category_choices.ndjson",
+      "columns": [
+        "bank_id",
+        "category_id",
+        "source",
+        "updated_at"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "category_evidence",
+      "filename": "tables/category_evidence.ndjson",
+      "columns": [
+        "bank_id",
+        "zen_id",
+        "category_id",
+        "direction",
+        "origin",
+        "eligible"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "category_payments",
+      "filename": "tables/category_payments.ndjson",
+      "columns": [
+        "bank_id",
+        "category_id",
+        "reason",
+        "eligible",
+        "zen_ids_json"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "category_predictions",
+      "filename": "tables/category_predictions.ndjson",
+      "columns": [
+        "bank_id",
+        "bank_revision",
+        "category_id",
+        "source",
+        "reason",
+        "candidates_json",
+        "mirror_generation",
+        "updated_at"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "connection_accounts",
+      "filename": "tables/connection_accounts.ndjson",
+      "columns": [
+        "connection_id",
+        "account_id"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "connection_discovery",
+      "filename": "tables/connection_discovery.ndjson",
+      "columns": [
+        "connection_id",
+        "account_id",
+        "present",
+        "supported",
+        "unsupported_reason",
+        "label",
+        "masked_number"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "connection_labels",
+      "filename": "tables/connection_labels.ndjson",
+      "columns": [
+        "connection_id",
+        "label"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "connections",
+      "filename": "tables/connections.ndjson",
+      "columns": [
+        "id",
+        "bank",
+        "profile_key",
+        "profile_identity",
+        "connector_version",
+        "timezone",
+        "capabilities_json",
+        "accounts_complete"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "coverage",
+      "filename": "tables/coverage.ndjson",
+      "columns": [
+        "account_id",
+        "start_date",
+        "end_date",
+        "interval_id"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "dataset_metadata",
+      "filename": "tables/dataset_metadata.ndjson",
+      "columns": [
+        "key",
+        "value"
+      ],
+      "rows": 2,
+      "bytes": 117,
+      "sha256": "169431f6a8874fe92a9ddbf55cd2f84ae14e2744c384bb7c953a2d80ab6f7471"
+    },
+    {
+      "name": "deliveries",
+      "filename": "tables/deliveries.ndjson",
+      "columns": [
+        "bank_id",
+        "zen_id",
+        "payload",
+        "state",
+        "ever_attempted",
+        "origin",
+        "authorized_job_id",
+        "updated_at",
+        "needs_rebuild"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "delivery_attempts",
+      "filename": "tables/delivery_attempts.ndjson",
+      "columns": [
+        "id",
+        "bank_id",
+        "zen_id",
+        "at",
+        "outcome",
+        "payload"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "delivery_authorizations",
+      "filename": "tables/delivery_authorizations.ndjson",
+      "columns": [
+        "bank_id",
+        "revision",
+        "job_id",
+        "interval_id",
+        "settings_version",
+        "target_id",
+        "source_hash",
+        "authorized_at"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "delivery_schedule",
+      "filename": "tables/delivery_schedule.ndjson",
+      "columns": [
+        "id",
+        "next_run_at",
+        "failures"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "job_accounts",
+      "filename": "tables/job_accounts.ndjson",
+      "columns": [
+        "job_id",
+        "account_id",
+        "settings_version",
+        "target_id",
+        "import_start",
+        "authorized_start"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "job_context",
+      "filename": "tables/job_context.ndjson",
+      "columns": [
+        "job_id",
+        "connector_version",
+        "timezone",
+        "capabilities_json"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "job_requests",
+      "filename": "tables/job_requests.ndjson",
+      "columns": [
+        "request_id",
+        "job_id",
+        "request_json"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "legacy_imports",
+      "filename": "tables/legacy_imports.ndjson",
+      "columns": [
+        "digest",
+        "imported_at",
+        "source_version",
+        "manifest_json",
+        "report_json"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "legacy_objects",
+      "filename": "tables/legacy_objects.ndjson",
+      "columns": [
+        "source_digest",
+        "type",
+        "name",
+        "table_name",
+        "sql",
+        "columns_json"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "legacy_rows",
+      "filename": "tables/legacy_rows.ndjson",
+      "columns": [
+        "source_digest",
+        "table_name",
+        "ordinal",
+        "values_json"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "link_bank_members",
+      "filename": "tables/link_bank_members.ndjson",
+      "columns": [
+        "group_id",
+        "bank_id"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "link_groups",
+      "filename": "tables/link_groups.ndjson",
+      "columns": [
+        "id",
+        "kind",
+        "account_id",
+        "created_at",
+        "origin"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "link_zen_members",
+      "filename": "tables/link_zen_members.ndjson",
+      "columns": [
+        "group_id",
+        "zen_id"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "processing_receipts",
+      "filename": "tables/processing_receipts.ndjson",
+      "columns": [
+        "bank_id",
+        "zen_id",
+        "origin",
+        "at"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "processing_targets",
+      "filename": "tables/processing_targets.ndjson",
+      "columns": [
+        "bank_id",
+        "zen_id",
+        "target_id",
+        "origin",
+        "at"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "recipient_rules",
+      "filename": "tables/recipient_rules.ndjson",
+      "columns": [
+        "bank",
+        "name",
+        "direction",
+        "category_id",
+        "updated_at"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "reimport_ranges",
+      "filename": "tables/reimport_ranges.ndjson",
+      "columns": [
+        "id",
+        "account_id",
+        "settings_version",
+        "source_job_id",
+        "remaining_json"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "source_capture_leases",
+      "filename": "tables/source_capture_leases.ndjson",
+      "columns": [
+        "account_id",
+        "job_id"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "source_schema_migrations",
+      "filename": "tables/source_schema_migrations.ndjson",
+      "columns": [
+        "version",
+        "applied_at",
+        "backup_path"
+      ],
+      "rows": 2,
+      "bytes": 117,
+      "sha256": "744cbd6a68c7a35c69f3e1b97c14fb500f0dd02cd0a406eb7a0a194159e47396"
+    },
+    {
+      "name": "zen_deletions",
+      "filename": "tables/zen_deletions.ndjson",
+      "columns": [
+        "id",
+        "run_id",
+        "kind",
+        "entity_id",
+        "data"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "zen_entities",
+      "filename": "tables/zen_entities.ndjson",
+      "columns": [
+        "kind",
+        "id",
+        "data",
+        "changed",
+        "deleted",
+        "run_id"
+      ],
+      "rows": 1,
+      "bytes": 175,
+      "sha256": "a28815daf26aeaa258b5b8e53dbe12292a552d431c9fd1b5bc8fb7e26e9f88f4"
+    },
+    {
+      "name": "zen_exclusions",
+      "filename": "tables/zen_exclusions.ndjson",
+      "columns": [
+        "zen_id",
+        "created_at"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "zen_mirror_state",
+      "filename": "tables/zen_mirror_state.ndjson",
+      "columns": [
+        "id",
+        "source_hash",
+        "cursor",
+        "generation",
+        "needs_full",
+        "ready",
+        "refreshed_at",
+        "error_code"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "zen_movements",
+      "filename": "tables/zen_movements.ndjson",
+      "columns": [
+        "kind",
+        "id",
+        "date",
+        "income_account",
+        "outcome_account",
+        "income_instrument",
+        "outcome_instrument",
+        "income",
+        "outcome",
+        "viewed",
+        "hold"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "zen_sync_runs",
+      "filename": "tables/zen_sync_runs.ndjson",
+      "columns": [
+        "id",
+        "received_at",
+        "requested_cursor",
+        "response_cursor",
+        "origin",
+        "payload"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "zen_tags",
+      "filename": "tables/zen_tags.ndjson",
+      "columns": [
+        "kind",
+        "entity_id",
+        "tag_id",
+        "position"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "zen_tombstones",
+      "filename": "tables/zen_tombstones.ndjson",
+      "columns": [
+        "kind",
+        "entity_id",
+        "reason",
+        "data"
+      ],
+      "rows": 0,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "expected_digest": "a75f7bfe06e22fa83ff1aa717ec152e9594088fc13be9574d46fe4397a37cb14",
+  "row_values": "portable-v2 typed scalars; never parse financial integers through JSON Number"
+}
