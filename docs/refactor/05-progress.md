@@ -551,3 +551,11 @@ not the earlier deliberately invalid format golden. Missing-parent mutations of
 all 33 populated FK cohorts are rejected. Focused Docker verification: 54 fixture
 and graph tests passed in 3.13s. Chrome ce41164 implements only its read-only
 relational subset so far; no financial activation or complete L4 claim is made.
+
+### Stock legacy fixture parity checkpoint
+
+Pinned the complete synthetic stock legacy conversion, including archived raw rows
+and schema objects. Python independently validates its full graph and unchanged
+financial digest; Chrome now checks the exact original legacy fingerprint without
+executing archived SQL. Focused Docker fixture/graph checks: 55 passed in 3.62s.
+Browser L4 still needs its remaining financial and lifecycle gates.

@@ -15,18 +15,21 @@ def decoded():
     return {name:[[codec.unscalar(cell) for cell in row] for row in values] for name,values in FIXTURE['rows'].items()}
 
 
-def stage(tmp_path,rows):
+def stage(tmp_path,rows,fixture=FIXTURE):
     archive=tmp_path/(str(uuid4())+'.zip')
-    codec.create_archive(archive,rows,dataset_id=FIXTURE['dataset_id'],owners=FIXTURE['owner_ids'],
+    codec.create_archive(archive,rows,dataset_id=fixture['dataset_id'],owners=fixture['owner_ids'],
         session_id=str(uuid4()),archive_id=str(uuid4()),created_at='2026-10-20T00:00:00Z',version='financial-fixture')
     return codec.read_archive(archive,tmp_path/str(uuid4()))
 
 
-def test_shared_financial_fixture_has_independent_complete_python_graph_proof(tmp_path):
-    data=stage(tmp_path,decoded())
-    assert data.manifest['dataset_digest']==FIXTURE['expected_digest']
-    result=graph.validate_stage(data,expected_owners=FIXTURE['owner_ids'])
-    assert dict(result.counts)=={name:len(rows) for name,rows in FIXTURE['rows'].items()}
+@pytest.mark.parametrize('name',['portable-financial-v2','portable-legacy-v2'])
+def test_shared_financial_fixture_has_independent_complete_python_graph_proof(tmp_path,name):
+    fixture=json.loads(Path('fixtures/business/v1',name+'.json').read_text())
+    rows={name:[[codec.unscalar(cell) for cell in row] for row in values] for name,values in fixture['rows'].items()}
+    data=stage(tmp_path,rows,fixture)
+    assert data.manifest['dataset_digest']==fixture['expected_digest']
+    result=graph.validate_stage(data,expected_owners=fixture['owner_ids'])
+    assert dict(result.counts)=={name:len(rows) for name,rows in fixture['rows'].items()}
 
 
 def test_shared_populated_foreign_keys_cannot_lose_their_parent(tmp_path):
