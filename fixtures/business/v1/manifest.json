@@ -29,6 +29,7 @@
     "unicode15.json": "edd824a306bde912bf896f706d44bc4a004202786f8b12c4f1b9e7bc4f7f9da7",
     "wire-examples-v1.json": "d6319a38bad15ded1f8c783cc40ae7261ee4a445bf8b7543b78a28dca8c18140",
     "wire-v1.json": "ecb8530bedb19bef497149050677882383308ddc20691e50ee104eadf66c2dec",
-    "portable-http-v2.json": "b9be61751532d6e2665a461e20eea1eceae3a6030a909b65ce5251fce7c93158"
+    "portable-http-v2.json": "b9be61751532d6e2665a461e20eea1eceae3a6030a909b65ce5251fce7c93158",
+    "sqlite-check-vectors.json": "1058e448c55d1c7e4c044a5ab5835f3e5f4b1c9c5a6491de3db284117b5cab27"
   }
 }

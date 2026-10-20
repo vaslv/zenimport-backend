@@ -51,6 +51,7 @@ COPY tests ./tests
 COPY scripts/migration_lab.py scripts/migration_history.py scripts/migration_replay.py ./scripts/
 COPY scripts/update_sdk.py ./scripts/update_sdk.py
 COPY scripts/build_portable_contract.py ./scripts/build_portable_contract.py
+COPY scripts/storage_check_vectors.py ./scripts/storage_check_vectors.py
 COPY fixtures/sync-v1 ./fixtures/sync-v1
 COPY fixtures/legacy-v12 ./fixtures/legacy-v12
 COPY fixtures/business ./fixtures/business
