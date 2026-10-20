@@ -58,7 +58,8 @@ def generate():
         '9223372036854775807','9223372036854775808','demo','live','[]','["a","b"]','["same","same"]',
         json.dumps(['😀'*240]),json.dumps(['😀'*241]),json.dumps(dict(account=['a'],tag=['b'],instrument=['2'])),
         json.dumps([provenance]),json.dumps([provenance,provenance]),
-        json.dumps([provenance|{'accepted_at':'01'}]),'Bearer ABCDEFGHIJKL']
+        json.dumps([provenance|{'accepted_at':'01'}]),'Bearer ABCDEFGHIJKL',
+        '1\n','1\r','a'*64+'\n',LINEAGE+'\n',json.dumps([provenance|{'archive_sha256':'a'*64+'\n'}])]
     for key in [*graph.META,'unknown','legacy:unknown','api_token']:
         for value in candidates:
             expected=observed(lambda: graph.metadata_value(key,value,LINEAGE));expected.pop('value',None)

@@ -618,3 +618,11 @@ syntax failure from fatal Unicode/resource decoder rejection when screening
 nested JSON text. All shared artifacts are repinned to that source commit.
 Focused offline Docker screening/resource/graph checks: 56 passed in 5.24s.
 No production credentials, financial writes or publication were involved.
+
+### Shared line-terminator lexical coverage
+
+Expanded actual SQLite/Python vectors for trailing line separators in financial
+scalars, identifiers and audit metadata. Existing browser validators already
+matched the reference; no runtime correction was needed. The shared suite now
+contains 2,642 SQLite CHECK outcomes and 1,132 value observations. Two focused
+Docker regeneration tests passed in 0.21s. Contracts are repinned locally.
