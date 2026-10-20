@@ -44,3 +44,11 @@ reference implementation determines the expectations. The regenerated vectors
 and pinned source commit are checked in Docker. Focused reference/portable-codec
 validation passed 46 tests; the Chrome gate passed 96 unit and 24 native cases in
 each of Chromium 145 and Chrome 140. No production database or live API is used.
+
+The browser format codec now exchanges the deliberately format-only golden ZIP
+with the Python codec through `sh ../ZenImportChrome/scripts/test-portable-interop.sh .`.
+Both directions compare all 49 tagged tables, original raw JSON, exact large
+integers, dataset digest and the reproducibly packaged contract revision. This
+runner does not validate or install a financial graph and grants no activation
+rights. Test containers are network-disabled, read-only and limited to 3 GiB;
+their only writable source-independent mount is a fresh private temporary folder.
