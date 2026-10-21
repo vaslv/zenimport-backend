@@ -65,6 +65,9 @@ def test_http_transfer_keeps_null_receipt_fields_and_authenticates_every_endpoin
         assert replay.status_code==202 and replay.json()['receipt']['state']=='activated'
         final=target.client.get(BASE+'/switches/'+switch).json()
         assert final['state']=='active' and final['awaiting_sync']
+        imported=target.client.get(BASE+'/capabilities').json()
+        assert imported['installation_id']==cap.json()['installation_id'] and imported['dataset_id']==seal['dataset_id']
+        assert imported['dataset_id']!=cap.json()['dataset_id']
         assert isinstance(final['operation']['validated'],bool)
         with storage.transaction(target.path,read_only=True) as db:
             participant.verify_receipt(moved['receipt'],command='source_handoff',current=participant.installation(db))
@@ -107,6 +110,9 @@ def test_fresh_identity_read_preserves_financial_state_and_hold(source,tmp_path)
     response=source.client.post(BASE+'/identity',json={})
     assert response.status_code==200,response.text
     identity=response.json();assert identity['owner_ids']==['1'] and identity['checked_at'].isdigit()
+    with storage.transaction(source.path,read_only=True) as db:
+        assert identity['dataset_id']==db.execute("SELECT value FROM service_meta WHERE key='instance_id'").fetchone()[0]
+    assert identity['dataset_id']==source.client.get(BASE+'/capabilities').json()['dataset_id']
     assert len(source.remote.reads)==before_reads+1 and response.headers['cache-control']=='no-store'
     with storage.transaction(source.path,read_only=True) as db:
         assert tuple(db.execute('SELECT cursor,generation,refreshed_at FROM zen_mirror_state').fetchone())==before

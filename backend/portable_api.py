@@ -68,6 +68,7 @@ class ParticipantStatus(WireModel):
 
 
 class Capabilities(ParticipantStatus):
+    dataset_id:UUID
     protocol_version:Literal['2']
     archive_version:Literal['2']
     financial_schema_version:Literal['1']

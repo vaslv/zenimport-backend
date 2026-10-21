@@ -787,3 +787,16 @@ foreign-client cancellation gates passed with zero financial writes, including
 server capture stopping and native quota rollback. Logs:
 /tmp/zenimport-l10-quiesce-backend-*.log and /tmp/zenimport-l10-controller-*.log.
 No production service/data/API, push, Git tags or publication.
+
+### Local mode L10 — separate physical and financial identity
+
+Portable capabilities and authenticated fresh identity expose dataset_id separately
+from installation_id. Import preserves physical installation identity while the
+financial dataset follows the validated source archive. Chrome shared HTTP contract
+is pinned to 4c30e917ce25a7be4c843ba9e3f54c6c76050ffd; no financial schema changes.
+
+Isolated Docker: all 770 backend tests passed in 42.35s (three existing warnings),
+plus HTTP/auth/SIGKILL/graceful-restart/restored-database gates. Chrome production
+controller HTTP gate: 18 passed; minimum Chrome 140 lineage gate: five passed.
+Independent API/adversarial reviews are clean. Synthetic data only, production
+services untouched. No push, Git tags or publication.

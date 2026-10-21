@@ -595,6 +595,11 @@
           ],
           "title": "Legacy Hold"
         },
+        "dataset_id": {
+          "format": "uuid",
+          "title": "Dataset Id",
+          "type": "string"
+        },
         "protocol_version": {
           "const": "2",
           "title": "Protocol Version",
@@ -632,6 +637,7 @@
         "operation_id",
         "awaiting_sync",
         "legacy_hold",
+        "dataset_id",
         "protocol_version",
         "archive_version",
         "financial_schema_version",
@@ -698,6 +704,11 @@
           ],
           "title": "Legacy Hold"
         },
+        "dataset_id": {
+          "format": "uuid",
+          "title": "Dataset Id",
+          "type": "string"
+        },
         "protocol_version": {
           "const": "2",
           "title": "Protocol Version",
@@ -749,6 +760,7 @@
         "operation_id",
         "awaiting_sync",
         "legacy_hold",
+        "dataset_id",
         "protocol_version",
         "archive_version",
         "financial_schema_version",

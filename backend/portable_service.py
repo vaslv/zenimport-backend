@@ -50,7 +50,8 @@ class PortableMigration:
             legacy=meta(db,'migration_hold')
             eligible=not started(db) and not meta(db,'migration_import_sha256') and not legacy and current['state']=='active'
             eligible=eligible and not participant.installation(db)['ever_activated'] and not current['awaiting_sync']
-            return dict(protocol_version='2',archive_version='2',financial_schema_version='1',
+            dataset=participant.uuid(meta(db,'instance_id'))
+            return dict(dataset_id=dataset,protocol_version='2',archive_version='2',financial_schema_version='1',
                 chunk_bytes='262144',max_archive_bytes=str(participant.LIMIT),can_import=bool(eligible),legacy_hold=legacy,**current)
 
     def identity(self):
