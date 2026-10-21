@@ -60,7 +60,8 @@ def capabilities(connection):
         value = Capabilities.model_validate_json(connection['capabilities_json'])
     except ValueError:
         fail('capture_context_changed')
-    if connection['bank'] not in {'vietinbank', 'bidv'} or value.timezone != 'Asia/Ho_Chi_Minh' or value.details == 'unavailable':
+    if (connection['bank'] not in {'vietinbank', 'bidv'} or value.timezone != 'Asia/Ho_Chi_Minh'
+            or value.details == 'unavailable' or connection['connector_version'] == 'legacy-v12'):
         fail('capture_context_changed')
     return value.model_dump(mode='json')
 
@@ -73,6 +74,8 @@ BIDV_DETAIL_FIELDS = frozenset('transactionDate referenceNumber transactionRemar
 def validate_discovery(data):
     if data.bank not in {'vietinbank', 'bidv'}:
         fail('unsupported_bank', 422)
+    if data.connector_version == 'legacy-v12':
+        fail('validation_error', 422)
     if data.capabilities.timezone != 'Asia/Ho_Chi_Minh' or data.capabilities.details == 'unavailable':
         fail('validation_error', 422)
     if data.bank == 'bidv' and (data.capabilities.currencies != ['VND'] or data.capabilities.details != 'included'
@@ -86,6 +89,9 @@ def validate_discovery(data):
 
 
 def validate_record(record, account, context, start, end):
+    if (record.identity_version == 'legacy-v12' or
+            ('connector_version' in context.keys() and context['connector_version'] == 'legacy-v12')):
+        fail('validation_error', 422)
     if record.currency != account['currency'] or len(record.amount.partition('.')[2]) > account['scale']:
         fail('unsupported_currency', 422)
     if not start <= record.local_date.isoformat() <= end or record.occurred_at.astimezone(ZoneInfo(context['timezone'])).date() != record.local_date:

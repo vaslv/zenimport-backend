@@ -16,6 +16,8 @@ def add_alias(db, account_id, bank_id, external_id, identity_version):
 
 
 def save_record(db, account_id, record: BankRecord, *, parser_version: str, timezone: str):
+    if record.identity_version == 'legacy-v12' or parser_version == 'legacy-v12':
+        raise ValueError('Legacy markers are reserved for verified archive import')
     account = db.execute('SELECT currency,scale FROM bank_accounts WHERE id=?', (account_id,)).fetchone()
     if not account or account['currency'] != record.currency:
         raise ValueError('Record does not belong to the account currency')

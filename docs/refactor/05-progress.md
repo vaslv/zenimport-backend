@@ -718,3 +718,16 @@ or publication were used.
 - This is compatibility support for the extension's in-progress L6, not local-mode
   product readiness. Production services/data and real API accounts were untouched.
   No push, tags or publication.
+
+# Local-mode L7 capture interoperability correction — 2026-10-21
+
+- Reserved `legacy-v12` for verified legacy archive imports. Live discovery,
+  incoming bank records and the direct record writer reject that marker before
+  any write; valid history remains exportable. Existing verified legacy imports
+  keep their separate path and portable format unchanged.
+- Independent capture review found the defect while checking the browser port
+  against Python. Both implementations receive the same regression guard.
+- Full isolated Docker gate: 766 passed in 32.25s, including four new synthetic
+  regressions; HTTP/auth and writer lifecycle checks also completed. Existing
+  dependency/ZIP fixture warnings remain. Log: /tmp/zenimport-l7-backend-full.log.
+- No production data/services, real API calls, push, tags or publication.
