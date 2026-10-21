@@ -915,3 +915,13 @@ Independent API focused reread: no findings. Docker HTTP/bootstrap/migration gat
 76 passed in 20.51s (two existing warnings), including namespaced routing, changed
 physical/dataset identity and conflicting headers. Log:
 /tmp/zenimport-l11-context-namespace.log. No live API/data, push, tags or publication.
+
+### Local-mode L11 review correction — preserve the frozen portable task schema
+
+The new ordinary selected-context error `stale_context` had leaked through the
+shared ErrorCode alias into portable Task/Status/CommandResult schemas. Portable
+background tasks do not emit an ordinary request-boundary context failure. Their
+error literal is now explicitly frozen to the existing protocol-2 contract;
+original shared fixture bytes are unchanged. Docker schema/negative-boundary
+checks: two passed, 13 deselected (0.44s). Full verification is recorded with the
+following archive-withdrawal checkpoint. No production data or publication.

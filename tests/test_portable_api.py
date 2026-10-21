@@ -161,3 +161,9 @@ def test_quiesce_stops_one_capture_without_completing_history_or_financial_write
         command(h,'source_start',str(uuid4()),peer_id=str(uuid4()))
         assert h.client.post(BASE+'/quiesce',json=body).status_code==409
     finally:h.close()
+
+
+def test_ordinary_context_fence_error_does_not_expand_frozen_task_results():
+    from pydantic import ValidationError
+    from backend.portable_api import Task
+    with pytest.raises(ValidationError):Task.model_validate(dict(id=str(uuid4()),switch_id=str(uuid4()),kind='snapshot',state='blocked',error_code='stale_context'))

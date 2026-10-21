@@ -8,7 +8,7 @@ from starlette.responses import Response
 from pydantic import Field
 
 from . import migration_participant as participant
-from .sync_contracts import WireModel,ErrorCode
+from .sync_contracts import WireModel
 
 DecimalText=Annotated[str,Field(strict=True,pattern=r'^(?:0|[1-9][0-9]{0,18})$')]
 Digest=Annotated[str,Field(strict=True,pattern=r'^[0-9a-f]{64}$')]
@@ -35,12 +35,25 @@ class Receipt(WireModel):
     receipt_sha256:Digest
 
 
+# Protocol-2 task schemas stay frozen independently of ordinary API additions.
+TaskErrorCode=Literal[
+    'unauthorized','unsupported_api_version','validation_error','payload_too_large',
+    'bank_login_required','unsupported_bank','unsupported_currency','account_unconfigured',
+    'account_disabled','settings_conflict','account_busy','capture_busy',
+    'lease_expired','idempotency_conflict','history_incomplete','capture_context_changed',
+    'zenmoney_unavailable','zenmoney_account_unavailable','delivery_uncertain','existing_ownership_unknown',
+    'not_found','method_not_allowed','internal_error','migration_busy',
+    'migration_paused','migration_not_empty','migration_invalid','migration_wrong_account',
+    'migration_incomplete',
+]
+
+
 class Task(WireModel):
     id:UUID
     switch_id:UUID
     kind:Literal['snapshot','validate','activate']
     state:Literal['queued','running','blocked','complete']
-    error_code:ErrorCode|None
+    error_code:TaskErrorCode|None
 
 
 class Operation(WireModel):
