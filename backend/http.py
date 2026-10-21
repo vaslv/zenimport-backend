@@ -49,6 +49,21 @@ class ApiBoundary:
                     raise ValueError('Invalid context')
             except (ValueError, UnicodeError):
                 return await reject('validation_error', 'Invalid storage context', 422)
+        if path.startswith('/api/v1/contexts/'):
+            parts = path.split('/', 6)
+            try:
+                if len(parts) != 7 or not parts[6] or parts[6].startswith('migration/'):
+                    raise ValueError('Not an ordinary context route')
+                selected = tuple(parts[4:6])
+                if any(str(UUID(value)) != value for value in selected):
+                    raise ValueError('Invalid context')
+                if expected_context is not None and expected_context != selected:
+                    raise ValueError('Conflicting context')
+            except ValueError:
+                return await reject('validation_error', 'Invalid storage context', 422)
+            expected_context = selected
+            path = '/api/v1/' + parts[6]
+            scope = dict(scope, path=path, raw_path=path.encode('utf-8'))
         parts = path.split('/')
         if len(parts) > 2 and parts[2] and parts[2] != 'v1':
             return await reject('unsupported_api_version', 'Unsupported API version', 404)

@@ -901,3 +901,17 @@ portable/archive controls retain their own explicit CAS protocol.
 Independent API review: no findings. Docker focused HTTP/bootstrap/live/legacy
 migration suite: 74 passed in 20.94s (two existing third-party warnings). Log:
 /tmp/zenimport-l11-context-fence.log. No live accounts, push, tags or publication.
+
+### Local mode L11 correction — make fenced dispatch incompatible with old servers
+
+Bound ordinary clients use /api/v1/contexts/{installation}/{dataset}/... as well as
+paired headers. The boundary checks canonical path IDs/header agreement, then
+forwards only ordinary routes under the same request gate. Legacy migration
+mutators are excluded. An older API1 server has no such route and therefore cannot
+ignore headers and accept an old job after a same-address downgrade/replacement,
+even if a previous capabilities handshake was cached.
+
+Independent API focused reread: no findings. Docker HTTP/bootstrap/migration gate:
+76 passed in 20.51s (two existing warnings), including namespaced routing, changed
+physical/dataset identity and conflicting headers. Log:
+/tmp/zenimport-l11-context-namespace.log. No live API/data, push, tags or publication.

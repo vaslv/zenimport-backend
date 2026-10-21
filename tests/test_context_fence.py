@@ -60,3 +60,21 @@ def test_partial_duplicate_and_malformed_contexts_do_not_reach_handler(fixture,k
     else:headers=[(key,'invalid' if key=='X-ZenImport-Dataset' else value) for key,value in headers]
     result=client.post('/api/v1/fence-fixture',headers=headers)
     assert result.status_code==422 and not calls
+
+
+def test_namespaced_dispatch_matches_the_same_guard_and_legacy_paths_remain_unchanged(fixture):
+    client,_,calls,headers=fixture
+    prefix='/api/v1/contexts/'+headers['X-ZenImport-Installation']+'/'+headers['X-ZenImport-Dataset']
+    assert client.post(prefix+'/fence-fixture',headers=headers).status_code==200
+    assert len(calls)==1
+    wrong='/api/v1/contexts/'+str(uuid4())+'/'+headers['X-ZenImport-Dataset']
+    result=client.post(wrong+'/fence-fixture',headers={'Authorization':headers['Authorization']})
+    assert result.status_code==409 and result.json()['error']['code']=='stale_context' and len(calls)==1
+    assert client.post(wrong+'/fence-fixture',headers=headers).status_code==422 and len(calls)==1
+
+
+def test_namespaced_ordinary_transport_cannot_address_legacy_migration_mutators(fixture):
+    client,_,calls,headers=fixture
+    prefix='/api/v1/contexts/'+headers['X-ZenImport-Installation']+'/'+headers['X-ZenImport-Dataset']
+    assert client.post(prefix+'/migration/resume',headers=headers,json={}).status_code==422
+    assert not calls
