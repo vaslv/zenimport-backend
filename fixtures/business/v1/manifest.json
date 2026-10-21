@@ -7,6 +7,7 @@
     "bank-record-vectors.json": "0adbc010279ce4193ca7b75b3badcd3bbd5c8262175e6e293239eba8dd1fb0e1",
     "baseline.json": "106e52419f893d3ae9cd3fc584383ba8b333916a27db251b2404000cc9c296b0",
     "http-routes-v1.json": "8a4678bf069b6593589586d0bfde2f9337c1d10c59015968a9e934efb658143b",
+    "participant-wire-vectors.json": "b3825fa643c6654a9f0224f383f9632918f115973e56e91fc650c2a0215aca5c",
     "portable-financial-v2.json": "914c785735c65fb272b131b48075906677ef36fb7fcc908ecdc390fd90ba72c2",
     "portable-format-v2.json": "8111c4d4f9685c0a43c359ae144bf158eeea7481853a29053a3efa8f51560291",
     "portable-golden-v2.json": "4766f98245a15542baf17cc7bca4e6f4d1e537f84811e537408c60a4fb682aca",

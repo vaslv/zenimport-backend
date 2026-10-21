@@ -667,3 +667,14 @@ Full isolated Docker gate: 759 tests passed in 38.15s, followed by HTTP/auth,
 fake-SDK dispatch, SIGKILL, graceful stop and snapshot restoration. Browser L4
 authority/export/retirement and independent review remain incomplete. No real API
 calls, production data, push, tags or publication.
+
+### Shared participant receipt wire observations (L4)
+
+Added 435 deterministic observations of the real Python participant receipt
+verifier and 15 canonical-byte outcomes, including exact counters above 2^53,
+null fields, UTF-8 key order, byte/depth boundaries and peer/operation binding.
+The source regenerates the fixture independently; no production data or network
+is involved. Docker vector/participant/HTTP checks: 53 passed in 2.24s. Native
+Chrome 140 and Chromium 145 each passed every observation; browser unit checks
+total 164. This adds test data only, not new backend authority or runtime logic.
+The browser participant and protected activation remain unfinished L4 work.
