@@ -253,4 +253,4 @@ def test_original_source_schema_audit_is_not_replaced_by_destination_runtime(tmp
         lineage=db.execute("SELECT value FROM service_meta WHERE key='instance_id'").fetchone()[0]
         rows,_=source_tables(db,lineage)
         assert list(rows['source_schema_migrations'])==[[7,9007199254740993,None]]
-        assert db.execute('SELECT max(version) FROM schema_migrations').fetchone()[0]==8
+        assert db.execute('SELECT max(version) FROM schema_migrations').fetchone()[0]==storage.SCHEMA_VERSION

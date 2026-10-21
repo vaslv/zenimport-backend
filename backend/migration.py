@@ -182,6 +182,7 @@ def reset_private_runtime(db, destination):
     for kind, name in sorted(storage.OBJECTS - storage.OBJECTS_V7, key=lambda item: (item[0] != 'trigger', item[1])):
         db.execute('DROP ' + kind.upper() + ' "' + name + '"')
     storage.execute_schema(db, storage.B8_SQL)
+    storage.execute_schema(db, storage.B9_SQL)
     db.execute("INSERT INTO migration_installation VALUES (1,?,?,'active',NULL,0,0)",
         (destination['installation_id'], destination['participant_epoch'] + 1))
 
@@ -198,7 +199,7 @@ def unpack(payload, destination):
         manifest = json.loads(archive.read('manifest.json'))
         if (not isinstance(manifest, dict) or manifest.get('format') != 'zenimport-migration'
                 or type(manifest.get('format_version')) is not int or manifest['format_version'] != 1
-                or type(manifest.get('schema_version')) is not int or manifest['schema_version'] not in (6, 7, storage.SCHEMA_VERSION)
+                or type(manifest.get('schema_version')) is not int or manifest['schema_version'] not in tuple(range(6, storage.SCHEMA_VERSION+1))
                 or not isinstance(manifest.get('instance_id'), str)):
             raise ValueError('Unsupported format')
         UUID(manifest['instance_id'])

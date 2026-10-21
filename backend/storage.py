@@ -9,7 +9,7 @@ import time
 from uuid import uuid4
 
 APPLICATION_ID = 0x5A494231
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 SCHEMA_SQL = Path(__file__).with_name('schema_v2.sql').read_text()
 B3_SQL = Path(__file__).with_name('schema_v3.sql').read_text()
 B4_SQL = Path(__file__).with_name('schema_v4.sql').read_text()
@@ -17,13 +17,16 @@ B5_SQL = Path(__file__).with_name('schema_v5.sql').read_text()
 B6_SQL = Path(__file__).with_name('schema_v6.sql').read_text()
 B7_SQL = Path(__file__).with_name('schema_v7.sql').read_text()
 B8_SQL = Path(__file__).with_name('schema_v8.sql').read_text()
+B9_SQL = Path(__file__).with_name('schema_v9.sql').read_text()
+ARCHIVE_RUNTIME_TABLES = {'archive_records', 'archive_chunks'}
 OBJECTS_V2 = {(kind.lower(), name) for kind, name in re.findall(r'CREATE (TABLE|TRIGGER) (\w+)', SCHEMA_SQL)}
 OBJECTS_V3 = OBJECTS_V2 | {(kind.lower(), name) for kind, name in re.findall(r'CREATE (TABLE|TRIGGER) (\w+)', B3_SQL)}
 OBJECTS_V4 = OBJECTS_V3 | {(kind.lower(), name) for kind, name in re.findall(r'CREATE (TABLE|TRIGGER) (\w+)', B4_SQL)}
 OBJECTS_V5 = OBJECTS_V4 | {(kind.lower(), name) for kind, name in re.findall(r'CREATE (TABLE|TRIGGER) (\w+)', B5_SQL)}
 OBJECTS_V6 = OBJECTS_V5 | {(kind.lower(), name) for kind, name in re.findall(r'CREATE (TABLE|TRIGGER) (\w+)', B6_SQL)}
 OBJECTS_V7 = OBJECTS_V6 | {(kind.lower(), name) for kind, name in re.findall(r'CREATE (TABLE|TRIGGER) (\w+)', B7_SQL)}
-OBJECTS = OBJECTS_V7 | {(kind.lower(), name) for kind, name in re.findall(r'CREATE (TABLE|TRIGGER) (\w+)', B8_SQL)}
+OBJECTS_V8 = OBJECTS_V7 | {(kind.lower(), name) for kind, name in re.findall(r'CREATE (TABLE|TRIGGER) (\w+)', B8_SQL)}
+OBJECTS = OBJECTS_V8 | {(kind.lower(), name) for kind, name in re.findall(r'CREATE (TABLE|TRIGGER) (\w+)', B9_SQL)}
 MONEY_PATTERN = re.compile(r'(?:0|[1-9][0-9]{0,23})(?:\.[0-9]{1,12})?')
 
 
@@ -51,7 +54,7 @@ def validate_owner(db, *, allow_upgrade=True):
     if app_id == 0 and version == 0 and not objects and allow_upgrade:
         return 0
     base = {('table', 'service_meta')}
-    expected = base if version == 1 else base | {2: OBJECTS_V2, 3: OBJECTS_V3, 4: OBJECTS_V4, 5: OBJECTS_V5, 6: OBJECTS_V6, 7: OBJECTS_V7}.get(version, OBJECTS)
+    expected = base if version == 1 else base | {2: OBJECTS_V2, 3: OBJECTS_V3, 4: OBJECTS_V4, 5: OBJECTS_V5, 6: OBJECTS_V6, 7: OBJECTS_V7, 8: OBJECTS_V8}.get(version, OBJECTS)
     if app_id != APPLICATION_ID or version not in (tuple(range(1, SCHEMA_VERSION + 1)) if allow_upgrade else (SCHEMA_VERSION,)) or objects != expected:
         raise RuntimeError('Database belongs to another application or schema; use the explicit migration procedure')
     return version
@@ -132,6 +135,9 @@ def initialize(path: Path):
                 execute_schema(db, B8_SQL)
                 db.execute("INSERT INTO migration_installation VALUES (1,?,1,'active',NULL,0,0)", (str(uuid4()),))
                 db.execute('INSERT INTO schema_migrations VALUES (?,?,?)', (8, int(time.time()), str(saved) if saved else None))
+            if version < 9:
+                execute_schema(db, B9_SQL)
+                db.execute('INSERT INTO schema_migrations VALUES (?,?,?)', (9, int(time.time()), str(saved) if saved else None))
             db.execute(f'PRAGMA application_id={APPLICATION_ID}')
             db.execute(f'PRAGMA user_version={SCHEMA_VERSION}')
             db.commit()

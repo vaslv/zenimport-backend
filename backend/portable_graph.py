@@ -115,7 +115,7 @@ def metadata_value(key, value, dataset_id):
 
 def source_tables(db, dataset_id):
     """Return lazy, sorted financial projections under the caller's stable hold."""
-    expected = {TABLES[name]['source'] for name in TABLES} | set(RULES.get('runtime_only_tables', []))
+    expected = {TABLES[name]['source'] for name in TABLES} | set(RULES.get('runtime_only_tables', [])) | storage.ARCHIVE_RUNTIME_TABLES
     actual = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%'")}
     require(actual == expected, 'unclassified_source_table')
     utf8 = db.execute('PRAGMA encoding').fetchone()[0].upper() == 'UTF-8'

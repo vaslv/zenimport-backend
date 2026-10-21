@@ -800,3 +800,32 @@ plus HTTP/auth/SIGKILL/graceful-restart/restored-database gates. Chrome producti
 controller HTTP gate: 18 passed; minimum Chrome 140 lineage gate: five passed.
 Independent API/adversarial reviews are clean. Synthetic data only, production
 services untouched. No push, Git tags or publication.
+
+### Local mode L10.14 — resumable format-2 server backups (2026-10-22)
+
+Private physical schema 9 adds archive intent/chunk controls without changing
+financial schema 1 or portable format 2. Upgrade retains physical identity and
+journal, with a private schema-8 pre-upgrade backup. Format-1 schema-8 compatibility
+remains available. New authenticated archive routes reserve a globally visible
+snapshot hold, asynchronously export/graph-verify bounded chunks, then atomically
+release only that own hold. No peer receipt or financial SDK request is created.
+Explicit verified-download acknowledgement precedes one-chunk cleanup.
+
+Independent API/adversarial reviews completed. Adversarial review found orphaned
+scratch files after SIGKILL; fixed with installation-scoped cleanup under the
+cross-process writer lock, including cancelled jobs, without following symlinks.
+Final reviews report no findings. External cross-model CLI unavailable. Tests
+include two actual SIGKILL cycles, process recovery, source preservation, foreign
+path/symlink safety, exact replay, blocked retry, auth, epoch bounds and schema-8
+upgrade retention. See docs/archive-backups.md.
+
+Isolated Docker full runner: 778 passed in 40.89s (three existing warnings), plus
+HTTP/auth, financial persistence, actual SIGKILL recovery, graceful shutdown and
+restored delivery; disposable Compose resources cleaned. Latest focused backup
+and added schema-8 upgrade gate: nine passed in 4.19s (one existing warning).
+Logs: /tmp/zenimport-l10-server-backups-final-full.log and
+/tmp/zenimport-l10-server-backups-complete.log.
+
+L10 remains in progress: archive-only server recovery and major-gate review, then
+L11 product UI and L12 acceptance. No live API/production data, push, tags or
+publication. Local product routing stays gated in Chrome.
