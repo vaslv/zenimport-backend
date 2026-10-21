@@ -6,7 +6,7 @@ physical participant authority are never imported. This has no HTTP route.
 import json
 
 from . import migration_participant as participant, storage
-from .portable_codec import CONTRACT, TABLES, _scan_table, require, validate_manifest
+from .portable_codec import CONTRACT, TABLES, _scan_table, require, validate_manifest, canonical
 from .portable_graph import quote,metadata_value
 
 
@@ -24,6 +24,31 @@ Any error restores data, schema, authority and receipts through SQL rollback.
     control = participant.installation(db)
     require(control['state'] == 'armed' and control['operation_id'] == operation['switch_id'], 'not_armed')
     participant._eligible(db, control, state='armed')
+    return _copy_facts(db,stage,source_hash=source_hash,archive_sha256=operation['archive_sha256'],accepted_at=operation['created_at'])
+
+
+def install_recovery(db,record,stage,*,source_hash,preview_id):
+    """Archive-only authority, separately guarded from live peer activation."""
+    manifest=validate_manifest(stage.manifest);current=participant.installation(db)
+    require(record['kind']=='recovery' and record['phase']=='preview','not_armed')
+    require(current['installation_id']==record['installation_id'] and current['state']=='import_hold' and
+        current['operation_id']==record['id'] and current['participant_epoch']==record['initial_epoch']+1,'not_armed')
+    participant._eligible(db,current,state='import_hold')
+    request=json.loads(record['request_json']);preview=json.loads(record['preview_json'])
+    require(request['former_writers_retired'] is True and request['accept_post_snapshot_evidence_loss'] is True,'not_armed')
+    require(preview['id']==preview_id and preview['archive_sha256']==record['archive_sha256'] and preview['source_hash']==source_hash,'not_armed')
+    require(record['manifest_json']==canonical(manifest).decode() and record['dataset_id']==manifest['dataset_id'],'dataset_mismatch')
+    return _copy_facts(db,stage,source_hash=source_hash,archive_sha256=record['archive_sha256'],accepted_at=record['created_at'])
+
+
+def _copy_facts(db,stage,*,source_hash,archive_sha256,accepted_at):
+    """Private copier; callers prove distinct live/recovery authority first.
+
+    A temporary read-only preview may also call this with a disposable database;
+    it never exposes that database through a running financial service.
+    """
+    manifest=validate_manifest(stage.manifest)
+    require(type(source_hash) is str and len(source_hash)==64,'missing_destination_context')
     for entry in manifest['tables']:
         _scan_table(stage.root/entry['filename'],entry['name'],expected=entry)
     definitions = CONTRACT['schema']['tables']
@@ -61,8 +86,8 @@ Any error restores data, schema, authority and receipts through SQL rollback.
     db.execute("DELETE FROM service_meta WHERE key='zenmoney_refreshed_at'")
     previous=db.execute("SELECT value FROM service_meta WHERE key='portable_imports'").fetchone()
     history=json.loads(previous[0]) if previous else []
-    history.append(dict(archive_id=manifest['archive_id'],archive_sha256=operation['archive_sha256'],
-        dataset_digest=manifest['dataset_digest'],export_session_id=manifest['export_session_id'],accepted_at=str(operation['created_at'])))
+    history.append(dict(archive_id=manifest['archive_id'],archive_sha256=archive_sha256,
+        dataset_digest=manifest['dataset_digest'],export_session_id=manifest['export_session_id'],accepted_at=str(accepted_at)))
     raw=json.dumps(history,ensure_ascii=True,separators=(',',':'))
     metadata_value('portable_imports',raw,manifest['dataset_id'])
     db.execute("INSERT OR REPLACE INTO service_meta VALUES ('portable_imports',?)",(raw,))

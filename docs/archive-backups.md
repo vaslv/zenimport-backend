@@ -47,6 +47,53 @@ ZIP outside the server. Only then acknowledge its checksum. Cleaning cached chun
 is explicit and bounded, preserves the archive audit, and never removes financial
 history. An acknowledged backup cannot be downloaded again after cleanup.
 
-Archive-only disaster restore and popup wiring are subsequent L10/L11 gates; these
-endpoints do not implement restore or mode selection. They do not automatically
-pause/retire another installation or authorize offline fallback.
+## Archive-only disaster recovery
+
+Use this distinct path only after explicitly retiring every former writer. An
+archive cannot prove retirement or preserve events recorded after its snapshot.
+The destination must be unused, with no started capture/history, prior import or
+activated writer. Existing histories are never merged or overwritten.
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| POST | `/recoveries` | Reserve an empty destination after fresh owner verification |
+| PUT | `/{id}/chunks/{number}` | Upload immutable bytes (`data` base64, `sha256`) |
+| POST | `/{id}/finalize` | Queue complete graph validation and a fresh read-only preview |
+| GET | `/{id}/preview` | Read checksum/cursor/time-bound reconciliation counters |
+| POST | `/{id}/activate` | Accept that exact `preview_id` with `accept_summary: true` |
+
+The recovery request contains `id`, `installation_id`, `expected_epoch`,
+`dataset_id`, `archive_sha256`, `archive_size`, ordered `owner_ids`,
+`former_writers_retired: true`, and
+`accept_post_snapshot_evidence_loss: true`. These declarations do not contact or
+resume the former source. They are explicit disaster-recovery consent, not peer
+handoff receipts. All JSON byte sizes/epochs are decimal strings.
+
+The destination holds globally before upload. Exact chunk retries are idempotent;
+conflicting bytes and incomplete hashes fail. The background owner validates the
+entire graph, then uses a fresh full SDK response in a disposable preview database.
+The active destination remains empty. Summary counters describe missing bank
+movements, extra ZenMoney account movements, and unchecked accounts; permanent
+tombstones exclude reappearing deleted transactions. They are reconciliation
+information, never an automatic instruction to delete or create a transaction.
+
+The summary hashes the actual SDK response bytes and records read time before
+projection/report work. It expires after five minutes. Activation requires the
+exact accepted preview, a fresh full SDK owner check, unchanged protected credential
+context, the same archive/manifest and an eligible held destination. The final
+transaction checks age before and after copying; expiry or any SQL fault rolls
+back imported facts, triggers and authority together. Activation preserves the
+physical installation, adopts financial dataset lineage, advances its epoch and
+requires explicit synchronization before delivery workers may send anything.
+No peer receipt is invented. A lost success response can only replay the permanent
+activated outcome; cancelled/cleaned attempts cannot masquerade as activation.
+
+Cancel releases only that recovery's own hold before activation and never resumes
+a former installation. Explicit cleanup removes only private uploaded chunks.
+Successful activation remains a permanent outcome even after acknowledged file
+cleanup. It does not block a new backup after the user explicitly synchronizes.
+Process interruptions retain upload/preview state; scratch cleanup is installation
+scoped. Retry never automatically sends financial SDK mutations.
+
+Popup wiring remains an L11 gate. Neither backup nor archive restore selects a
+browser storage mode or authorizes automatic offline fallback.

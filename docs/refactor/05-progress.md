@@ -829,3 +829,43 @@ Logs: /tmp/zenimport-l10-server-backups-final-full.log and
 L10 remains in progress: archive-only server recovery and major-gate review, then
 L11 product UI and L12 acceptance. No live API/production data, push, tags or
 publication. Local product routing stays gated in Chrome.
+
+### Local mode L10.15 — explicit archive-only server recovery (2026-10-22)
+
+New recovery routes reserve only an unused destination, with explicit retirement
+of every former writer and acceptance of lost post-snapshot evidence. A fresh
+full SDK read verifies the owner before upload reservation. Immutable bounded
+chunks, full graph checks, fresh read-only reconciliation preview and explicit
+acceptance precede atomic financial installation. Physical identity is retained;
+financial lineage follows the archive. No peer/handoff receipt or SDK financial
+mutation is fabricated. Imported delivery remains awaiting explicit First Sync.
+
+Shared financial copying is private, behind separate live peer and archive-only
+authority guards, or used solely in a disposable preview database. Cancellation
+releases only this own unactivated hold. Lost activation replies replay only the
+permanent activated outcome, including after cache cleanup. Cancelled/cleaned
+attempts cannot impersonate successful activation. Explicit acknowledged cleanup
+preserves permanent activation evidence and allows later backup after user sync.
+
+Independent API/adversarial review found and fixed: terminal activation/cache
+cleanup conflict, false successful replay after cancelled cleanup, preview freshness
+before/after long graph/SDK/copy work, snapshot read time before projection/report
+work, exact SDK raw-response hashing, tombstone-aware transaction counters, and
+retryable classification of malformed fresh SDK projections. Final reviewers
+report no remaining findings. External cross-model CLI unavailable.
+
+Latest Docker complete suite: 795 passed in 139.70s (three existing warnings).
+Latest focused backup/recovery/live-copy gate: 44 passed in 29.88s (one existing
+warning). Full isolated Compose runner also passed HTTP/auth, financial persistence,
+actual SIGKILL recovery, graceful shutdown and restored-delivery checks; disposable
+resources cleaned. New tests kill recovery during graph validation and after
+activation commit, prove retry without SDK financial sends, SQL-fault rollback,
+late preview expiry before/after copy, stale summary construction, raw byte hash,
+tombstoned reappearance and new backup after successful recovery/cache cleanup.
+Logs: /tmp/zenimport-l10-server-recovery-final-all.log,
+/tmp/zenimport-l10-server-recovery-final.log,
+/tmp/zenimport-l10-server-recovery-full.log.
+
+L10 remains in progress: installed Chrome archive-control interoperability and
+major-gate review, followed by L11 popup integration and L12 complete acceptance.
+No live API/production data, push, Git tags or publication.

@@ -13,11 +13,13 @@ from . import __version__, storage, migration_participant as participant
 from . import portable_codec as codec, portable_graph as graph
 from .capture_policy import SyncError
 from .migration import owners,meta
+from .archive_recovery import ArchiveRecovery
+from zenmoney_api import HTTPError,ResponseError,TransportError
 
 CHUNK=262144
 
 
-class ArchiveService:
+class ArchiveService(ArchiveRecovery):
     def __init__(self,path,gate,mirror,clock):
         self.path,self.gate,self.mirror,self.clock=path,gate,mirror,clock
         self.stop_event,self.signal=threading.Event(),threading.Event()
@@ -49,10 +51,16 @@ class ArchiveService:
     def _held(db,row):
         current=participant.installation(db)
         participant.require(current['installation_id']==row['installation_id'] and current['operation_id']==row['id'] and
-            current['participant_epoch']==row['initial_epoch']+1 and current['state']=='export_hold' and
-            row['kind']=='backup' and row['phase'] in ('building','blocked'),'migration_paused')
-        participant.require(meta(db,'instance_id')==row['dataset_id'],'migration_invalid')
+            current['participant_epoch']==row['initial_epoch']+1 and
+            ((row['kind']=='backup' and current['state']=='export_hold' and row['phase'] in ('building','blocked')) or
+             (row['kind']=='recovery' and current['state']=='import_hold' and row['phase'] in ('uploading','validating','preview','blocked'))),'migration_paused')
+        if row['kind']=='backup':participant.require(meta(db,'instance_id')==row['dataset_id'],'migration_invalid')
         return current
+
+    @staticmethod
+    def _cache_pending(db):
+        return db.execute("""SELECT 1 FROM archive_records a WHERE phase<>'cleaned' AND
+            (phase<>'activated' OR acknowledged_at IS NULL OR EXISTS(SELECT 1 FROM archive_chunks c WHERE c.id=a.id)) LIMIT 1""").fetchone()
 
     @staticmethod
     def _view(row):
@@ -79,7 +87,7 @@ class ArchiveService:
             current=participant.installation(db)
             participant.require(current['installation_id']==installation and current['participant_epoch']==epoch,'migration_busy')
             participant.require(current['state']=='active' and not current['awaiting_sync'] and not meta(db,'migration_hold'),'migration_paused')
-            participant.require(not db.execute("SELECT 1 FROM archive_records WHERE phase<>'cleaned' LIMIT 1").fetchone(),'migration_busy')
+            participant.require(not self._cache_pending(db),'migration_busy')
             participant.require(not db.execute('SELECT 1 FROM migration_operations WHERE switch_id=?',(id,)).fetchone())
             participant.require(not db.execute("SELECT 1 FROM capture_jobs WHERE capture_state IN ('planned','collecting','paused') LIMIT 1").fetchone(),'migration_incomplete')
             participant.require(owners(db),'zenmoney_unavailable')
@@ -131,7 +139,7 @@ class ArchiveService:
     def run_once(self):
         with storage.transaction(self.path,read_only=True) as db:
             installation=participant.uuid(participant.installation(db)['installation_id'])
-            row=db.execute("SELECT id FROM archive_records WHERE kind='backup' AND phase='building' ORDER BY created_at,id LIMIT 1").fetchone()
+            row=db.execute("SELECT id FROM archive_records WHERE (kind='backup' AND phase='building') OR (kind='recovery' AND phase='validating') ORDER BY created_at,id LIMIT 1").fetchone()
         prefix='.archive-work-'+installation+'-'
         if row is None and not any(self.path.parent.glob(prefix+'*')):return False
         try:
@@ -145,10 +153,14 @@ class ArchiveService:
                 if row is None:return False
                 # A different process may have completed/cancelled before this lock.
                 with storage.transaction(self.path,read_only=True) as db:
-                    if self._record(db,row['id'])['phase']!='building':return False
-                try:self._backup(row['id'])
+                    value=self._record(db,row['id'])
+                    if value['phase'] not in ('building','validating'):return False
+                    kind=value['kind']
+                try:
+                    if kind=='backup':self._backup(row['id'])
+                    else:self._preview(row['id'])
                 except Exception as exc:
-                    code=exc.code if isinstance(exc,SyncError) else 'migration_invalid'
+                    code=exc.code if isinstance(exc,SyncError) else 'zenmoney_unavailable' if isinstance(exc,(HTTPError,ResponseError,TransportError)) else 'migration_invalid'
                     with storage.transaction(self.path) as db:
                         value=self._record(db,row['id']);self._held(db,value)
                         db.execute("UPDATE archive_records SET phase='blocked',error_code=? WHERE id=?",(code,row['id']))
@@ -161,7 +173,7 @@ class ArchiveService:
         with self.gate.exclusive(),storage.transaction(self.path) as db:
             row=self._record(db,id)
             if row['phase']=='blocked':
-                self._held(db,row);db.execute("UPDATE archive_records SET phase='building',error_code=NULL WHERE id=?",(id,))
+                self._held(db,row);db.execute("UPDATE archive_records SET phase=?,error_code=NULL WHERE id=?",('building' if row['kind']=='backup' else 'validating',id))
             result=self._view(self._record(db,id))
         self.signal.set();return result
 
@@ -185,7 +197,7 @@ class ArchiveService:
     def acknowledge(self,id,checksum):
         participant.digest(checksum)
         with self.gate.exclusive(),storage.transaction(self.path) as db:
-            row=self._record(db,id);participant.require(row['phase']=='ready' and row['archive_sha256']==checksum,'migration_incomplete')
+            row=self._record(db,id);participant.require(row['phase'] in ('ready','activated') and row['archive_sha256']==checksum,'migration_incomplete')
             now=self.clock();participant.require(type(now) is int and row['created_at']<=now<=253402300799)
             if row['acknowledged_at'] is None:db.execute('UPDATE archive_records SET acknowledged_at=? WHERE id=?',(now,id))
             return self._view(self._record(db,id))
@@ -193,8 +205,10 @@ class ArchiveService:
     def clean(self,id):
         with self.gate.exclusive(),storage.transaction(self.path) as db:
             row=self._record(db,id)
-            participant.require(row['phase'] in ('cancelled','cleaned') or row['phase']=='ready' and row['acknowledged_at'] is not None,'migration_paused')
+            participant.require(row['phase'] in ('cancelled','cleaned') or row['phase'] in ('ready','activated') and row['acknowledged_at'] is not None,'migration_paused')
             part=db.execute('SELECT number FROM archive_chunks WHERE id=? ORDER BY number LIMIT 1',(id,)).fetchone()
             if part:
                 db.execute('DELETE FROM archive_chunks WHERE id=? AND number=?',(id,part[0]));return dict(complete=False)
-            db.execute("UPDATE archive_records SET phase='cleaned' WHERE id=?",(id,));return dict(complete=True)
+            # Activation is permanent authority evidence, not a cache phase.
+            if row['phase']!='activated':db.execute("UPDATE archive_records SET phase='cleaned' WHERE id=?",(id,))
+            return dict(complete=True)
