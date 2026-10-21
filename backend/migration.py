@@ -43,7 +43,7 @@ class MigrationGate:
         self.exclusive_active = False
 
     @contextmanager
-    def operation(self, *, worker=False):
+    def operation(self, *, worker=False, expected_context=None):
         with self.lock:
             if self.exclusive_active:
                 raise SyncError('migration_busy', retryable=True)
@@ -51,6 +51,10 @@ class MigrationGate:
         try:
             with storage.transaction(self.path, read_only=True) as db:
                 hold = meta(db, 'migration_hold')
+                if expected_context is not None:
+                    current = (participant.installation(db)['installation_id'], meta(db, 'instance_id'))
+                    if current != expected_context:
+                        raise SyncError('stale_context')
                 if participant.blocked(db, worker=worker):
                     raise SyncError('migration_paused')
             if hold == 'exported' or worker and hold == 'imported':

@@ -1,6 +1,6 @@
 """Small ASGI boundary: bounded bodies, authentication and redacted errors."""
 import secrets
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from starlette.responses import JSONResponse
 
@@ -37,6 +37,18 @@ class ApiBoundary:
         supplied = [value for key, value in scope['headers'] if key.lower() == b'authorization']
         if len(supplied) != 1 or not secrets.compare_digest(supplied[0], self.authorization):
             return await reject('unauthorized', 'Invalid connection token', 401)
+        expected_context = None
+        context_values = [[v for k, v in scope['headers'] if k.lower() == name]
+                          for name in (b'x-zenimport-installation', b'x-zenimport-dataset')]
+        if any(context_values):
+            try:
+                if any(len(values) != 1 for values in context_values):
+                    raise ValueError('Incomplete context')
+                expected_context = tuple(values[0].decode('ascii') for values in context_values)
+                if any(str(UUID(value)) != value for value in expected_context):
+                    raise ValueError('Invalid context')
+            except (ValueError, UnicodeError):
+                return await reject('validation_error', 'Invalid storage context', 422)
         parts = path.split('/')
         if len(parts) > 2 and parts[2] and parts[2] != 'v1':
             return await reject('unsupported_api_version', 'Unsupported API version', 404)
@@ -83,7 +95,7 @@ class ApiBoundary:
         try:
             if self.migration_gate and path != '/api/v1/info' and not path.startswith('/api/v1/migration/'):
                 try:
-                    with self.migration_gate().operation():
+                    with self.migration_gate().operation(expected_context=expected_context):
                         await self.app(scope, replay, response)
                 except SyncError as exc:
                     await error_response(identifier, exc.code, MESSAGES[exc.code], exc.status, retryable=exc.retryable)(scope, receive, send)

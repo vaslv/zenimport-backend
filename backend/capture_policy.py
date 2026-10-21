@@ -7,6 +7,7 @@ from .sync_contracts import Capabilities
 
 
 MESSAGES = {
+    'stale_context': 'The selected server storage context has changed',
     'payload_too_large': 'The archive exceeds the size limit',
     'migration_busy': 'Finish the current request or delivery and try again',
     'migration_paused': 'This server is paused after data export',

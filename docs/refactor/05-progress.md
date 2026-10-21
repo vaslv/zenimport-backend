@@ -888,3 +888,16 @@ Compose resources cleaned. Logs: /tmp/zenimport-l10-fence-budget-backend.log and
 
 Other Chrome major-gate corrections are still in progress; L10 is not complete.
 No production/live data, push, Git tags or publication.
+
+### Local mode L11 prerequisite — fence selected ordinary HTTP contexts
+
+Ordinary API requests may now carry paired canonical X-ZenImport-Installation and
+X-ZenImport-Dataset headers. The request gate verifies physical installation and
+financial lineage before invoking the handler and remains held throughout it, so
+an exclusive import cannot replace the dataset during the request. Legacy clients
+without headers retain their existing behavior. Info advertises context_fencing=1;
+portable/archive controls retain their own explicit CAS protocol.
+
+Independent API review: no findings. Docker focused HTTP/bootstrap/live/legacy
+migration suite: 74 passed in 20.94s (two existing third-party warnings). Log:
+/tmp/zenimport-l11-context-fence.log. No live accounts, push, tags or publication.

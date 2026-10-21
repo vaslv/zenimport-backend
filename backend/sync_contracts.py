@@ -51,7 +51,7 @@ ErrorCode = Literal[
     'idempotency_conflict', 'history_incomplete', 'capture_context_changed',
     'zenmoney_unavailable', 'zenmoney_account_unavailable', 'delivery_uncertain', 'existing_ownership_unknown', 'not_found',
     'method_not_allowed', 'internal_error',
-    'migration_busy', 'migration_paused', 'migration_not_empty', 'migration_invalid',
+    'stale_context', 'migration_busy', 'migration_paused', 'migration_not_empty', 'migration_invalid',
     'migration_wrong_account', 'migration_incomplete',
 ]
 
@@ -202,6 +202,7 @@ class AccountCatalog(WireModel):
 
 
 class ServerInfo(WireModel):
+    context_fencing: Literal[1] = 1
     api_version: Literal[1] = API_VERSION
     service_version: Identifier
     zenmoney_state: Literal['ready', 'not_configured', 'unavailable']
