@@ -111,6 +111,17 @@ class FinalizeRequest(WireModel):
     expected_epoch:DecimalText
 
 
+class QuiesceRequest(WireModel):
+    installation_id:UUID
+    expected_epoch:DecimalText
+
+
+class QuiesceResult(WireModel):
+    installation_id:UUID
+    participant_epoch:DecimalText
+    ready:bool
+
+
 class Empty(WireModel):pass
 
 
@@ -122,6 +133,9 @@ def router(service):
 
     @routes.post('/identity',response_model=Identity)
     def identity(data:Empty):return service().identity()
+
+    @routes.post('/quiesce',response_model=QuiesceResult)
+    def quiesce(data:QuiesceRequest):return service().quiesce(data.model_dump(mode='json'))
 
     @routes.get('/switches/{switch}',response_model=Status)
     def status(switch:UUID):return service().status(str(switch))

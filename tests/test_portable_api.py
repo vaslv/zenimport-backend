@@ -130,3 +130,28 @@ def test_fresh_identity_failure_is_redacted_and_does_not_invent_an_owner(source,
     assert response.status_code==503 and response.json()['error']['code']=='zenmoney_unavailable'
     assert 'synthetic private response' not in response.text
     assert not list(source.path.parent.glob('.portable-identity-*'))
+
+
+def test_quiesce_stops_one_capture_without_completing_history_or_financial_writes(tmp_path):
+    h=DeliveryHarness(tmp_path/'quiesce.sqlite3')
+    try:
+        connection=h.ready()
+        job=h.start(connection['id']).json()
+        cap=h.client.get(BASE+'/capabilities').json()
+        body=dict(installation_id=cap['installation_id'],expected_epoch=cap['participant_epoch'])
+        before=len(h.remote.writes)
+        denied=h.client.post(BASE+'/quiesce',json=body,headers={'Authorization':'Bearer invalid-fixture'})
+        assert denied.status_code==401
+        wrong=h.client.post(BASE+'/quiesce',json={**body,'installation_id':str(uuid4())})
+        assert wrong.status_code==409
+        response=h.client.post(BASE+'/quiesce',json=body)
+        assert response.status_code==200,response.text
+        assert not response.json()['ready']
+        assert h.client.post(BASE+'/quiesce',json=body).json()['ready']
+        with storage.transaction(h.path,read_only=True) as db:
+            assert db.execute('SELECT capture_state FROM capture_jobs WHERE id=?',(job['id'],)).fetchone()[0]=='cancelled'
+            assert not db.execute("SELECT 1 FROM capture_intervals WHERE state='complete'").fetchone()
+        assert len(h.remote.writes)==before
+        command(h,'source_start',str(uuid4()),peer_id=str(uuid4()))
+        assert h.client.post(BASE+'/quiesce',json=body).status_code==409
+    finally:h.close()

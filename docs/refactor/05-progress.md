@@ -768,3 +768,22 @@ isolated arm64 runner passed 769 tests in 32.78s (three existing warnings), then
 HTTP/auth, SIGKILL recovery, graceful shutdown and restored journal checks. The
 disposable Compose project/volumes/images were cleaned. Logs:
 /tmp/zenimport-l10-identity*.log. No production data, push, tags or publication.
+
+### L10.8 — bounded capture quiescence for shared-server transfer (2026-10-21)
+
+Added authenticated POST /api/v1/migration/portable/quiesce with exact physical
+installation/epoch CAS. Under the existing exclusive writer gate it cancels one
+active capture, preserves received facts and never marks unfinished intervals
+complete. Repetition reports readiness; final source_start independently rejects
+new active capture. No SDK financial write or participant transition is performed.
+The additive HTTP contract is pinned to Chrome commit
+3b64daf4d06bde0fe47ce61ef474abe1210b94ca. Independent API/adversarial review is clean.
+
+Full isolated arm64 Docker runner: 770 tests passed in 41.67s (three existing
+warnings), HTTP/auth, SIGKILL recovery, graceful shutdown and restored journal
+checks passed; disposable resources cleaned. Focused API/service/contracts:
+33 passed in 13.03s. Actual installed Chrome production controller roundtrip and
+foreign-client cancellation gates passed with zero financial writes, including
+server capture stopping and native quota rollback. Logs:
+/tmp/zenimport-l10-quiesce-backend-*.log and /tmp/zenimport-l10-controller-*.log.
+No production service/data/API, push, Git tags or publication.

@@ -64,6 +64,21 @@ class PortableMigration:
                 raise SyncError('zenmoney_unavailable',503,retryable=True) from None
             return dict(self.capabilities(),owner_ids=list(current),checked_at=str(self.clock()))
 
+    def quiesce(self,request):
+        # Explicit mode-switch preparation stops one active bank capture only.
+        # The final source_start gate still rechecks absence of all active jobs.
+        from . import capture
+        from .migration import meta
+        participant.require(type(request) is dict and set(request)=={'installation_id','expected_epoch'})
+        expected=participant.uuid(request['installation_id']);epoch=participant.integer(request['expected_epoch'])
+        with self.gate.exclusive(),self.mirror.lock,storage.transaction(self.path) as db:
+            current=participant.installation(db)
+            participant.require(current['installation_id']==expected and current['participant_epoch']==epoch,'migration_busy')
+            participant.require(current['state']=='active' and current['operation_id'] is None and not meta(db,'migration_hold'),'migration_paused')
+            job=db.execute("SELECT id FROM capture_jobs WHERE capture_state IN ('planned','collecting','paused') LIMIT 1").fetchone()
+            if job:capture.stop(db,job['id'],self.clock())
+            return dict(installation_id=expected,participant_epoch=str(epoch),ready=job is None)
+
     def status(self,switch):
         with storage.transaction(self.path,read_only=True) as db:
             result=participant.status(db,switch)

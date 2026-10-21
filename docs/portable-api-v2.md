@@ -26,6 +26,17 @@ Prefix: `/api/v1/migration/portable`.
   `legacy_hold` identifies an unfinished format-1 operation; complete that old
   operation before starting a live portable migration. Never infer the physical
   installation identity from a URL or portable financial lineage.
+- `POST /identity` with `{}`: fresh read-only ZenMoney owner verification and
+  current physical participant state. The temporary mirror is not published and
+  no awaiting-Sync or migration fence is released.
+- `POST /quiesce` with `installation_id` and decimal-string `expected_epoch`:
+  explicit shared-server switch preparation. Under the exclusive writer gate,
+  stop at most one active bank capture, preserving received facts and leaving
+  unfinished intervals cancelled. Return `ready: false` after a stopped job;
+  repeat until `ready: true`. Reject a changed participant, epoch or held source.
+  This is capture control, never a financial SDK request. The final `source_start`
+  still checks that no new capture appeared. Show the shared-client pause warning
+  before invoking this endpoint.
 - `GET /switches/{switch}`: current physical state, optional permanent operation,
   immutable receipts and background task tickets. An unknown switch has no
   operation, receipts or tasks. It does not imply that an old source may resume.

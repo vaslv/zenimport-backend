@@ -16,6 +16,10 @@
       "/identity"
     ],
     [
+      "POST",
+      "/quiesce"
+    ],
+    [
       "GET",
       "/switches/{switch}"
     ],
@@ -1559,6 +1563,53 @@
         "expected_epoch"
       ],
       "title": "FinalizeRequest",
+      "type": "object"
+    },
+    "QuiesceRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "format": "uuid",
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "expected_epoch": {
+          "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+          "title": "Expected Epoch",
+          "type": "string"
+        }
+      },
+      "required": [
+        "installation_id",
+        "expected_epoch"
+      ],
+      "title": "QuiesceRequest",
+      "type": "object"
+    },
+    "QuiesceResult": {
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "format": "uuid",
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "participant_epoch": {
+          "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+          "title": "Participant Epoch",
+          "type": "string"
+        },
+        "ready": {
+          "title": "Ready",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "installation_id",
+        "participant_epoch",
+        "ready"
+      ],
+      "title": "QuiesceResult",
       "type": "object"
     },
     "Empty": {
