@@ -254,3 +254,31 @@ def test_original_source_schema_audit_is_not_replaced_by_destination_runtime(tmp
         rows,_=source_tables(db,lineage)
         assert list(rows['source_schema_migrations'])==[[7,9007199254740993,None]]
         assert db.execute('SELECT max(version) FROM schema_migrations').fetchone()[0]==storage.SCHEMA_VERSION
+
+
+@pytest.mark.parametrize('role,remaining',[('source',3),('source',2),('source',1),('destination',2),('destination',1)])
+def test_start_reserves_the_complete_success_or_cancel_epoch_path(pair,role,remaining):
+    source,target,switch=pair;chosen=source if role=='source' else target
+    fields={'peer_id':target.status()['installation_id']} if role=='source' else {'peer_receipt':sealed(pair)}
+    with storage.transaction(chosen.path) as db:db.execute('UPDATE migration_installation SET participant_epoch=?',(2**63-1-remaining,))
+    before=chosen.status(switch)
+    with pytest.raises(SyncError):chosen.command(role+'_start',switch,**fields)
+    assert chosen.status(switch)==before and chosen.status()['state']=='active'
+
+
+@pytest.mark.parametrize('cancel',[False,True])
+def test_last_safe_epochs_can_complete_or_cancel_without_overflow(pair,cancel):
+    source,target,switch=pair
+    for chosen,remaining in [(source,4),(target,3)]:
+        with storage.transaction(chosen.path) as db:db.execute('UPDATE migration_installation SET participant_epoch=?',(2**63-1-remaining,))
+    arm=armed(pair)
+    if cancel:
+        proof=source.command('source_cancel',switch)
+        discarded=target.command('destination_discard',switch,peer_receipt=proof)
+        source.command('source_resume',switch,peer_receipt=discarded)
+        assert source.status()['participant_epoch']==str(2**63-1) and source.status()['state']=='active'
+    else:
+        proof=source.command('source_handoff',switch,peer_receipt=arm)
+        target.command('destination_activate',switch,peer_receipt=proof,install=lambda *_:None)
+        assert target.status()['awaiting_sync']
+    assert target.status()['participant_epoch']==str(2**63-1) and target.status()['state']=='active'

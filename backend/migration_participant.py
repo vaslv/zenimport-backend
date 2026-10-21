@@ -223,6 +223,8 @@ def transition(db, command, request, now, *, install=None):
         next_state = 'discarded'
     elif command in ('source_start','destination_start'):
         require(operation is None and current['state'] == 'active' and not current['awaiting_sync'], 'migration_paused')
+        # Keep enough fence values for the longest successful/cancelled path.
+        require(epoch <= 2**63-1-(4 if command == 'source_start' else 3), 'migration_busy')
         if command == 'source_start':
             from .migration import meta
             require(meta(db, 'migration_hold') is None, 'migration_paused')

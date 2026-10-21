@@ -869,3 +869,22 @@ Logs: /tmp/zenimport-l10-server-recovery-final-all.log,
 L10 remains in progress: installed Chrome archive-control interoperability and
 major-gate review, followed by L11 popup integration and L12 complete acceptance.
 No live API/production data, push, Git tags or publication.
+
+### Local mode L10 major review — reserve complete participant fence paths
+
+Independent major-gate adversarial review found that a source could acquire a
+hold without enough int64 epoch values for cancellation/resume. source_start now
+reserves four increments (start/seal/cancel/resume); destination_start reserves
+three (start/arm/activate or discard), matching Chrome. Boundary rejection commits
+nothing; exact last-safe successful/cancelled paths reach their terminal state
+without overflow, counter reset or financial SDK mutation.
+
+Independent reread reports no remaining budget findings. Docker focused
+participant/live/archive gate: 85 passed in 35.13s (one existing warning). Full
+isolated runner: 802 passed in 68.95s (three existing warnings), HTTP/auth,
+persistence, SIGKILL, graceful shutdown and restored delivery all passed; temporary
+Compose resources cleaned. Logs: /tmp/zenimport-l10-fence-budget-backend.log and
+/tmp/zenimport-l10-fence-budget-backend-full.log.
+
+Other Chrome major-gate corrections are still in progress; L10 is not complete.
+No production/live data, push, Git tags or publication.
