@@ -75,10 +75,15 @@ class ArchiveService(ArchiveRecovery):
     def status(self,id):
         with storage.transaction(self.path,read_only=True) as db:return self._view(self._record(db,id))
 
-    def begin_backup(self,request):
+    @staticmethod
+    def _backup_input(request):
         participant.require(type(request) is dict and set(request)=={'id','installation_id','expected_epoch'})
         id=participant.uuid(request['id']);installation=participant.uuid(request['installation_id']);epoch=participant.integer(request['expected_epoch'],maximum=2**63-3)
         raw=participant.canonical(request).decode()
+        return id,installation,epoch,raw
+
+    def begin_backup(self,request):
+        id,installation,epoch,raw=self._backup_input(request)
         with self.gate.exclusive(),self.mirror.lock,storage.transaction(self.path) as db:
             previous=db.execute('SELECT * FROM archive_records WHERE id=?',(id,)).fetchone()
             if previous:
@@ -99,6 +104,33 @@ class ArchiveService(ArchiveRecovery):
             db.execute("UPDATE migration_installation SET state='export_hold',operation_id=?,participant_epoch=participant_epoch+1 WHERE id=1",(id,))
             result=self._view(self._record(db,id))
         self.signal.set();return result
+
+    def withdraw_backup(self,request):
+        """Cancel an exact snapshot request; never claim it was downloaded."""
+        id,installation,epoch,raw=self._backup_input(request)
+        with self.gate.exclusive(),storage.transaction(self.path) as db:
+            current=participant.installation(db)
+            participant.require(current['installation_id']==installation,'migration_invalid')
+            previous=db.execute('SELECT * FROM archive_records WHERE id=?',(id,)).fetchone()
+            if previous:
+                participant.require(previous['kind']=='backup' and previous['request_json']==raw,'migration_invalid')
+                if previous['phase'] in ('building','blocked'):
+                    self._held(db,previous)
+                    db.execute("UPDATE archive_records SET phase='cancelled',error_code=NULL WHERE id=?",(id,))
+                    db.execute("UPDATE migration_installation SET state='active',operation_id=NULL,participant_epoch=participant_epoch+1 WHERE id=1")
+                elif previous['phase']=='ready':
+                    # The snapshot hold was already released. Explicit discard
+                    # changes only this private cache, not a newer writer/hold.
+                    db.execute("UPDATE archive_records SET phase='cancelled',error_code=NULL WHERE id=?",(id,))
+                else:participant.require(previous['phase'] in ('cancelled','cleaned'),'migration_paused')
+            else:
+                now=self.clock();participant.require(type(now) is int and 0<=now<=253402300799)
+                db.execute("""INSERT INTO archive_records(id,kind,installation_id,initial_epoch,phase,request_json,dataset_id,created_at)
+                    VALUES (?,'backup',?,?,'cleaned',?,?,?)""",
+                    (id,installation,epoch,raw,participant.uuid(meta(db,'instance_id')),now))
+            current=participant.installation(db)
+            return dict(withdrawal_version='1',decision='withdrawn',id=id,request_sha256=sha256(raw.encode('utf-8')).hexdigest(),
+                installation_id=installation,dataset_id=participant.uuid(meta(db,'instance_id')),participant_epoch=str(current['participant_epoch']))
 
     def _backup(self,id):
         with storage.transaction(self.path,read_only=True) as db:

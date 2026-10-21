@@ -30,6 +30,11 @@ class ArchiveCapabilities(WireModel):
     recovery_withdrawal:Literal[True]
 
 
+class BackupCapabilities(WireModel):
+    archive_control_version:Literal['1']
+    backup_withdrawal:Literal[True]
+
+
 class RecoveryWithdrawal(WireModel):
     withdrawal_version:Literal['1']
     decision:Literal['withdrawn']
@@ -99,6 +104,12 @@ def router(service):
 
     @routes.get('/capabilities',response_model=ArchiveCapabilities)
     def capabilities():return dict(archive_control_version='1',recovery_withdrawal=True)
+
+    @routes.get('/backups/capabilities',response_model=BackupCapabilities)
+    def backup_capabilities():return dict(archive_control_version='1',backup_withdrawal=True)
+
+    @routes.post('/backups/withdraw',response_model=RecoveryWithdrawal)
+    def withdraw_backup(data:BackupRequest):return service().withdraw_backup(data.model_dump(mode='json'))
 
     @routes.post('/backups',response_model=ArchiveStatus,status_code=202)
     def backup(data:BackupRequest):return service().begin_backup(data.model_dump(mode='json'))

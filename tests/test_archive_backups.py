@@ -144,3 +144,99 @@ def test_v8_upgrade_preserves_financial_and_physical_authority_with_private_back
         storage.check_integrity(db)
     after=snapshot(source)[1]
     assert {k:v for k,v in after.items() if k!='source_schema_migrations'}=={k:v for k,v in before.items() if k!='source_schema_migrations'}
+
+
+def test_unused_backup_withdrawal_permanently_fences_begin_without_touching_financial_facts(source):
+    from backend import migration_participant as participant
+    service=source.app.state.archives;body=request(source);before=source.app.state.portable.capabilities();facts=snapshot(source)[1]
+    assert source.client.get(BASE+'/backups/capabilities').json()==dict(archive_control_version='1',backup_withdrawal=True)
+    # Preserve the existing exact recovery capabilities response.
+    assert source.client.get(BASE+'/capabilities').json()==dict(archive_control_version='1',recovery_withdrawal=True)
+    proof=source.client.post(BASE+'/backups/withdraw',json=body);assert proof.status_code==200,proof.text
+    assert proof.json()==dict(withdrawal_version='1',decision='withdrawn',id=body['id'],
+        request_sha256=sha256(participant.canonical(body)).hexdigest(),installation_id=body['installation_id'],
+        dataset_id=before['dataset_id'],participant_epoch=before['participant_epoch'])
+    for _ in range(2):
+        assert service.begin_backup(body)['phase']=='cleaned'
+        assert service.withdraw_backup(body)==proof.json()
+        assert not service.run_once()
+    assert source.app.state.portable.capabilities()==before and snapshot(source)[1]==facts
+    assert source.client.post(BASE+'/backups/withdraw',json=body|dict(expected_epoch=str(int(body['expected_epoch'])+1))).status_code==422
+    assert source.client.post(BASE+'/backups/withdraw',json=body,headers={'Authorization':'Bearer wrong-synthetic-token'}).status_code==401
+
+
+@pytest.mark.parametrize('phase',['building','blocked','ready'])
+def test_backup_withdrawal_cancels_only_its_snapshot_and_never_fakes_download_ack(source,phase):
+    service=source.app.state.archives;body=request(source);facts=snapshot(source)[1];writes=len(source.remote.writes)
+    service.begin_backup(body)
+    if phase=='blocked':
+        with storage.transaction(source.path) as db:db.execute("UPDATE archive_records SET phase='blocked',error_code='migration_invalid' WHERE id=?",(body['id'],))
+    if phase=='ready':assert service.run_once()
+    before=source.app.state.portable.capabilities()
+    result=service.withdraw_backup(body)
+    assert result['decision']=='withdrawn' and service.status(body['id'])['phase']=='cancelled'
+    assert service.status(body['id'])['acknowledged_at'] is None
+    after=source.app.state.portable.capabilities()
+    assert after['state']=='active' and after['operation_id'] is None
+    assert int(after['participant_epoch'])==int(before['participant_epoch'])+(0 if phase=='ready' else 1)
+    assert service.withdraw_backup(body)==result
+    while not service.clean(body['id'])['complete']:pass
+    next_request=request(source);service.begin_backup(next_request);held=source.app.state.portable.capabilities()
+    service.withdraw_backup(body)
+    unused=request(source);service.withdraw_backup(unused)
+    assert source.app.state.portable.capabilities()==held
+    assert snapshot(source)[1]==facts and len(source.remote.writes)==writes
+
+
+@pytest.mark.parametrize('reserved',[False,True])
+def test_backup_withdrawal_sql_error_rolls_back_the_hold_and_tombstone(source,reserved,monkeypatch):
+    import sqlite3
+    service=source.app.state.archives;body=request(source)
+    if reserved:service.begin_backup(body)
+    before=source.app.state.portable.capabilities();facts=snapshot(source)[1]
+    from contextlib import contextmanager
+    original=storage.transaction;armed=True
+    @contextmanager
+    def transaction(path,*,read_only=False):
+        nonlocal armed
+        with original(path,read_only=read_only) as db:
+            if armed and not read_only:
+                armed=False
+                trigger="BEFORE UPDATE ON migration_installation" if reserved else "BEFORE INSERT ON archive_records"
+                db.execute("CREATE TRIGGER synthetic_backup_withdraw_failure "+trigger+" BEGIN SELECT RAISE(ABORT,'synthetic rollback'); END")
+            yield db
+    monkeypatch.setattr(storage,'transaction',transaction)
+    with pytest.raises(sqlite3.IntegrityError):service.withdraw_backup(body)
+    assert source.app.state.portable.capabilities()==before and snapshot(source)[1]==facts
+    with storage.transaction(source.path,read_only=True) as db:
+        assert db.execute("SELECT count(*) FROM sqlite_master WHERE name='synthetic_backup_withdraw_failure'").fetchone()[0]==0
+    assert service.withdraw_backup(body)['decision']=='withdrawn'
+
+
+def test_backup_withdrawal_and_delayed_begin_reach_one_permanent_cancelled_outcome(source):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    service=source.app.state.archives;body=request(source);barrier=Barrier(2);facts=snapshot(source)[1]
+    def attempt(command):
+        barrier.wait()
+        try:return command(body)
+        except SyncError as error:
+            assert error.code=='migration_busy';return dict(busy=True)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        begin=pool.submit(attempt,service.begin_backup);withdraw=pool.submit(attempt,service.withdraw_backup)
+        begin.result();withdraw.result()
+    assert service.withdraw_backup(body)['decision']=='withdrawn'
+    assert service.begin_backup(body)['phase'] in ('cancelled','cleaned')
+    while not service.clean(body['id'])['complete']:pass
+    assert not service.run_once() and source.app.state.portable.capabilities()['state']=='active'
+    assert snapshot(source)[1]==facts
+
+
+def test_backup_withdrawal_rejects_wrong_physical_identity_and_recovery_kind(source):
+    service=source.app.state.archives;body=request(source);before=source.app.state.portable.capabilities()
+    assert source.client.post(BASE+'/backups/withdraw',json=body|dict(installation_id=str(uuid4()))).status_code==422
+    with storage.transaction(source.path) as db:
+        db.execute("""INSERT INTO archive_records(id,kind,installation_id,initial_epoch,phase,request_json,dataset_id,created_at,archive_sha256,archive_size)
+            VALUES (?,'recovery',?,?,'cleaned','{}',?,0,?,1)""",(body['id'],body['installation_id'],int(body['expected_epoch']),before['dataset_id'],'a'*64))
+    assert source.client.post(BASE+'/backups/withdraw',json=body).status_code==422
+    assert source.app.state.portable.capabilities()==before

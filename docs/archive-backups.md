@@ -128,3 +128,28 @@ cannot restart it. Upload, finalization and activation cannot bypass the termina
 record. Cache cleanup retains the request audit. Lost withdrawal replies can be
 retried without releasing a newer foreign operation. Ordinary capture APIs and
 live peer migration do not gain an offline escape or a resume shortcut.
+
+## Cancelling a backup whose begin outcome is unknown
+
+Before creating a durable client backup request, check authenticated
+`GET /api/v1/migration/archives/backups/capabilities`. The exact response is
+`{"archive_control_version":"1","backup_withdrawal":true}`. This separate endpoint
+preserves the existing recovery capabilities contract unchanged.
+
+`POST /api/v1/migration/archives/backups/withdraw` accepts the same exact
+`BackupRequest` as begin: `id`, `installation_id`, `expected_epoch`. Its permanent
+request audit prevents a delayed begin from creating a new hold after withdrawal.
+A never-accepted request records a cleaned tombstone without changing authority.
+An owned building/blocked backup releases only its own hold atomically. A ready
+snapshot has already released its hold; withdrawal discards only that snapshot
+cache, preserving every current installation/epoch/foreign operation field.
+
+The response uses the version-1 withdrawal proof: `withdrawal_version`, `decision`,
+`id`, `request_sha256`, `installation_id`, `dataset_id`, `participant_epoch`.
+`request_sha256` hashes the exact canonical backup request. It proves withdrawal,
+not download, migration, activation, retirement or peer handoff. Existing archive
+request/hash/manifest/acknowledgement evidence remains immutable. No acknowledgement
+is fabricated to discard a ready snapshot. Bounded `/clean` calls remove its cache;
+financial rows remain untouched. Conflicting request bodies, wrong physical
+installations and recovery IDs are rejected. Repeated exact withdrawals and begins
+cannot restart cancelled work.

@@ -947,3 +947,24 @@ following archive-withdrawal checkpoint. No production data or publication.
 
 No production data, live API, push, tags or publication. Full container lifecycle
 and cross-runtime acceptance remain L12 work.
+
+### L11 archive control prerequisite: exact backup withdrawal
+
+Added a separate authenticated backup capability endpoint and permanent exact
+BackupRequest withdrawal. Unused requests leave cleaned tombstones; owned holds
+cancel atomically; ready snapshots discard only their private cache without a
+false download acknowledgement or any current/foreign authority change. Canonical
+request audits and prior archive evidence remain retained. Existing exact recovery
+capabilities are unchanged. Native SQL rollback and concurrent begin/withdraw,
+physical/kind conflict, authorization, phase and retry tests cover the control.
+Independent API review found no remaining confirmed findings. Docker full-suite
+result is recorded below after completion; no live services/data, push or tags.
+
+Docker complete suite: 826 passed, three existing third-party/intentional duplicate
+ZIP warnings (155.68s). Initial two fault-injection tests installed a persistent
+extra trigger and were correctly rejected by the schema ownership validator;
+injection now occurs inside the already validated transaction and rolls back with
+it. SQL phase/authority/tombstone rollback, concurrent begin/withdraw, wrong
+physical/kind and unchanged recovery capability checks all pass. Log:
+/tmp/zenimport-l11-backup-withdrawal-full.log. Container lifecycle and the final
+combined browser/server acceptance remain L12 work.
