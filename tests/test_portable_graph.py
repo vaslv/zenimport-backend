@@ -61,6 +61,23 @@ def test_source_projection_and_graph_preserve_a_complete_attempted_journal(sourc
     assert not list(data.root.glob('.graph-validation-*'))
 
 
+@pytest.mark.parametrize('kind,day_field',[('reminder','startDate'),('reminderMarker','date')])
+def test_current_mirror_unknown_movement_flags_remain_portable(source,tmp_path,kind,day_field):
+    # SDK reads retain unknown fields. Generic mirror.save_entity projects these
+    # flags for every movement kind, so portable proof must check the same rule.
+    source.remote.data[kind]=[dict(id='fixture-reminder',**{day_field:'2026-10-01'},
+        income=0,outcome=1,viewed=True,hold=False,tag=[])]
+    source.app.state.mirror.refresh(force=True)
+    with storage.transaction(source.path) as db:db.execute("DELETE FROM service_meta WHERE key='fixture-network-write-lock-free'")
+    lineage,rows,_=snapshot(source)
+    graph.validate_stage(stage(tmp_path,lineage,rows),expected_owners=['1'])
+    projection=next(row for row in rows['zen_movements'] if row[:2]==[kind,'fixture-reminder'])
+    assert projection[offset('zen_movements','viewed')]==1
+    projection[offset('zen_movements','viewed')]=0
+    with pytest.raises(codec.PortableError,match='invalid_mirror_projection'):
+        graph.validate_stage(stage(tmp_path,lineage,rows),expected_owners=['1'])
+
+
 def test_format_valid_golden_is_never_mistaken_for_a_valid_financial_graph(tmp_path):
     golden = json.loads(Path('fixtures/business/v1/portable-golden-v2.json').read_text())
     rows = {name: [[codec.unscalar(cell) for cell in row] for row in values] for name, values in golden['rows'].items()}

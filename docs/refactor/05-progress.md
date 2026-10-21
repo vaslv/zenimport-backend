@@ -702,3 +702,19 @@ An independent read-only review found no actionable defect in the final authorit
 implementation and interop runner. Runtime backend code is unchanged; the script
 is excluded from the runtime image. No live account, production data, push, tags
 or publication were used.
+# Local-mode L6 interoperability correction — 2026-10-21
+
+- Portable mirror proof now applies the actual generic movement flag projection
+  to reminder and reminderMarker rows as well as transactions. The SDK and mirror
+  retain unknown fields; previously a valid viewed/hold field on either reminder
+  kind made the backend reject its own exported mirror. Raw data is unchanged.
+- Two synthetic regressions validate real mirror-to-archive graphs and reject a
+  deliberately changed projected flag. The Chrome proof receives the same fix.
+- Manual/API review confirmed the proof now matches mirror.save_entity; no SDK
+  request, transaction writing, schema or portable-format change is involved.
+- Docker: focused portable graph suite 54 passed; full isolated Python suite
+  762 passed in 40.20s. Three existing deprecation/duplicate-ZIP fixture warnings.
+  Logs: /tmp/zenimport-l6-backend.log and /tmp/zenimport-l6-backend-full.log.
+- This is compatibility support for the extension's in-progress L6, not local-mode
+  product readiness. Production services/data and real API accounts were untouched.
+  No push, tags or publication.

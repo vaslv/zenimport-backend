@@ -431,7 +431,7 @@ def _mirror_projections(db):
         expected.extend(str(data[field]) if data.get(field) is not None else None
                         for field in ('incomeAccount', 'outcomeAccount', 'incomeInstrument', 'outcomeInstrument'))
         expected.extend(mirror.amount(data.get(field)) for field in ('income', 'outcome'))
-        expected.extend(mirror.flag(data.get(field)) if row['kind'] == 'transaction' else None for field in ('viewed', 'hold'))
+        expected.extend(mirror.flag(data.get(field)) for field in ('viewed', 'hold'))
         require(expected == actual, 'invalid_mirror_projection')
         tags = [tuple(tag) for tag in db.execute('SELECT tag_id,position FROM zen_tags WHERE kind=? AND entity_id=? ORDER BY position', (row['kind'], row['id']))]
         require(tags == [(tag,i) for i,tag in enumerate(data.get('tag') or [])], 'invalid_mirror_tags')
