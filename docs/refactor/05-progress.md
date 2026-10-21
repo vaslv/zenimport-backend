@@ -678,3 +678,27 @@ is involved. Docker vector/participant/HTTP checks: 53 passed in 2.24s. Native
 Chrome 140 and Chromium 145 each passed every observation; browser unit checks
 total 164. This adds test data only, not new backend authority or runtime logic.
 The browser participant and protected activation remain unfinished L4 work.
+
+### Actual native/SQLite authority exchange (L4)
+
+Added an explicit test-only participant exchange script to the Docker tests target.
+The runner in the neighboring Chrome project persists a genuine MV3 profile
+between phases and exchanges source-seal, destination-arm and source-handoff
+receipts with real SQLite participant transitions. Both directions activate once;
+request replay returns the same receipt and awaiting-sync keeps ordinary workers
+blocked. All 49 logical tables are compared with separately asserted Python
+mirror, prediction, unattempted-source and provenance normalizations. Native
+activation preserves its validated financial facts for later guarded first-sync
+initialization; this does not enable local financial sends.
+
+The seven prepare/browser/SQLite/verify phases passed on Chromium 145 and Chrome
+140. The three native phases took 2.55/1.29/0.99s and 7.93/7.53/6.71s respectively.
+Authenticated peer status and owner identity are offline private fixture ports;
+these runs do not establish live HTTP authentication or real SDK owner checks.
+The full isolated backend Docker gate passed 760 tests in 50.30s plus HTTP/auth,
+fake-SDK dispatch, SIGKILL/recovery, graceful stop and snapshot restoration.
+
+An independent read-only review found no actionable defect in the final authority
+implementation and interop runner. Runtime backend code is unchanged; the script
+is excluded from the runtime image. No live account, production data, push, tags
+or publication were used.

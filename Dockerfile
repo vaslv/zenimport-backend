@@ -53,6 +53,7 @@ COPY scripts/update_sdk.py ./scripts/update_sdk.py
 COPY scripts/build_portable_contract.py ./scripts/build_portable_contract.py
 COPY scripts/storage_check_vectors.py scripts/portable_format_interop.py ./scripts/
 COPY scripts/portable_financial_interop.py ./scripts/
+COPY scripts/portable_authority_interop.py ./scripts/
 COPY scripts/participant_wire_vectors.py ./scripts/
 COPY scripts/graph_value_vectors.py ./scripts/
 COPY scripts/bank_record_vectors.py ./scripts/
