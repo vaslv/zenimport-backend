@@ -645,3 +645,25 @@ and rejection of changed captured values on the shared fixture. Focused offline
 Docker graph/resource/model/fixture checks: 74 passed in 5.28s. Chrome now has a
 complete read-only facts validator; protected native activation/lifecycle and the
 remaining L4 interop/performance/review gates are still required.
+
+### Native browser financial archive interoperability (L4)
+
+Added an explicit test-only interop script and Docker test-image copy. Python
+archives for current and legacy graphs, plus a genuine format-1 export restored
+into a compatible temporary backend and converted to format 2, pass through actual
+MV3/IndexedDB staging/validation/copy in Chrome 140 and Chromium 145. Returned
+archives install into isolated synthetic protocol-2 targets, re-export from SQL
+and pass through the browser again. Python compares every logical scalar and
+separately asserts the installer's declared runtime/provenance normalizations.
+
+All prepare/install/final verification phases passed for the three graphs. Each
+browser passed three native cases in each direction (145: 5.41s/4.39s; 140:
+27.04s/21.64s). A first format-1 test expectation confused a physical hold-audit
+alias with its original logical key; correcting that oracle required no runtime
+change. Synthetic owner/participant setup is not a live identity proof or browser
+activation gate. Test scripts never enter the runtime Docker image.
+
+Full isolated Docker gate: 759 tests passed in 38.15s, followed by HTTP/auth,
+fake-SDK dispatch, SIGKILL, graceful stop and snapshot restoration. Browser L4
+authority/export/retirement and independent review remain incomplete. No real API
+calls, production data, push, tags or publication.
