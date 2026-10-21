@@ -4,7 +4,7 @@ from hashlib import sha256
 from uuid import uuid4
 from base64 import b64encode
 import pytest
-from backend import storage,portable_codec as codec
+from backend import storage,portable_codec as codec,migration_participant as participant
 from backend.archive_service import ArchiveService
 from backend.capture_policy import SyncError
 from delivery_factory import DeliveryHarness
@@ -254,3 +254,94 @@ def test_failed_activation_transaction_retains_empty_destination_and_original_pr
     monkeypatch.setattr(portable_install,'install_recovery',original)
     assert service.activate_recovery(body['id'],proof['id'],True)['phase']=='activated'
     assert not target.remote.writes
+
+
+def test_unused_recovery_withdrawal_permanently_fences_a_delayed_begin(recovery):
+    _,target,body,_,_=recovery;before=target.app.state.portable.capabilities()
+    response=target.client.post(BASE+'/recoveries/withdraw',json=body);assert response.status_code==200,response.text
+    proof=response.json();assert proof==dict(withdrawal_version='1',decision='withdrawn',id=body['id'],
+        request_sha256=sha256(participant.canonical(body)).hexdigest(),
+        installation_id=body['installation_id'],dataset_id=before['dataset_id'],participant_epoch=before['participant_epoch'])
+    assert target.app.state.portable.capabilities()==before
+    for _ in range(2):
+        late=target.client.post(BASE+'/recoveries',json=body);assert late.status_code==202 and late.json()['phase']=='cleaned',late.text
+        assert target.client.post(BASE+'/recoveries/withdraw',json=body).json()==proof
+    assert target.app.state.portable.capabilities()==before and not target.remote.writes
+    assert target.client.post(BASE+'/'+body['id']+'/finalize',json={}).status_code==409
+    retried=target.client.post(BASE+'/'+body['id']+'/retry',json={});assert retried.status_code==202 and retried.json()['phase']=='cleaned'
+    assert target.client.post(BASE+'/'+body['id']+'/activate',json=dict(preview_id=str(uuid4()),accept_summary=True)).status_code==409
+
+
+def test_withdrawal_of_an_owned_hold_cancels_atomically_and_never_cancels_another_hold(recovery):
+    _,target,body,_,_=recovery;service=target.app.state.archives
+    service.begin_recovery(body);proof=service.withdraw_recovery(body)
+    assert service.status(body['id'])['phase']=='cancelled'
+    assert proof['participant_epoch']==str(int(body['expected_epoch'])+2)
+    assert target.app.state.portable.capabilities()['state']=='active'
+    while not service.clean(body['id'])['complete']:pass
+    cap=target.app.state.portable.capabilities()
+    foreign=body|dict(id=str(uuid4()),expected_epoch=cap['participant_epoch'])
+    service.begin_recovery(foreign);held=target.app.state.portable.capabilities()
+    # Lost cancellation replies can be retried while another operation owns hold.
+    again=service.withdraw_recovery(body);assert again['decision']=='withdrawn'
+    assert target.app.state.portable.capabilities()==held
+    unused=body|dict(id=str(uuid4()))
+    assert service.withdraw_recovery(unused)['decision']=='withdrawn'
+    assert target.app.state.portable.capabilities()==held and not target.remote.writes
+
+
+def test_withdrawal_rejects_conflicts_and_permanent_activation(recovery):
+    _,target,body,raw,_=recovery;service=target.app.state.archives
+    unused=body|dict(id=str(uuid4()));service.withdraw_recovery(unused)
+    response=target.client.post(BASE+'/recoveries/withdraw',json=unused|dict(archive_sha256='f'*64));assert response.status_code==422
+    summary=preview(target,body,raw);service.activate_recovery(body['id'],summary['id'],True)
+    before=target.app.state.portable.capabilities()
+    response=target.client.post(BASE+'/recoveries/withdraw',json=body);assert response.status_code==409
+    assert target.app.state.portable.capabilities()==before and not target.remote.writes
+
+
+def test_withdrawal_and_delayed_begin_serialize_to_a_permanent_non_writable_outcome(recovery):
+    from concurrent.futures import ThreadPoolExecutor
+    _,target,body,_,_=recovery;service=target.app.state.archives
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        def attempt(operation):
+            try:return operation(deepcopy(body))
+            except SyncError as error:
+                assert error.code=='migration_busy';return {'busy':True}
+        begin=pool.submit(attempt,service.begin_recovery)
+        withdraw=pool.submit(attempt,service.withdraw_recovery)
+        first,second=begin.result(),withdraw.result()
+        assert first.get('busy') or first['phase'] in ('uploading','cleaned')
+        assert second.get('busy') or second['decision']=='withdrawn'
+    assert service.withdraw_recovery(body)['decision']=='withdrawn'
+    assert service.status(body['id'])['phase'] in ('cancelled','cleaned')
+    assert target.app.state.portable.capabilities()['state']=='active'
+    assert service.begin_recovery(body)['phase'] in ('cancelled','cleaned')
+    assert not service.run_once() and not target.remote.writes
+
+
+@pytest.mark.parametrize('reserved',[False,True])
+def test_withdrawal_sql_failure_cannot_partially_cancel_or_publish_a_tombstone(recovery,reserved,monkeypatch):
+    import sqlite3
+    _,target,body,_,_=recovery;service=target.app.state.archives
+    if reserved:service.begin_recovery(body)
+    before=target.app.state.portable.capabilities()
+    from contextlib import contextmanager
+    original=storage.transaction;armed=True
+    @contextmanager
+    def transaction(path,*,read_only=False):
+        nonlocal armed
+        with original(path,read_only=read_only) as db:
+            if armed and not read_only:
+                armed=False
+                trigger="BEFORE UPDATE ON migration_installation" if reserved else "BEFORE INSERT ON archive_records"
+                db.execute("CREATE TRIGGER synthetic_withdraw_failure "+trigger+" BEGIN SELECT RAISE(ABORT,'synthetic withdrawal failure'); END")
+            yield db
+    monkeypatch.setattr(storage,'transaction',transaction)
+    with pytest.raises(sqlite3.IntegrityError):service.withdraw_recovery(body)
+    assert target.app.state.portable.capabilities()==before
+    with storage.transaction(target.path) as db:
+        row=db.execute('SELECT phase FROM archive_records WHERE id=?',(body['id'],)).fetchone()
+        assert row is not None and row[0]=='uploading' if reserved else row is None
+        assert db.execute("SELECT count(*) FROM sqlite_master WHERE name='synthetic_withdraw_failure'").fetchone()[0]==0
+    assert service.withdraw_recovery(body)['decision']=='withdrawn' and not target.remote.writes

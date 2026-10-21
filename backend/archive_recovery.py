@@ -32,7 +32,8 @@ class ArchiveRecovery:
         except (HTTPError,ResponseError,TransportError):
             raise SyncError('zenmoney_unavailable',503,retryable=True) from None
 
-    def begin_recovery(self,request):
+    @staticmethod
+    def _recovery_input(request):
         fields={'id','installation_id','expected_epoch','dataset_id','archive_sha256','archive_size','owner_ids',
             'former_writers_retired','accept_post_snapshot_evidence_loss'}
         participant.require(type(request) is dict and set(request)==fields)
@@ -43,6 +44,35 @@ class ArchiveRecovery:
         declared=request['owner_ids'];participant.require(type(declared) is list and 0<len(declared)<=1000 and
             all(type(v) is str and 0<len(v)<=240 for v in declared) and declared==sorted(set(declared)))
         raw=participant.canonical(request).decode()
+        return id,installation,dataset,epoch,size,declared,raw
+
+    def withdraw_recovery(self,request):
+        """Permanently fence an exact begin, including one never accepted."""
+        id,installation,dataset,epoch,size,_,raw=self._recovery_input(request)
+        with self.gate.exclusive(),storage.transaction(self.path) as db:
+            current=participant.installation(db)
+            participant.require(current['installation_id']==installation,'migration_invalid')
+            previous=db.execute('SELECT * FROM archive_records WHERE id=?',(id,)).fetchone()
+            if previous:
+                participant.require(previous['kind']=='recovery' and previous['request_json']==raw,'migration_invalid')
+                participant.require(previous['phase']!='activated','migration_paused')
+                if previous['phase'] not in ('cancelled','cleaned'):
+                    self._held(db,previous)
+                    db.execute("UPDATE archive_records SET phase='cancelled',error_code=NULL WHERE id=?",(id,))
+                    db.execute("UPDATE migration_installation SET state='active',operation_id=NULL,participant_epoch=participant_epoch+1 WHERE id=1")
+            else:
+                now=self.clock();participant.require(type(now) is int and 0<=now<=253402300799)
+                # No hold or chunks existed. Keep the permanent rejected-command
+                # audit outside the active cache; never alter a foreign operation.
+                db.execute("""INSERT INTO archive_records(id,kind,installation_id,initial_epoch,phase,request_json,dataset_id,created_at,archive_sha256,archive_size)
+                    VALUES (?,'recovery',?,?,'cleaned',?,?,?,?,?)""",
+                    (id,installation,epoch,raw,dataset,now,request['archive_sha256'],size))
+            current=participant.installation(db)
+            return dict(withdrawal_version='1',decision='withdrawn',id=id,request_sha256=sha256(raw.encode('utf-8')).hexdigest(),
+                installation_id=installation,dataset_id=participant.uuid(meta(db,'instance_id')),participant_epoch=str(current['participant_epoch']))
+
+    def begin_recovery(self,request):
+        id,installation,dataset,epoch,size,declared,raw=self._recovery_input(request)
         with self.gate.exclusive(),self.mirror.lock:
             with storage.transaction(self.path,read_only=True) as db:
                 previous=db.execute('SELECT * FROM archive_records WHERE id=?',(id,)).fetchone()

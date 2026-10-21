@@ -97,3 +97,34 @@ scoped. Retry never automatically sends financial SDK mutations.
 
 Popup wiring remains an L11 gate. Neither backup nor archive restore selects a
 browser storage mode or authorizes automatic offline fallback.
+
+## Withdrawing a rejected recovery request
+
+Before freezing a browser route for remote recovery, discover
+`GET /api/v1/migration/archives/capabilities`. This authenticated, read-only reply
+contains `archive_control_version: "1"` and `recovery_withdrawal: true`. Older
+servers must be upgraded before this recovery path is offered.
+
+`POST /api/v1/migration/archives/recoveries/withdraw` takes the exact full recovery
+request, including its original ID, expected epoch, archive digest and consent.
+It permanently withdraws that command. If reservation never happened, it stores
+an immutable terminal tombstone without changing any participant, history, epoch,
+foreign hold or chunk. An existing reservation can cancel only its own hold,
+atomically. Activation is permanent and cannot be withdrawn. Conflicting request
+content or a different archive kind under the same ID is rejected.
+
+The reply has exactly `withdrawal_version: "1"`, `decision: "withdrawn"`, `id`,
+`request_sha256`, `installation_id`, `dataset_id` and `participant_epoch`.
+The digest covers the canonical full recovery request. Dataset and epoch describe
+server state observed with the permanent withdrawal decision. The browser checks
+this proof and a fresh authenticated identity against its original selected
+physical server and dataset before releasing its local route hold. A wrong owner
+in the rejected archive must not prevent restoration of that original route;
+withdrawal grants no imported writer. An unavailable or changed server leaves the
+browser paused, with the original immutable request retained for retry.
+
+A late begin returns the saved cancelled/cleaned result. Retrying cancelled work
+cannot restart it. Upload, finalization and activation cannot bypass the terminal
+record. Cache cleanup retains the request audit. Lost withdrawal replies can be
+retried without releasing a newer foreign operation. Ordinary capture APIs and
+live peer migration do not gain an offline escape or a resume shortcut.

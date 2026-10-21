@@ -25,6 +25,21 @@ class RecoveryRequest(BackupRequest):
     accept_post_snapshot_evidence_loss:bool
 
 
+class ArchiveCapabilities(WireModel):
+    archive_control_version:Literal['1']
+    recovery_withdrawal:Literal[True]
+
+
+class RecoveryWithdrawal(WireModel):
+    withdrawal_version:Literal['1']
+    decision:Literal['withdrawn']
+    id:UUID
+    request_sha256:Digest
+    installation_id:UUID
+    dataset_id:UUID
+    participant_epoch:DecimalText
+
+
 class RecoveryChunk(WireModel):
     data:Annotated[str,Field(strict=True,min_length=4,max_length=349528)]
     sha256:Digest
@@ -82,11 +97,17 @@ class CleanResult(WireModel):
 def router(service):
     routes=APIRouter(prefix='/api/v1/migration/archives')
 
+    @routes.get('/capabilities',response_model=ArchiveCapabilities)
+    def capabilities():return dict(archive_control_version='1',recovery_withdrawal=True)
+
     @routes.post('/backups',response_model=ArchiveStatus,status_code=202)
     def backup(data:BackupRequest):return service().begin_backup(data.model_dump(mode='json'))
 
     @routes.post('/recoveries',response_model=ArchiveStatus,status_code=202)
     def recovery(data:RecoveryRequest):return service().begin_recovery(data.model_dump(mode='json'))
+
+    @routes.post('/recoveries/withdraw',response_model=RecoveryWithdrawal)
+    def withdraw(data:RecoveryRequest):return service().withdraw_recovery(data.model_dump(mode='json'))
 
     @routes.put('/{id}/chunks/{number}',response_model=RecoveryChunkResult)
     def upload(id:UUID,number:int,data:RecoveryChunk):

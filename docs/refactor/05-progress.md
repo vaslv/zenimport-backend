@@ -925,3 +925,25 @@ error literal is now explicitly frozen to the existing protocol-2 contract;
 original shared fixture bytes are unchanged. Docker schema/negative-boundary
 checks: two passed, 13 deselected (0.44s). Full verification is recorded with the
 following archive-withdrawal checkpoint. No production data or publication.
+
+### L11 recovery prerequisite — permanently withdraw a rejected archive begin
+
+- Added authenticated archive capability discovery and exact-request withdrawal.
+  A never-accepted recovery gets a permanent cleaned tombstone, without changing
+  participant state/epoch, foreign holds, chunks or financial data. An owned hold
+  cancels atomically; activated data cannot be withdrawn. Exact late begin/retry
+  cannot restart a withdrawn command, including after cache cleanup.
+- The separate versioned proof binds canonical full request SHA256, physical
+  installation and observed original dataset/epoch. It lets the browser release
+  only its own pending route after fresh identity verification, including rejected
+  wrong-owner or stale-epoch begins. This is not an activation or peer receipt.
+- Native browser orchestration is in the Chrome checkpoint. API and adversarial
+  review of the paired change are clean after fixing the rejected-begin dead-end.
+- Docker targeted archive/backups/context fence: 40 passed (8.20s). Complete
+  backend suite after the frozen task-schema correction: 818 passed (55.54s),
+  three existing third-party warnings. Concurrent busy retry, late begin and
+  SQL rollback tests cover unused and owned cancellation. Logs:
+  /tmp/zenimport-l11-withdraw-backend{,-full}.log.
+
+No production data, live API, push, tags or publication. Full container lifecycle
+and cross-runtime acceptance remain L12 work.
