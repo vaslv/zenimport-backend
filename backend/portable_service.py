@@ -53,6 +53,17 @@ class PortableMigration:
             return dict(protocol_version='2',archive_version='2',financial_schema_version='1',
                 chunk_bytes='262144',max_archive_bytes=str(participant.LIMIT),can_import=bool(eligible),legacy_hold=legacy,**current)
 
+    def identity(self):
+        # A fresh read verifies the configured credential, without publishing a
+        # cursor or unpausing an imported/shared financial dataset.
+        with self.gate.exclusive(), self.mirror.lock:
+            try:
+                with TemporaryDirectory(prefix='.portable-identity-',dir=self.path.parent) as directory:
+                    current=self._read_identity(Path(directory))
+            except (TransportError, HTTPError, ResponseError, ValueError, sqlite3.Error):
+                raise SyncError('zenmoney_unavailable',503,retryable=True) from None
+            return dict(self.capabilities(),owner_ids=list(current),checked_at=str(self.clock()))
+
     def status(self,switch):
         with storage.transaction(self.path,read_only=True) as db:
             result=participant.status(db,switch)
@@ -260,6 +271,9 @@ class PortableMigration:
                         install=lambda db,op:portable_install.install(db,op,stage,source_hash=self.mirror.source_hash))
 
     def _fresh_owner(self,root,expected):
+        participant.require(tuple(self._read_identity(root))==tuple(expected),'migration_wrong_account')
+
+    def _read_identity(self,root):
         participant.require(self.mirror.client is not None,'zenmoney_unavailable')
         diff=self.mirror.client.read_diff(0,force_fetch=FORCE_FETCH)
         probe=root/'identity.sqlite3';storage.initialize(probe)
@@ -267,4 +281,6 @@ class PortableMigration:
             db.execute('UPDATE zen_mirror_state SET source_hash=? WHERE id=1',(self.mirror.source_hash,))
             mirror_module.apply_diff(db,diff,expected_generation=0,source_hash=self.mirror.source_hash,
                 requested_cursor=0,full=True,now=self.clock(),origin='migration-identity-check')
-            participant.require(tuple(owners(db))==tuple(expected),'migration_wrong_account')
+            result=tuple(owners(db))
+            participant.require(bool(result),'zenmoney_unavailable')
+            return result

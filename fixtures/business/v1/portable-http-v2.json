@@ -12,6 +12,10 @@
       "/capabilities"
     ],
     [
+      "POST",
+      "/identity"
+    ],
+    [
       "GET",
       "/switches/{switch}"
     ],
@@ -632,6 +636,125 @@
         "can_import"
       ],
       "title": "Capabilities",
+      "type": "object"
+    },
+    "Identity": {
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "format": "uuid",
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "participant_epoch": {
+          "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+          "title": "Participant Epoch",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "active",
+            "export_hold",
+            "import_hold",
+            "armed",
+            "cancel_pending",
+            "handed_off"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "operation_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Operation Id"
+        },
+        "awaiting_sync": {
+          "title": "Awaiting Sync",
+          "type": "boolean"
+        },
+        "legacy_hold": {
+          "anyOf": [
+            {
+              "enum": [
+                "exported",
+                "imported"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Legacy Hold"
+        },
+        "protocol_version": {
+          "const": "2",
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "archive_version": {
+          "const": "2",
+          "title": "Archive Version",
+          "type": "string"
+        },
+        "financial_schema_version": {
+          "const": "1",
+          "title": "Financial Schema Version",
+          "type": "string"
+        },
+        "chunk_bytes": {
+          "const": "262144",
+          "title": "Chunk Bytes",
+          "type": "string"
+        },
+        "max_archive_bytes": {
+          "const": "67108864",
+          "title": "Max Archive Bytes",
+          "type": "string"
+        },
+        "can_import": {
+          "title": "Can Import",
+          "type": "boolean"
+        },
+        "owner_ids": {
+          "items": {
+            "maxLength": 240,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Owner Ids",
+          "type": "array"
+        },
+        "checked_at": {
+          "pattern": "^(?:0|[1-9][0-9]{0,18})$",
+          "title": "Checked At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "installation_id",
+        "participant_epoch",
+        "state",
+        "operation_id",
+        "awaiting_sync",
+        "legacy_hold",
+        "protocol_version",
+        "archive_version",
+        "financial_schema_version",
+        "chunk_bytes",
+        "max_archive_bytes",
+        "can_import",
+        "owner_ids",
+        "checked_at"
+      ],
+      "title": "Identity",
       "type": "object"
     },
     "Status": {

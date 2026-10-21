@@ -97,3 +97,36 @@ def test_unknown_status_never_invents_an_export_or_activation_receipt(source):
     assert response.status_code==200
     assert response.json()['operation'] is None and response.json()['receipts']==[] and response.json()['work']==[]
     assert source.client.post(BASE+'/commands/source_seal',json={}).status_code==422
+
+
+def test_fresh_identity_read_preserves_financial_state_and_hold(source,tmp_path):
+    before_reads=len(source.remote.reads)
+    with storage.transaction(source.path,read_only=True) as db:
+        before=tuple(db.execute('SELECT cursor,generation,refreshed_at FROM zen_mirror_state').fetchone())
+        attempts=db.execute('SELECT count(*) FROM delivery_attempts').fetchone()[0]
+    response=source.client.post(BASE+'/identity',json={})
+    assert response.status_code==200,response.text
+    identity=response.json();assert identity['owner_ids']==['1'] and identity['checked_at'].isdigit()
+    assert len(source.remote.reads)==before_reads+1 and response.headers['cache-control']=='no-store'
+    with storage.transaction(source.path,read_only=True) as db:
+        assert tuple(db.execute('SELECT cursor,generation,refreshed_at FROM zen_mirror_state').fetchone())==before
+        assert db.execute('SELECT count(*) FROM delivery_attempts').fetchone()[0]==attempts
+    assert source.client.post(BASE+'/identity',json={},headers={'Authorization':'Bearer invalid-fixture'}).status_code==401
+    assert source.client.post(BASE+'/identity',json={'unexpected':True}).status_code==422
+    target=DeliveryHarness(tmp_path/'identity-target.sqlite3')
+    try:
+        switch=str(uuid4());command(source,'source_start',switch,peer_id=target.client.get(BASE+'/capabilities').json()['installation_id'])
+        held=source.client.post(BASE+'/identity',json={});assert held.status_code==200,held.text
+        assert held.json()['state']=='export_hold'
+        assert source.client.get(BASE+'/capabilities').json()['state']=='export_hold'
+    finally:target.close()
+
+
+def test_fresh_identity_failure_is_redacted_and_does_not_invent_an_owner(source,monkeypatch):
+    from zenmoney_api import TransportError
+    def unavailable(*args,**kwargs):raise TransportError('synthetic private response')
+    monkeypatch.setattr(source.app.state.portable,'_read_identity',unavailable)
+    response=source.client.post(BASE+'/identity',json={})
+    assert response.status_code==503 and response.json()['error']['code']=='zenmoney_unavailable'
+    assert 'synthetic private response' not in response.text
+    assert not list(source.path.parent.glob('.portable-identity-*'))

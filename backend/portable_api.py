@@ -76,6 +76,11 @@ class Capabilities(ParticipantStatus):
     can_import:bool
 
 
+class Identity(Capabilities):
+    owner_ids:list[Annotated[str,Field(strict=True,min_length=1,max_length=240)]]
+    checked_at:DecimalText
+
+
 class Status(ParticipantStatus):
     operation:Operation|None
     receipts:list[Receipt]
@@ -114,6 +119,9 @@ def router(service):
 
     @routes.get('/capabilities',response_model=Capabilities)
     def capabilities():return service().capabilities()
+
+    @routes.post('/identity',response_model=Identity)
+    def identity(data:Empty):return service().identity()
 
     @routes.get('/switches/{switch}',response_model=Status)
     def status(switch:UUID):return service().status(str(switch))

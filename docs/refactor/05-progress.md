@@ -749,3 +749,22 @@ Independent API review found no remaining issues. Full isolated Docker arm64:
 graceful stop and restored snapshot delivery lifecycle passed. Only disposable
 synthetic data used. Log: /tmp/zenimport-l9-backend-history.log. No production
 service/data/API, push, tags or publication.
+
+### L10.1 — fresh portable migration identity (2026-10-21)
+
+Added authenticated POST /api/v1/migration/portable/identity. It reads the current
+SDK identity into a private temporary database under the exclusive writer gate;
+it does not publish financial rows/cursors or clear holds. The existing migration
+owner checks reuse the same projection validation. Errors are redacted.
+
+The canonical portable HTTP contract is pinned to Chrome commit
+65d3a3446dc1dff23ad533f0a6fa13148379aab3; its verified copy includes this additive
+endpoint. Existing portable commands and ordinary API v1 retain their contracts.
+Independent API review found no remaining issues. Chrome's real browser to this
+isolated Python HTTP API identity/auth/permission check passed in 3.29s.
+
+Docker: 32 focused portable API/service/contract cases passed in 11.98s; the full
+isolated arm64 runner passed 769 tests in 32.78s (three existing warnings), then
+HTTP/auth, SIGKILL recovery, graceful shutdown and restored journal checks. The
+disposable Compose project/volumes/images were cleaned. Logs:
+/tmp/zenimport-l10-identity*.log. No production data, push, tags or publication.
