@@ -731,3 +731,21 @@ or publication were used.
   regressions; HTTP/auth and writer lifecycle checks also completed. Existing
   dependency/ZIP fixture warnings remain. Log: /tmp/zenimport-l7-backend-full.log.
 - No production data/services, real API calls, push, tags or publication.
+
+
+## 2026-10-21 — Preserve valid cross-job delivery authorization in portable archives
+
+The standalone extension L9 source-parity test exposed an overstrict portable
+history condition. A new synchronization click legitimately authorizes immutable
+completed observations from an older job for the same physical account. This is
+existing delivery.authorize_job SQL behavior, including history outside overlap.
+Removed only the extra interval-job equality; complete revision/account/current
+job snapshot and FK/insert proofs remain mandatory. Attempted identity/payload,
+terminal history and unresolved-delivery protections remain unchanged.
+
+Added an actual DeliveryHarness newer-click/older-capture archive regression.
+Independent API review found no remaining issues. Full isolated Docker arm64:
+767 tests passed in 38.05s (three existing warnings), HTTP/auth, SIGKILL recovery,
+graceful stop and restored snapshot delivery lifecycle passed. Only disposable
+synthetic data used. Log: /tmp/zenimport-l9-backend-history.log. No production
+service/data/API, push, tags or publication.

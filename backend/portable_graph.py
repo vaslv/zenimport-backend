@@ -395,8 +395,8 @@ def _history(db):
         (SELECT 1 FROM delivery_attempts a WHERE a.bank_id=d.bank_id AND a.zen_id=d.zen_id AND a.payload=d.payload) LIMIT 1''').fetchone(), 'missing_attempt_evidence')
     require(not db.execute('''SELECT 1 FROM deliveries d WHERE d.ever_attempted=1 AND d.origin NOT LIKE 'legacy:%' AND NOT EXISTS
         (SELECT 1 FROM delivery_authorizations a WHERE a.bank_id=d.bank_id AND a.job_id=d.authorized_job_id) LIMIT 1''').fetchone(), 'missing_attempt_authorization')
-    require(not db.execute('''SELECT 1 FROM delivery_authorizations a JOIN capture_intervals i ON i.id=a.interval_id
-        WHERE a.job_id<>i.job_id LIMIT 1''').fetchone(), 'invalid_authorization_job')
+    # A later explicit click can authorize complete observations from an older
+    # capture. Insert/FK proofs already validate revision, account and snapshot.
     require(not db.execute('''SELECT 1 FROM bank_processing p WHERE p.state IN ('pending','prepared','uncertain') AND
         (EXISTS(SELECT 1 FROM processing_receipts r WHERE r.bank_id=p.bank_id)
          OR EXISTS(SELECT 1 FROM link_bank_members b WHERE b.bank_id=p.bank_id)) LIMIT 1''').fetchone(), 'terminal_history_conflict')

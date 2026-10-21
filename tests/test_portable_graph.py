@@ -290,3 +290,20 @@ def test_unclassified_legacy_objects_are_rejected_instead_of_being_executed(tmp_
         rows = {name:list(items) for name,items in values.items()}
     with pytest.raises(codec.PortableError, match='unclassified_legacy_object'):
         graph.validate_stage(stage(tmp_path, lineage, rows))
+
+
+def test_later_click_can_export_authorization_for_a_prior_complete_capture(tmp_path):
+    from delivery_factory import DeliveryHarness
+    h=DeliveryHarness(tmp_path/'later-click.sqlite3')
+    try:
+        assert h.configure(h.account_id,version=1,start='2026-10-01').status_code==200
+        first,interval,*_=h.capture(count=1)
+        second=h.start(h.connection['id']);assert second.status_code==202,second.text
+        second=second.json();assert second['id']!=first['id']
+        with storage.transaction(h.path,read_only=True) as db:
+            row=db.execute('SELECT * FROM delivery_authorizations').fetchone()
+            assert row['job_id']==second['id'] and row['interval_id']==interval['id']
+        assert h.client.post('/api/v1/jobs/'+second['id']+'/stop',json={}).status_code==200
+        lineage,rows,_=snapshot(h)
+        graph.validate_stage(stage(tmp_path,lineage,rows),expected_owners=['1'])
+    finally:h.close()
