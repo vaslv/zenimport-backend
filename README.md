@@ -1,5 +1,9 @@
 # ZenImport Backend
 
+**0.3.0 is an unpublished local candidate** with portable browser/server transfer
+support. See [candidate preparation](docs/container-release-0.3.0.md). Existing
+0.2.1 deployment instructions below refer to the last published image.
+
 Release **0.2.1** adds the [BIDV capture policy](docs/bidv.md) and
 [named bank connections](docs/bank-connections.md), paired with Chrome 0.2.1+. It also repairs corroborated legacy transfer links and
 reports unmatched records from both sources independently of delivery. It is published for Linux AMD64 and ARM64.

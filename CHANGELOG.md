@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0 — unreleased
+
+- Add portable format-2 archives and verified transfer/recovery APIs for the standalone Chrome client.
+- Fence all financial delivery by database identity, context, generation and write authority; preserve ordinary API v1 for existing remote clients.
+- Add resumable backup, chunk upload, preview/activation, exact-request cancellation and first-sync holds.
+- Keep legacy SQLite format-1 recovery for conversion to portable archives. Never merge used databases or restore deleted financial operations.
+- Keep zenmoney-python pinned to public PyPI 0.7.0.
+
+Local candidate only; see [preparation and compatibility](docs/container-release-0.3.0.md).
+
 ## 0.2.1 — 2026-10-19
 
 - Accept BIDV VND payment-account history with isolated capture validation.

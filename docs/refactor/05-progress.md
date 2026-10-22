@@ -968,3 +968,14 @@ it. SQL phase/authority/tombstone rollback, concurrent begin/withdraw, wrong
 physical/kind and unchanged recovery capability checks all pass. Log:
 /tmp/zenimport-l11-backup-withdrawal-full.log. Container lifecycle and the final
 combined browser/server acceptance remain L12 work.
+
+## Standalone compatibility candidate — 2026-10-22
+
+Prepared backend 0.3.0 locally for the standalone Chrome application. Portable
+format-2 transfer/recovery support, context gates and ordinary API v1 compatibility
+were reviewed independently without remaining findings. The final Docker run
+passed 826 tests (69.62s), then HTTP/auth and lifecycle smoke tests including lost
+response, graceful shutdown and restart with unchanged UUIDs. Candidate image-only
+deployments passed on linux/arm64 and linux/amd64 using disposable projects/volumes.
+No production data, live ZenMoney, push, tags or registry publication.
+Chrome owns the consolidated L12 matrix and archive interchange evidence.
