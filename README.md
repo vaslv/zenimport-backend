@@ -1,8 +1,8 @@
 # ZenImport Backend
 
-**0.3.0 is an unpublished local candidate** with portable browser/server transfer
-support. See [candidate preparation](docs/container-release-0.3.0.md). Existing
-0.2.1 deployment instructions below refer to the last published image.
+**ZenImport Backend 0.3.0** adds portable browser/server transfers and fenced
+recovery for the optional server mode in Chrome 0.3.0. See
+[release and upgrade instructions](docs/container-release-0.3.0.md).
 
 Release **0.2.1** adds the [BIDV capture policy](docs/bidv.md) and
 [named bank connections](docs/bank-connections.md), paired with Chrome 0.2.1+. It also repairs corroborated legacy transfer links and
@@ -22,13 +22,13 @@ Plan: [docs/refactor/README.md](docs/refactor/README.md). Status: [docs/refactor
 
 ## Published server image
 
-Backend 0.2.1 is published for Linux AMD64 and ARM64:
+Backend 0.3.0 supports Linux AMD64 and ARM64:
 
 ```sh
-docker pull ghcr.io/vaslv/zenimport-backend:0.2.1
+docker pull ghcr.io/vaslv/zenimport-backend:0.3.0
 ```
 
-[Release verification and installation commands](docs/container-release-0.2.1.md).
+[Release verification and installation commands](docs/container-release-0.3.0.md).
 For deployment, use that immutable digest and keep SQLite in the named volume.
 When moving an existing installation, transfer its consistent database and delivery
 journal before switching the extension; do not run old/new workers together.
